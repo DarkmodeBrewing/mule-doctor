@@ -3,6 +3,12 @@ import assert from "node:assert/strict";
 
 import { RustMuleClient } from "../dist/api/rustMuleClient.js";
 
+const originalFetch = global.fetch;
+
+test.afterEach(() => {
+  global.fetch = originalFetch;
+});
+
 function makeJsonResponse(body, status = 200) {
   return {
     ok: status >= 200 && status < 300,

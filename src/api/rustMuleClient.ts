@@ -42,8 +42,16 @@ export class RustMuleClient {
   private authToken: string | undefined;
 
   constructor(baseUrl: string, tokenPath?: string, apiPrefix = "/api/v1") {
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.apiPrefix = apiPrefix.startsWith("/") ? apiPrefix : `/${apiPrefix}`;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+    const trimmedPrefix = apiPrefix.trim();
+    if (trimmedPrefix === "") {
+      this.apiPrefix = "";
+    } else {
+      const withoutTrailing = trimmedPrefix.replace(/\/+$/, "");
+      this.apiPrefix = withoutTrailing.startsWith("/")
+        ? withoutTrailing
+        : `/${withoutTrailing}`;
+    }
     this.tokenPath = tokenPath;
   }
 
@@ -76,6 +84,7 @@ export class RustMuleClient {
   async getNodeInfo(): Promise<NodeInfo> {
     const status = await this.get<Record<string, unknown>>("/status");
     return {
+      ...status,
       nodeId:
         typeof status["node_id_hex"] === "string"
           ? status["node_id_hex"]
@@ -88,7 +97,6 @@ export class RustMuleClient {
         typeof status["uptime_secs"] === "number"
           ? status["uptime_secs"]
           : 0,
-      ...status,
     };
   }
 
@@ -96,8 +104,9 @@ export class RustMuleClient {
     const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>(
       "/kad/peers"
     );
-    const peers = payload.peers ?? [];
+    const peers = Array.isArray(payload.peers) ? payload.peers : [];
     return peers.map((p) => ({
+      ...p,
       id:
         typeof p["kad_id_hex"] === "string"
           ? p["kad_id_hex"]
@@ -110,7 +119,6 @@ export class RustMuleClient {
           : typeof p["udp_dest_b64"] === "string"
             ? p["udp_dest_b64"]
             : "unknown",
-      ...p,
     }));
   }
 
@@ -123,17 +131,23 @@ export class RustMuleClient {
       return buckets.map((b) => {
         const count = typeof b["count"] === "number" ? b["count"] : 0;
         return {
+          ...b,
           index: typeof b["index"] === "number" ? b["index"] : 0,
           count,
           size: count,
-          ...b,
         };
       });
     } catch (err) {
+      const msg = String(err);
+      const unavailableDebugEndpoint =
+        msg.includes(" status 404") || msg.includes(" status 501");
+      if (!unavailableDebugEndpoint) {
+        throw err;
+      }
       log(
         "warn",
         "rustMuleClient",
-        `Routing buckets unavailable (debug endpoints disabled?): ${String(err)}`
+        `Routing buckets unavailable (debug endpoints disabled?): ${msg}`
       );
       return [];
     }
@@ -162,11 +176,11 @@ export class RustMuleClient {
         ? status["tracked_out_expired_total"]
         : 0);
     return {
+      ...status,
       total,
       successful,
       failed,
       avgDurationMs: 0,
-      ...status,
     };
   }
 }
