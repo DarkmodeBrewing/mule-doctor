@@ -29,12 +29,17 @@ async function main(): Promise<void> {
   const openaiKey = requireEnv("OPENAI_API_KEY");
   const webhookUrl = requireEnv("MATTERMOST_WEBHOOK_URL");
   const tokenPath = process.env["RUST_MULE_TOKEN_PATH"];
+  const rawApiPrefix = process.env["RUST_MULE_API_PREFIX"];
+  const apiPrefix =
+    rawApiPrefix && rawApiPrefix.trim().length > 0
+      ? rawApiPrefix.trim()
+      : "/api/v1";
   const intervalMs = process.env["OBSERVE_INTERVAL_MS"]
     ? parseInt(process.env["OBSERVE_INTERVAL_MS"], 10)
     : undefined;
 
   // Build components
-  const rustMuleClient = new RustMuleClient(apiUrl, tokenPath);
+  const rustMuleClient = new RustMuleClient(apiUrl, tokenPath, apiPrefix);
   await rustMuleClient.loadToken();
 
   const logWatcher = new LogWatcher(logPath);

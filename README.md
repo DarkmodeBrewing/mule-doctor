@@ -1,2 +1,41 @@
 # mule-doctor
-Log and observability agent for rust-mule
+
+Observability and diagnostic agent for `rust-mule` nodes.
+
+## What it does
+
+- polls the rust-mule API (`/api/v1`)
+- tails rust-mule logs
+- runs an LLM diagnostic loop with tool-calling
+- posts periodic reports to Mattermost via incoming webhook
+
+## Configuration
+
+Copy `.env.example` and set values in your shell or runtime environment.
+
+Required:
+
+- `RUST_MULE_API_URL` (example: `http://127.0.0.1:17835`)
+- `RUST_MULE_LOG_PATH` (example: `/home/coder/mule-a/data/logs/rust-mule.log`)
+- `OPENAI_API_KEY`
+- `MATTERMOST_WEBHOOK_URL`
+
+Optional:
+
+- `RUST_MULE_TOKEN_PATH` (API bearer token file path; defaults to no bearer auth)
+- `RUST_MULE_API_PREFIX` (defaults to `/api/v1`)
+- `OBSERVE_INTERVAL_MS` (defaults to `300000`, 5 minutes)
+
+## Scripts
+
+- `npm run build` – compile TypeScript to `dist/`
+- `npm run start` – run compiled agent
+- `npm run dev` – watch compile during development
+- `npm run typecheck` – strict typecheck (`tsc --noEmit`)
+- `npm test` – build + run basic smoke tests
+- `npm run check` – CI-friendly verification (`typecheck` + `test`)
+
+## Notes
+
+- `getRoutingBuckets` uses `/api/v1/debug/routing/buckets`. If debug endpoints are disabled in rust-mule, mule-doctor logs a warning and continues with empty bucket data.
+- Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.
