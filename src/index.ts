@@ -85,7 +85,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher);
+  const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher, runtimeStore);
   const analyzer = new Analyzer(openaiKey, toolRegistry, { model: openaiModel });
   const mattermostClient = new MattermostClient(webhookUrl, analyzer);
   const observer = new Observer(analyzer, mattermostClient, {

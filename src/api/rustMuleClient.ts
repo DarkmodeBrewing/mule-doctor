@@ -38,8 +38,35 @@ export interface LookupStats {
   [key: string]: unknown;
 }
 
+export interface BootstrapJobResult {
+  jobId: string;
+  status: string;
+  [key: string]: unknown;
+}
+
+export interface TraceLookupHop {
+  peerQueried: string;
+  distance?: number;
+  rttMs?: number;
+  contactsReturned?: number;
+  error?: string;
+  [key: string]: unknown;
+}
+
+export interface TraceLookupResult {
+  traceId: string;
+  status: string;
+  hops: TraceLookupHop[];
+  [key: string]: unknown;
+}
+
 interface RequestOptions {
   debug?: boolean;
+}
+
+interface PollOptions {
+  pollIntervalMs?: number;
+  maxWaitMs?: number;
 }
 
 class HttpError extends Error {
@@ -51,6 +78,9 @@ class HttpError extends Error {
     this.status = status;
   }
 }
+
+const DEFAULT_POLL_INTERVAL_MS = 500;
+const DEFAULT_MAX_WAIT_MS = 15_000;
 
 export class RustMuleClient {
   private readonly baseUrl: string;
@@ -115,6 +145,23 @@ export class RustMuleClient {
     const res = await fetch(url, { headers: this.headers(options) });
     if (!res.ok) {
       throw new HttpError("GET", url, res.status);
+    }
+    return res.json() as Promise<T>;
+  }
+
+  private async post<T>(
+    path: string,
+    body: Record<string, unknown> = {},
+    options: RequestOptions = {}
+  ): Promise<T> {
+    const url = `${this.baseUrl}${this.apiPrefix}${path}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: this.headers(options),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new HttpError("POST", url, res.status);
     }
     return res.json() as Promise<T>;
   }
@@ -235,6 +282,150 @@ export class RustMuleClient {
       outboundShaperDelayedTotal,
     };
   }
+
+  async triggerBootstrap(options: PollOptions = {}): Promise<BootstrapJobResult> {
+    const started = await this.post<Record<string, unknown>>(
+      "/debug/bootstrap/restart",
+      {},
+      { debug: true }
+    );
+    const jobId = readString(started, ["job_id", "jobId"]);
+    if (!jobId) {
+      throw new Error(`Bootstrap restart response missing job_id: ${JSON.stringify(started)}`);
+    }
+
+    const result = await this.pollDebugResult<Record<string, unknown>>(
+      `/debug/bootstrap/jobs/${encodeURIComponent(jobId)}`,
+      options
+    );
+
+    return {
+      ...result,
+      jobId,
+      status: inferStatus(result),
+    };
+  }
+
+  async traceLookup(targetId?: string, options: PollOptions = {}): Promise<TraceLookupResult> {
+    const body: Record<string, unknown> = {};
+    if (typeof targetId === "string" && targetId.trim().length > 0) {
+      body["target_id"] = targetId.trim();
+    }
+
+    const started = await this.post<Record<string, unknown>>(
+      "/debug/trace_lookup",
+      body,
+      { debug: true }
+    );
+    const traceId = readString(started, ["trace_id", "traceId"]);
+    if (!traceId) {
+      throw new Error(`Trace lookup response missing trace_id: ${JSON.stringify(started)}`);
+    }
+
+    const result = await this.pollDebugResult<Record<string, unknown>>(
+      `/debug/trace_lookup/${encodeURIComponent(traceId)}`,
+      options
+    );
+
+    return {
+      ...result,
+      traceId,
+      status: inferStatus(result),
+      hops: normalizeTraceHops(result["hops"]),
+    };
+  }
+
+  private async pollDebugResult<T extends Record<string, unknown>>(
+    path: string,
+    options: PollOptions = {}
+  ): Promise<T> {
+    const pollIntervalMs = clampInt(options.pollIntervalMs, DEFAULT_POLL_INTERVAL_MS, 10, 30_000);
+    const maxWaitMs = clampInt(options.maxWaitMs, DEFAULT_MAX_WAIT_MS, 100, 300_000);
+
+    const deadline = Date.now() + maxWaitMs;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const result = await this.get<Record<string, unknown>>(path, { debug: true });
+      if (isTerminalDebugResult(result)) {
+        return result as T;
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(`Timed out polling ${path} after ${maxWaitMs}ms`);
+      }
+      await sleep(pollIntervalMs);
+    }
+  }
+}
+
+function normalizeTraceHops(raw: unknown): TraceLookupHop[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((hop) => {
+    const payload = typeof hop === "object" && hop !== null ? (hop as Record<string, unknown>) : {};
+    return {
+      ...payload,
+      peerQueried: readString(payload, ["peer_queried", "peerQueried", "peer", "node_id"]) ?? "unknown",
+      distance: readNumber(payload, ["distance", "distance_to_target"]),
+      rttMs: readNumber(payload, ["rtt_ms", "rttMs", "latency_ms"]),
+      contactsReturned: readNumber(payload, ["contacts_returned", "contactsReturned"]),
+      error: readString(payload, ["error", "err"]),
+    };
+  });
+}
+
+function isTerminalDebugResult(payload: Record<string, unknown>): boolean {
+  const status = readString(payload, ["status", "state"]);
+  if (status) {
+    const normalized = status.toLowerCase();
+    if (
+      normalized === "completed" ||
+      normalized === "succeeded" ||
+      normalized === "failed" ||
+      normalized === "error" ||
+      normalized === "done"
+    ) {
+      return true;
+    }
+  }
+
+  if (typeof payload["completed"] === "boolean") return payload["completed"];
+  if (typeof payload["done"] === "boolean") return payload["done"];
+  if (typeof payload["success"] === "boolean" && payload["success"] === true) return true;
+  if (typeof payload["finished_at"] === "string") return true;
+  return false;
+}
+
+function inferStatus(payload: Record<string, unknown>): string {
+  return readString(payload, ["status", "state"]) ?? "completed";
+}
+
+function readString(payload: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function readNumber(payload: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function clampInt(value: number | undefined, fallback: number, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Minimal structured logger shared across the module.
