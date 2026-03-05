@@ -12,6 +12,7 @@ import type {
 import type { LogWatcher } from "../logs/logWatcher.js";
 import type { RuntimeStore } from "../storage/runtimeStore.js";
 import type { HistoryEntry, ToolResult } from "../types/contracts.js";
+import { SourceCodeTools } from "./sourceCodeTools.js";
 
 /** Shape expected by the OpenAI tools array. */
 export interface ToolDefinition {
@@ -33,11 +34,20 @@ interface SearchLogsResult {
   matches: string[];
 }
 
+export interface ToolRegistryOptions {
+  sourcePath?: string;
+}
+
 export class ToolRegistry {
   private readonly handlers = new Map<string, ToolHandler>();
   private readonly definitions: ToolDefinition[] = [];
 
-  constructor(client: RustMuleClient, logWatcher: LogWatcher, runtimeStore?: RuntimeStore) {
+  constructor(
+    client: RustMuleClient,
+    logWatcher: LogWatcher,
+    runtimeStore?: RuntimeStore,
+    options: ToolRegistryOptions = {}
+  ) {
     this.register(
       {
         type: "function",
@@ -266,6 +276,140 @@ export class ToolRegistry {
         });
       }
     );
+
+    if (options.sourcePath) {
+      const sourceTools = new SourceCodeTools({ sourcePath: options.sourcePath });
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "search_code",
+            description:
+              "Searches source files under RUST_MULE_SOURCE_PATH for literal text matches.",
+            parameters: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "Literal text query to search for.",
+                },
+              },
+              required: ["query"],
+            },
+          },
+        },
+        async (args) => {
+          const query = typeof args["query"] === "string" ? args["query"] : "";
+          return sourceTools.searchCode(query);
+        }
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "read_file",
+            description:
+              "Reads a source file relative to RUST_MULE_SOURCE_PATH with bounded output.",
+            parameters: {
+              type: "object",
+              properties: {
+                path: {
+                  type: "string",
+                  description: "Relative path to the file to read.",
+                },
+              },
+              required: ["path"],
+            },
+          },
+        },
+        async (args) => {
+          const path = typeof args["path"] === "string" ? args["path"] : "";
+          return sourceTools.readFile(path);
+        }
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "show_function",
+            description:
+              "Finds function definitions by name in source files under RUST_MULE_SOURCE_PATH.",
+            parameters: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description: "Function name to locate.",
+                },
+              },
+              required: ["name"],
+            },
+          },
+        },
+        async (args) => {
+          const name = typeof args["name"] === "string" ? args["name"] : "";
+          return sourceTools.showFunction(name);
+        }
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "propose_patch",
+            description:
+              "Stores a patch proposal artifact for human review only; does not apply changes.",
+            parameters: {
+              type: "object",
+              properties: {
+                diff: {
+                  type: "string",
+                  description: "Unified diff proposal text.",
+                },
+              },
+              required: ["diff"],
+            },
+          },
+        },
+        async (args) => {
+          const diff = typeof args["diff"] === "string" ? args["diff"] : "";
+          return sourceTools.proposePatch(diff);
+        }
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "git_blame",
+            description:
+              "Runs git blame for a specific file and line under RUST_MULE_SOURCE_PATH.",
+            parameters: {
+              type: "object",
+              properties: {
+                file: {
+                  type: "string",
+                  description: "Relative file path.",
+                },
+                line: {
+                  type: "number",
+                  description: "1-based line number.",
+                },
+              },
+              required: ["file", "line"],
+            },
+          },
+        },
+        async (args) => {
+          const file = typeof args["file"] === "string" ? args["file"] : "";
+          const line = typeof args["line"] === "number" ? args["line"] : 1;
+          return sourceTools.gitBlame(file, line);
+        }
+      );
+    }
   }
 
   private register(def: ToolDefinition, handler: ToolHandler): void {

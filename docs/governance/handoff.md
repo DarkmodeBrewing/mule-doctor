@@ -1,52 +1,53 @@
 # Handoff
 
 ## Branch
-- `feature/phase6-7-reporting-telemetry`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/9
+- `feature/phase5-source-tools`
+- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/10
 - Last updated: 2026-03-05
 
 ## Status
-- Phase 6/7 architecture implementation is in progress.
-- This branch adds structured Mattermost reporting and LLM usage/cost telemetry with persisted daily/monthly aggregates.
+- Phase 5 architecture implementation is in progress.
+- This branch adds source-code tooling behind `RUST_MULE_SOURCE_PATH` with path sandboxing and proposal-only patch behavior.
 
 ## Completed Work
-- Added LLM usage tracking module:
-  - `src/llm/usageTracker.ts`
-  - writes `/data/mule-doctor/LLM_<timestamp>.log` records
-  - tracks daily/monthly aggregate buckets in runtime state
-  - computes estimated cost from configurable per-1K token rates
-  - supports once-per-day usage report emission (`consumeDailyReport`)
-- Extended analyzer to emit telemetry:
-  - captures prompt/completion token usage from OpenAI responses
-  - records model/tokens/cost through `UsageTracker`
-  - exposes `consumeDailyUsageReport()` for observer scheduling
-- Upgraded Mattermost integration:
-  - structured periodic attachments with health color mapping
-  - metrics block + observations block payload format
-  - daily usage/spend attachments (today + monthly totals)
-- Updated observer loop:
-  - uses structured periodic report method
-  - emits one daily usage report when usage exists and not yet reported that UTC day
-- Added config wiring in startup:
-  - `MULE_DOCTOR_LLM_LOG_DIR`
-  - `OPENAI_INPUT_COST_PER_1K`
-  - `OPENAI_OUTPUT_COST_PER_1K`
-- Expanded tests:
-  - `src/usageTracker.test.mjs` (log writing, aggregation, once-per-day report behavior)
-  - `src/mattermost.test.mjs` (periodic + usage attachment payloads)
+- Added `src/tools/sourceCodeTools.ts`:
+  - `searchCode(query)` literal match search across bounded source files.
+  - `readFile(path)` bounded read of source files within configured root.
+  - `showFunction(name)` signature lookup for Rust and JS/TS function definitions.
+  - `proposePatch(diff)` stores proposal artifact under `.mule-doctor/proposals` and never applies.
+  - `gitBlame(file, line)` returns structured commit/author metadata using `git blame --porcelain`.
+- Added strict path safety controls:
+  - relative-path-only inputs for file-based tools.
+  - path traversal prevention (`..`/absolute path rejection).
+  - symlink/realpath boundary checks to keep reads/blame inside source root.
+- Extended `src/tools/toolRegistry.ts`:
+  - new optional `sourcePath` option.
+  - architecture tool names added when source path is configured:
+    - `search_code`
+    - `read_file`
+    - `show_function`
+    - `propose_patch`
+    - `git_blame`
+- Updated startup config wiring in `src/index.ts`:
+  - reads `RUST_MULE_SOURCE_PATH` and enables source tools only when set.
+- Added tests:
+  - `src/sourceCodeTools.test.mjs` (proposal artifact behavior, git blame metadata, bounded file reads).
+  - expanded `src/toolRegistry.test.mjs` for source tool gating, source tool contract behavior, and traversal rejection.
+- Updated docs/config:
+  - `.env.example` with `RUST_MULE_SOURCE_PATH`.
+  - `README.md` documenting source-tool enablement, scope, and safety.
 
 ## Key Decisions
-- Keep usage pricing configurable via env rates to avoid hardcoding model pricing in code.
-- Usage reporting is UTC-day keyed and persisted in state so behavior survives restarts.
-- Daily usage report is emitted at most once per UTC day and only when calls > 0 for that day.
-- Periodic diagnostic report uses attachment colors aligned with architecture health semantics.
+- Source code tools are opt-in and disabled by default unless `RUST_MULE_SOURCE_PATH` is configured.
+- All source file access is sandboxed to the configured source root to avoid filesystem escape.
+- `propose_patch` is artifact-only (no automatic write/apply to target source files).
 
 ## Validation
 - `npm run check` passed on this branch:
   - TypeScript no-emit typecheck passed
-  - Tests passed (`30/30`)
+  - Tests passed (`37/37`)
 
 ## Next Steps
-- Open PR for Phase 6/7 structured reporting + telemetry.
-- Start Phase 8 (runtime/container layout alignment) after this PR merges.
-- Phase 9 follow-up task documented: add GitHub Actions PR CI workflow (`pull_request` on `main`) running `npm ci` and `npm run check`.
+- Open PR for Phase 5 source tools implementation.
+- Start Phase 8 (runtime/container layout alignment) after Phase 5 merges.
+- Phase 9 follow-up task remains: add GitHub Actions PR CI workflow (`pull_request` on `main`) running `npm ci` and `npm run check`.
