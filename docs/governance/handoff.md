@@ -1,54 +1,44 @@
 # Handoff
 
 ## Branch
-- `feature/phase2-state-history`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/6
+- `feature/phase3-network-health`
+- PR: TBD (to be created with `gh pr create`)
 - Last updated: 2026-03-05
 
 ## Status
-- Phase 2 architecture implementation is in progress.
-- This branch introduces persistent runtime state/history and wires persistence into observer cycles.
+- Phase 3 architecture implementation is in progress.
+- This branch introduces deterministic network health scoring and integrates it into observer context + persistence.
 
 ## Completed Work
-- Added runtime persistence module:
-  - `src/storage/runtimeStore.ts`
-  - initializes and auto-creates `state.json` and `history.json`
-  - supports state patch updates and bounded history retention
-- Extended observer to collect baseline metrics each cycle and persist:
-  - `lastRun`
-  - `logOffset`
-  - per-cycle history entry (`timestamp`, `peerCount`, `lookupSuccess`)
-- Extended log watcher with `getOffset()` for persisted log byte offset.
-- Wired persistence configuration in startup (`index.ts`):
-  - `MULE_DOCTOR_DATA_DIR`
-  - `MULE_DOCTOR_STATE_PATH`
-  - `MULE_DOCTOR_HISTORY_PATH`
-  - `MULE_DOCTOR_HISTORY_LIMIT`
-- Included recent history/snapshot context in observer diagnostic prompt.
-- Expanded docs/config:
-  - `.env.example` includes persistence env vars
-  - `README.md` documents persistence behavior and env vars
-- Added runtime store tests:
-  - bootstrap file creation
-  - state merge persistence
-  - retention trimming
-  - restart persistence behavior
-- Addressed PR review hardening feedback:
-  - runtime store initialization in `index.ts` now degrades gracefully (warn + continue without persistence)
-  - runtime store mutations are serialized via internal queue to prevent concurrent read/modify/write data loss
-  - JSON writes are now atomic (tmp file + rename) to avoid partial file corruption on crash/interruption
-  - added concurrency regression tests for concurrent history appends and concurrent state updates
+- Added network health module:
+  - `src/health/healthScore.ts`
+  - weighted deterministic scoring:
+    - peer count (25%)
+    - bucket balance (20%)
+    - lookup success (25%)
+    - lookup efficiency/hops (15%)
+    - error rate (15%)
+  - includes explicit normalization and clamping rules (0-100)
+- Integrated health scoring into observer cycle:
+  - computes `networkHealth` snapshot each cycle
+  - persists `lastHealthScore` into runtime state
+  - persists `routingBalance`, `avgHops`, `healthScore` into history entries
+  - includes `networkHealth` in the LLM baseline context payload
+- Added tests:
+  - `src/healthScore.test.mjs` (healthy, degraded, missing-data scenarios)
+  - `src/observer.test.mjs` (observer persistence/context includes health score)
+- Updated README notes to document health score behavior.
 
 ## Key Decisions
-- Default persistence paths follow architecture (`/data/mule-doctor/{state,history}.json`) with env overrides for development/deployment flexibility.
-- Persistence failures should not stop diagnostics; observer logs warning and continues.
-- History retention is enforced at write-time, default limit `500`.
+- Use deterministic, bounded scoring to keep model inputs stable across runs.
+- Missing hop data defaults to neutral lookup-efficiency score (50) instead of failing health computation.
+- Error-rate component prefers canonical timeout ratio (`timeoutsPerSent`) and applies additional shaping-delay penalty when available.
 
 ## Validation
 - `npm run check` passed on this branch:
   - TypeScript no-emit typecheck passed
-  - Tests passed (`14/14`)
+  - Tests passed (`18/18`)
 
 ## Next Steps
-- Review and merge PR #6 for Phase 2 state/history persistence.
-- Start Phase 3 (network health scoring module) on a new feature branch after merge.
+- Open PR for Phase 3 network health module.
+- Start Phase 4 (tool surface completion: `getHistory`, `searchLogs`, `triggerBootstrap`, `traceLookup`) on a new feature branch after merge.
