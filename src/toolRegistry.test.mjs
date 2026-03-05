@@ -224,3 +224,51 @@ test("ToolRegistry source tools block path traversal", async () => {
     await tmp.cleanup();
   }
 });
+
+test("ToolRegistry propose_patch triggers patch proposal notifier with diff content", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    const notices = [];
+    const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
+      sourcePath: tmp.dir,
+      patchProposalNotifier: async (notice) => {
+        notices.push(notice);
+      },
+    });
+    const diff =
+      "diff --git a/src/lib.rs b/src/lib.rs\n@@\n-pub fn old() {}\n+pub fn new() {}\n";
+
+    const result = await registry.invoke("propose_patch", { diff });
+
+    assert.equal(result.success, true);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].artifactPath.startsWith(".mule-doctor/proposals/"), true);
+    assert.equal(notices[0].diff, diff.trim());
+    assert.equal(notices[0].bytes, result.data.bytes);
+    assert.equal(notices[0].lines, result.data.lines);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("ToolRegistry propose_patch succeeds even when notifier fails", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
+      sourcePath: tmp.dir,
+      patchProposalNotifier: async () => {
+        throw new Error("webhook down");
+      },
+    });
+
+    const result = await registry.invoke("propose_patch", {
+      diff: "diff --git a/src/lib.rs b/src/lib.rs\n@@\n-pub fn old() {}\n+pub fn new() {}\n",
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.data.applied, false);
+    assert.equal(result.data.artifactPath.startsWith(".mule-doctor/proposals/"), true);
+  } finally {
+    await tmp.cleanup();
+  }
+});

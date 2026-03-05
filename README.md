@@ -54,5 +54,6 @@ Optional:
 - Source tools are enabled only when `RUST_MULE_SOURCE_PATH` is set: `search_code`, `read_file`, `show_function`, `propose_patch`, and `git_blame`.
 - Source scanning is Rust-project oriented (`.rs` and core Rust project text files), and `show_function` resolves Rust function signatures.
 - File access is sandboxed to the configured source root and `propose_patch` only stores proposal artifacts for review.
+- When `propose_patch` is used, mule-doctor also posts a Mattermost notification containing proposal metadata and diff content for quick reviewer access.
 - Analyzer records per-call LLM usage logs (`LLM_<timestamp>.log`), aggregates daily/monthly usage in state, and emits one Mattermost usage report per UTC day when usage exists.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

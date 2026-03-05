@@ -14,9 +14,14 @@
   - narrowed search scanning scope to Rust-project text files.
   - narrowed `showFunction(name)` to Rust function signatures only.
   - added dedicated Rust-source file scanning for function lookup (`.rs` only).
+- Added patch-notification wiring for `propose_patch`:
+  - `ToolRegistry` now supports a patch proposal notifier callback.
+  - `MattermostClient` now posts patch proposal metadata and diff content.
+  - `index.ts` wires `propose_patch` events to Mattermost notifications.
 - Added Rust-alignment tests in `src/sourceCodeTools.test.mjs`:
   - verifies JS-style function declarations are ignored by `showFunction`.
   - verifies `searchCode` scans Rust-project files and excludes non-Rust blobs like `.json`.
+- Added notifier tests in `src/toolRegistry.test.mjs` and patch message payload test in `src/mattermost.test.mjs`.
 - Updated `README.md` to document Rust-oriented source-tool behavior explicitly.
 
 ## Key Decisions
@@ -26,7 +31,7 @@
 ## Validation
 - `npm run check` passed on this branch:
   - TypeScript no-emit typecheck passed
-  - Tests passed (`39/39`)
+  - Tests passed (`42/42`)
 
 ## Next Steps
 - Open PR for Rust-source-tools alignment follow-up.

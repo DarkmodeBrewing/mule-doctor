@@ -32,6 +32,13 @@ export interface PeriodicReportInput {
   lookupTimeoutPct?: number;
 }
 
+export interface PatchProposalInput {
+  artifactPath: string;
+  diff: string;
+  bytes: number;
+  lines: number;
+}
+
 export class MattermostClient {
   private readonly webhookUrl: string;
   private readonly analyzer: Analyzer;
@@ -97,6 +104,31 @@ export class MattermostClient {
           title: "Monthly usage",
           color: "#3498db",
           text: usageBucketText(summary.month, summary.monthKey),
+        },
+      ],
+    };
+    await this.postPayload(payload);
+  }
+
+  async postPatchProposal(input: PatchProposalInput): Promise<void> {
+    const { body, truncated } = clampPatchBody(input.diff, MAX_PATCH_BODY_CHARS);
+    const payload: MattermostPayload = {
+      text: "rust-mule patch proposal available",
+      attachments: [
+        {
+          title: "Patch Proposal Metadata",
+          color: "#3498db",
+          text: [
+            `Artifact: ${input.artifactPath}`,
+            `Bytes: ${input.bytes}`,
+            `Lines: ${input.lines}`,
+            `Content truncated: ${truncated ? "yes" : "no"}`,
+          ].join("\n"),
+        },
+        {
+          title: "Patch Content",
+          color: "#f1c40f",
+          text: `\`\`\`diff\n${escapeCodeFence(body)}\n\`\`\``,
         },
       ],
     };
@@ -190,6 +222,19 @@ function usageBucketText(
     `Tokens out: ${bucket.tokensOut}`,
     `Estimated cost: $${bucket.estimatedCost.toFixed(6)}`,
   ].join("\n");
+}
+
+const MAX_PATCH_BODY_CHARS = 12_000;
+
+function clampPatchBody(diff: string, maxChars: number): { body: string; truncated: boolean } {
+  if (diff.length <= maxChars) {
+    return { body: diff, truncated: false };
+  }
+  return { body: diff.slice(0, maxChars), truncated: true };
+}
+
+function escapeCodeFence(text: string): string {
+  return text.replaceAll("```", "``\\`");
 }
 
 function log(level: string, module: string, msg: string): void {
