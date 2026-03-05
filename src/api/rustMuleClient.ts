@@ -302,7 +302,7 @@ export class RustMuleClient {
     return {
       ...result,
       jobId,
-      status: readString(result, ["status", "state"]) ?? inferStatus(result),
+      status: inferStatus(result),
     };
   }
 
@@ -330,7 +330,7 @@ export class RustMuleClient {
     return {
       ...result,
       traceId,
-      status: readString(result, ["status", "state"]) ?? inferStatus(result),
+      status: inferStatus(result),
       hops: normalizeTraceHops(result["hops"]),
     };
   }

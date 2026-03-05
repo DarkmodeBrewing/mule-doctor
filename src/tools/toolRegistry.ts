@@ -110,32 +110,31 @@ export class ToolRegistry {
       }
     );
 
-    this.register(
-      {
-        type: "function",
-        function: {
-          name: "getHistory",
-          description: "Returns recent persisted history snapshots from mule-doctor.",
-          parameters: {
-            type: "object",
-            properties: {
-              n: {
-                type: "number",
-                description: "Number of recent history entries to return (default 50).",
+    if (runtimeStore) {
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "getHistory",
+            description: "Returns recent persisted history snapshots from mule-doctor.",
+            parameters: {
+              type: "object",
+              properties: {
+                n: {
+                  type: "number",
+                  description: "Number of recent history entries to return (default 50).",
+                },
               },
+              required: [],
             },
-            required: [],
           },
         },
-      },
-      async (args): Promise<HistoryEntry[]> => {
-        if (!runtimeStore) {
-          throw new Error("Runtime store unavailable");
+        async (args): Promise<HistoryEntry[]> => {
+          const n = clampInt(args["n"], 50, 1, 1000);
+          return runtimeStore.getRecentHistory(n);
         }
-        const n = clampInt(args["n"], 50, 1, 1000);
-        return runtimeStore.getRecentHistory(n);
-      }
-    );
+      );
+    }
 
     this.register(
       {

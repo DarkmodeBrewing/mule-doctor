@@ -88,6 +88,21 @@ test("ToolRegistry getHistory reads from runtime store", async () => {
   assert.deepEqual(result.data, [{ timestamp: "t-1" }, { timestamp: "t-2" }]);
 });
 
+test("ToolRegistry does not expose getHistory when runtime store is unavailable", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher());
+
+  const defs = registry.getDefinitions();
+  const hasGetHistory = defs.some((def) => def.function.name === "getHistory");
+  assert.equal(hasGetHistory, false);
+
+  const result = await registry.invoke("getHistory", { n: 5 });
+  assert.deepEqual(result, {
+    tool: "getHistory",
+    success: false,
+    error: "Unknown tool: getHistory",
+  });
+});
+
 test("ToolRegistry searchLogs returns bounded matches", async () => {
   const registry = new ToolRegistry(new StubClient(), new StubLogWatcher());
 
