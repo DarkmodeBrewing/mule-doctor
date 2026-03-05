@@ -23,8 +23,10 @@ Required:
 Optional:
 
 - `RUST_MULE_TOKEN_PATH` (API bearer token file path; defaults to no bearer auth)
+- `RUST_MULE_DEBUG_TOKEN_FILE` (debug token file path; required by rust-mule debug endpoints via `X-Debug-Token`)
 - `RUST_MULE_API_PREFIX` (defaults to `/api/v1`)
 - `OBSERVE_INTERVAL_MS` (defaults to `300000`, 5 minutes)
+- `OPENAI_MODEL` (defaults to `gpt-5-mini`)
 
 ## Scripts
 
@@ -37,5 +39,5 @@ Optional:
 
 ## Notes
 
-- `getRoutingBuckets` uses `/api/v1/debug/routing/buckets`. If debug endpoints are disabled in rust-mule, mule-doctor logs a warning and continues with empty bucket data.
+- `getRoutingBuckets` uses `/api/v1/debug/routing/buckets` and sends `X-Debug-Token` when `RUST_MULE_DEBUG_TOKEN_FILE` is configured. If debug endpoints are unavailable (403/404/501), mule-doctor logs a warning and continues with empty bucket data.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

@@ -6,6 +6,7 @@
 
 import type { RustMuleClient } from "../api/rustMuleClient.js";
 import type { LogWatcher } from "../logs/logWatcher.js";
+import type { ToolResult } from "../types/contracts.js";
 
 /** Shape expected by the OpenAI tools array. */
 export interface ToolDefinition {
@@ -105,13 +106,32 @@ export class ToolRegistry {
 
   /** All tool definitions to send to the OpenAI API. */
   getDefinitions(): ToolDefinition[] {
-    return this.definitions;
+    return [...this.definitions];
   }
 
-  /** Invoke a tool by name with parsed arguments. Throws if the tool is unknown. */
-  async invoke(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
+  /** Invoke a tool by name with parsed arguments and return a structured result envelope. */
+  async invoke(name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
     const handler = this.handlers.get(name);
-    if (!handler) throw new Error(`Unknown tool: ${name}`);
-    return handler(args);
+    if (!handler) {
+      return {
+        tool: name,
+        success: false,
+        error: `Unknown tool: ${name}`,
+      };
+    }
+    try {
+      const data = await handler(args);
+      return {
+        tool: name,
+        success: true,
+        data,
+      };
+    } catch (err) {
+      return {
+        tool: name,
+        success: false,
+        error: String(err),
+      };
+    }
   }
 }
