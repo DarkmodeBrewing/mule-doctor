@@ -10,6 +10,7 @@ import type { RustMuleClient } from "./api/rustMuleClient.js";
 import type { LogWatcher } from "./logs/logWatcher.js";
 import type { RuntimeStore } from "./storage/runtimeStore.js";
 import type { HistoryEntry, RuntimeState } from "./types/contracts.js";
+import { getNetworkHealth } from "./health/healthScore.js";
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -89,20 +90,31 @@ export class Observer {
         ]);
 
       const timestamp = new Date().toISOString();
+      const avgHops = readAverageHops(lookupStats);
+      const health = getNetworkHealth({
+        peerCount: peers.length,
+        routingBuckets,
+        lookupStats,
+        avgHops,
+      });
       const lookupSuccess =
         typeof lookupStats.matchPerSent === "number"
           ? lookupStats.matchPerSent
-          : undefined;
+          : health.components.lookup_success / 100;
 
       const historyEntry: HistoryEntry = {
         timestamp,
         peerCount: peers.length,
+        routingBalance: health.components.bucket_balance / 100,
         lookupSuccess,
+        avgHops,
+        healthScore: health.score,
       };
       await this.runtimeStore.appendHistory(historyEntry);
 
       const statePatch: RuntimeState = {
         lastRun: timestamp,
+        lastHealthScore: health.score,
         logOffset: this.logWatcher.getOffset(),
       };
       await this.runtimeStore.updateState(statePatch);
@@ -112,6 +124,7 @@ export class Observer {
         peerCount: peers.length,
         routingBucketCount: routingBuckets.length,
         lookupStats,
+        networkHealth: health,
         recentHistory,
       };
     } catch (err) {
@@ -131,6 +144,17 @@ export class Observer {
       JSON.stringify(context)
     );
   }
+}
+
+function readAverageHops(lookupStats: Record<string, unknown>): number | undefined {
+  const candidates = ["avgHops", "avg_hops", "average_hops"];
+  for (const key of candidates) {
+    const value = lookupStats[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 function log(level: string, module: string, msg: string): void {
