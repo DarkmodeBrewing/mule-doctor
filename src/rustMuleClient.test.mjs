@@ -157,3 +157,89 @@ test("RustMuleClient preserves explicit zero matched count without recv fallback
   assert.equal(stats.matchPerSent, 0);
   assert.equal(stats.timeoutsPerSent, 0.1);
 });
+
+test("RustMuleClient triggerBootstrap posts debug restart and polls job endpoint", async () => {
+  const debugToken = await writeTempFile("debug.token", "debug-secret\n");
+  const calls = [];
+
+  try {
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url, init });
+      if (String(url).endsWith("/debug/bootstrap/restart")) {
+        return makeJsonResponse({ job_id: "job-123" }, 202);
+      }
+      if (String(url).endsWith("/debug/bootstrap/jobs/job-123")) {
+        return makeJsonResponse({ status: "completed", detail: "ok" });
+      }
+      throw new Error(`Unexpected URL in test: ${String(url)}`);
+    };
+
+    const client = new RustMuleClient(
+      "http://127.0.0.1:17835",
+      undefined,
+      "/api/v1",
+      debugToken.filePath
+    );
+    await client.loadToken();
+
+    const result = await client.triggerBootstrap({ pollIntervalMs: 1, maxWaitMs: 1000 });
+
+    assert.equal(result.jobId, "job-123");
+    assert.equal(result.status, "completed");
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(calls[0].init.headers["X-Debug-Token"], "debug-secret");
+    assert.equal(calls[1].init.headers["X-Debug-Token"], "debug-secret");
+  } finally {
+    await debugToken.cleanup();
+  }
+});
+
+test("RustMuleClient traceLookup posts and returns normalized hops", async () => {
+  const debugToken = await writeTempFile("debug.token", "debug-secret\n");
+
+  try {
+    global.fetch = async (url) => {
+      if (String(url).endsWith("/debug/trace_lookup")) {
+        return makeJsonResponse({ trace_id: "trace-42" }, 202);
+      }
+      if (String(url).endsWith("/debug/trace_lookup/trace-42")) {
+        return makeJsonResponse({
+          status: "completed",
+          hops: [
+            {
+              peer_queried: "peer-a",
+              distance: 12,
+              rtt_ms: 44,
+              contacts_returned: 3,
+            },
+            {
+              peer: "peer-b",
+              error: "timeout",
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected URL in test: ${String(url)}`);
+    };
+
+    const client = new RustMuleClient(
+      "http://127.0.0.1:17835",
+      undefined,
+      "/api/v1",
+      debugToken.filePath
+    );
+    await client.loadToken();
+
+    const result = await client.traceLookup("abcd", { pollIntervalMs: 1, maxWaitMs: 1000 });
+
+    assert.equal(result.traceId, "trace-42");
+    assert.equal(result.status, "completed");
+    assert.equal(result.hops.length, 2);
+    assert.equal(result.hops[0].peerQueried, "peer-a");
+    assert.equal(result.hops[0].rttMs, 44);
+    assert.equal(result.hops[1].peerQueried, "peer-b");
+    assert.equal(result.hops[1].error, "timeout");
+  } finally {
+    await debugToken.cleanup();
+  }
+});

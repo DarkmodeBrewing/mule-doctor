@@ -46,4 +46,5 @@ Optional:
 - `getRoutingBuckets` uses `/api/v1/debug/routing/buckets` and sends `X-Debug-Token` when `RUST_MULE_DEBUG_TOKEN_FILE` is configured. If debug endpoints are unavailable (403/404/501), mule-doctor logs a warning and continues with empty bucket data.
 - Runtime persistence auto-creates state/history files and appends one history snapshot per observer cycle.
 - Observer now computes a deterministic network health score (peer count, bucket balance, lookup success, hop efficiency, error rate) and persists it as `lastHealthScore` + history entries.
+- Tool surface includes: `getHistory`, `searchLogs`, `triggerBootstrap`, and `traceLookup` (debug tools require bearer + `X-Debug-Token` and poll async job/trace status endpoints).
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

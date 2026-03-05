@@ -1,44 +1,50 @@
 # Handoff
 
 ## Branch
-- `feature/phase3-network-health`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/7
+- `feature/phase4-tool-surface`
+- PR: TBD (to be created with `gh pr create`)
 - Last updated: 2026-03-05
 
 ## Status
-- Phase 3 architecture implementation is in progress.
-- This branch introduces deterministic network health scoring and integrates it into observer context + persistence.
+- Phase 4 architecture implementation is in progress.
+- This branch completes the requested tool surface additions: `getHistory`, `searchLogs`, `triggerBootstrap`, and `traceLookup`.
 
 ## Completed Work
-- Added network health module:
-  - `src/health/healthScore.ts`
-  - weighted deterministic scoring:
-    - peer count (25%)
-    - bucket balance (20%)
-    - lookup success (25%)
-    - lookup efficiency/hops (15%)
-    - error rate (15%)
-  - includes explicit normalization and clamping rules (0-100)
-- Integrated health scoring into observer cycle:
-  - computes `networkHealth` snapshot each cycle
-  - persists `lastHealthScore` into runtime state
-  - persists `routingBalance`, `avgHops`, `healthScore` into history entries
-  - includes `networkHealth` in the LLM baseline context payload
-- Added tests:
-  - `src/healthScore.test.mjs` (healthy, degraded, missing-data scenarios)
-  - `src/observer.test.mjs` (observer persistence/context includes health score)
-- Updated README notes to document health score behavior.
+- Extended `RustMuleClient` with debug command endpoints:
+  - `triggerBootstrap()`:
+    - `POST /api/v1/debug/bootstrap/restart` (expects `202` + `job_id`)
+    - polls `GET /api/v1/debug/bootstrap/jobs/{job_id}` until terminal status
+  - `traceLookup(target_id?)`:
+    - `POST /api/v1/debug/trace_lookup` (expects `202` + `trace_id`)
+    - polls `GET /api/v1/debug/trace_lookup/{trace_id}` until terminal status
+    - normalizes per-hop output (`peerQueried`, `distance`, `rttMs`, `contactsReturned`, `error`)
+- Added tool registry entries:
+  - `getHistory` (reads persisted history snapshots)
+  - `searchLogs` (safe bounded substring search over recent log buffer)
+  - `triggerBootstrap`
+  - `traceLookup`
+- Updated startup wiring so tool registry receives runtime store instance for history tool support.
+- Preserved structured tool response envelope contract (`{ tool, success, data|error }`).
+- Expanded tests:
+  - `src/rustMuleClient.test.mjs`:
+    - bootstrap debug flow + header/assertions
+    - trace lookup debug flow + hop normalization
+  - `src/toolRegistry.test.mjs`:
+    - `getHistory`
+    - `searchLogs`
+    - `triggerBootstrap`
+    - `traceLookup`
 
 ## Key Decisions
-- Use deterministic, bounded scoring to keep model inputs stable across runs.
-- Missing hop data defaults to neutral lookup-efficiency score (50) instead of failing health computation.
-- Error-rate component prefers canonical timeout ratio (`timeoutsPerSent`) and applies additional shaping-delay penalty when available.
+- Debug command tools intentionally do **not** downgrade failures to empty results; they surface explicit tool errors when auth/debug mode/polling fails.
+- `searchLogs` uses bounded in-memory substring matching to avoid command injection risk while still enabling targeted log pattern checks.
+- Polling is bounded and configurable via tool arguments (`pollIntervalMs`, `maxWaitMs`) with clamped ranges.
 
 ## Validation
 - `npm run check` passed on this branch:
   - TypeScript no-emit typecheck passed
-  - Tests passed (`18/18`)
+  - Tests passed (`25/25`)
 
 ## Next Steps
-- Open PR for Phase 3 network health module.
-- Start Phase 4 (tool surface completion: `getHistory`, `searchLogs`, `triggerBootstrap`, `traceLookup`) on a new feature branch after merge.
+- Open PR for Phase 4 tool surface completion.
+- Start Phase 6/7 (Mattermost structured reporting + LLM usage telemetry) after Phase 4 merge.
