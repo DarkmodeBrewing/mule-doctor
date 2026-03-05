@@ -24,6 +24,7 @@ Optional:
 
 - `RUST_MULE_TOKEN_PATH` (API bearer token file path; defaults to no bearer auth)
 - `RUST_MULE_DEBUG_TOKEN_FILE` (debug token file path; required by rust-mule debug endpoints via `X-Debug-Token`)
+- `RUST_MULE_SOURCE_PATH` (enables source inspection tools scoped to this repository path)
 - `RUST_MULE_API_PREFIX` (defaults to `/api/v1`)
 - `OBSERVE_INTERVAL_MS` (defaults to `300000`, 5 minutes)
 - `OPENAI_MODEL` (defaults to `gpt-5-mini`)
@@ -50,5 +51,6 @@ Optional:
 - Runtime persistence auto-creates state/history files and appends one history snapshot per observer cycle.
 - Observer now computes a deterministic network health score (peer count, bucket balance, lookup success, hop efficiency, error rate) and persists it as `lastHealthScore` + history entries.
 - Tool surface includes: `getHistory`, `searchLogs`, `triggerBootstrap`, and `traceLookup` (debug tools require bearer + `X-Debug-Token` and poll async job/trace status endpoints).
+- Source tools are enabled only when `RUST_MULE_SOURCE_PATH` is set: `search_code`, `read_file`, `show_function`, `propose_patch`, and `git_blame`. File access is sandboxed to the configured source root and `propose_patch` only stores proposal artifacts for review.
 - Analyzer records per-call LLM usage logs (`LLM_<timestamp>.log`), aggregates daily/monthly usage in state, and emits one Mattermost usage report per UTC day when usage exists.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

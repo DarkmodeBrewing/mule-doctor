@@ -69,6 +69,7 @@ async function main(): Promise<void> {
   const llmLogDir = optionalEnv("MULE_DOCTOR_LLM_LOG_DIR") ?? dataDir;
   const inputCostPer1k = parseNonNegativeFloatEnv("OPENAI_INPUT_COST_PER_1K");
   const outputCostPer1k = parseNonNegativeFloatEnv("OPENAI_OUTPUT_COST_PER_1K");
+  const sourcePath = optionalEnv("RUST_MULE_SOURCE_PATH");
 
   // Build components
   const rustMuleClient = new RustMuleClient(
@@ -100,7 +101,9 @@ async function main(): Promise<void> {
     );
   }
 
-  const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher, runtimeStore);
+  const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher, runtimeStore, {
+    sourcePath,
+  });
   const usageTracker = new UsageTracker({
     runtimeStore,
     dataDir: llmLogDir,
