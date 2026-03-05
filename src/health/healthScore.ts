@@ -89,13 +89,23 @@ function scoreBucketBalance(buckets: RoutingBucket[]): number {
 }
 
 function scoreLookupSuccess(lookupStats: Record<string, unknown>): number {
+  const total = readNumber(lookupStats, ["total", "sent_reqs_total"]);
+  const successful = readNumber(lookupStats, ["successful", "tracked_out_matched_total"]);
+  const matchedCounter = readNumber(lookupStats, ["tracked_out_matched_total"]);
   const matchPerSent = readNumber(lookupStats, ["matchPerSent", "match_per_sent"]);
   if (typeof matchPerSent === "number") {
+    if (
+      matchPerSent <= 0 &&
+      typeof matchedCounter !== "number" &&
+      typeof total === "number" &&
+      total > 0 &&
+      typeof successful === "number"
+    ) {
+      return clamp(Math.round((successful / total) * 100));
+    }
     return clamp(Math.round(matchPerSent * 100));
   }
 
-  const total = readNumber(lookupStats, ["total", "sent_reqs_total"]);
-  const successful = readNumber(lookupStats, ["successful", "tracked_out_matched_total"]);
   if (typeof total === "number" && total > 0 && typeof successful === "number") {
     return clamp(Math.round((successful / total) * 100));
   }
@@ -123,7 +133,7 @@ function scoreErrorRate(
   const outboundShaperDelayed = readNumber(lookupStats, ["outboundShaperDelayedTotal"]);
 
   const baseErrorRate =
-    typeof timeoutsPerSent === "number"
+    typeof timeoutsPerSent === "number" && typeof total === "number" && total > 0
       ? clampRatio(timeoutsPerSent)
       : typeof total === "number" && total > 0 && typeof failed === "number"
         ? clampRatio(failed / total)

@@ -75,3 +75,50 @@ test("getNetworkHealth handles missing data deterministically", () => {
     },
   });
 });
+
+test("getNetworkHealth falls back to successful/total when matchPerSent is synthetic", () => {
+  const result = getNetworkHealth({
+    peerCount: 64,
+    routingBuckets: [
+      { index: 0, count: 6, size: 6 },
+      { index: 1, count: 6, size: 6 },
+      { index: 2, count: 6, size: 6 },
+      { index: 3, count: 6, size: 6 },
+    ],
+    lookupStats: {
+      total: 100,
+      successful: 80,
+      matchPerSent: 0,
+      timeoutsPerSent: 0.1,
+    },
+    avgHops: 7,
+  });
+
+  assert.equal(result.components.lookup_success, 80);
+});
+
+test("getNetworkHealth handles zero-traffic lookup payload without inflating score", () => {
+  const result = getNetworkHealth({
+    peerCount: 0,
+    routingBuckets: [],
+    lookupStats: {
+      total: 0,
+      successful: 0,
+      failed: 0,
+      matchPerSent: 0,
+      timeoutsPerSent: 0,
+      outboundShaperDelayedTotal: 0,
+    },
+  });
+
+  assert.deepEqual(result, {
+    score: 8,
+    components: {
+      peer_count: 0,
+      bucket_balance: 0,
+      lookup_success: 0,
+      lookup_efficiency: 50,
+      error_rate: 0,
+    },
+  });
+});
