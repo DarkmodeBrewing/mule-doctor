@@ -45,6 +45,34 @@ Optional:
 - `npm test` – build + run basic smoke tests
 - `npm run check` – CI-friendly verification (`typecheck` + `test`)
 
+## Container Runtime
+
+The Docker image follows the architecture runtime layout:
+
+- `/opt/rust-mule` – rust-mule source + compiled binary
+- `/app` – mule-doctor code and compiled JS
+- `/data` – runtime volume (state, logs, token, config)
+
+Container defaults:
+
+- `RUST_MULE_API_URL=http://127.0.0.1:17835`
+- `RUST_MULE_TOKEN_PATH=/data/token`
+- `RUST_MULE_LOG_PATH=/data/logs/rust-mule.log`
+- `RUST_MULE_SOURCE_PATH=/opt/rust-mule`
+- `MULE_DOCTOR_DATA_DIR=/data/mule-doctor`
+
+Entrypoint behavior:
+
+1. Starts rust-mule (`/opt/rust-mule/target/release/rust-mule --config /data/config.toml`)
+2. Waits for token file (`/data/token` by default)
+3. Starts mule-doctor (`node /app/dist/index.js`)
+
+Required production runtime inputs:
+
+- `/data/config.toml` for rust-mule startup
+- `OPENAI_API_KEY`
+- `MATTERMOST_WEBHOOK_URL`
+
 ## Notes
 
 - `getRoutingBuckets` uses `/api/v1/debug/routing/buckets` and sends `X-Debug-Token` when `RUST_MULE_DEBUG_TOKEN_FILE` is configured. If debug endpoints are unavailable (403/404/501), mule-doctor logs a warning and continues with empty bucket data.
