@@ -2,7 +2,7 @@
 
 ## Branch
 - `feature/phase6-7-reporting-telemetry`
-- PR: TBD (to be created with `gh pr create`)
+- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/9
 - Last updated: 2026-03-05
 
 ## Status
