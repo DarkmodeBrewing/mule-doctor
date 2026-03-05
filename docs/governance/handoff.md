@@ -52,5 +52,5 @@
   - Tests passed (`7/7`)
 
 ## Next Steps
-- Open PR for Phase 1 contract-alignment changes.
+- Review and merge PR #5 for Phase 1 contract-alignment changes.
 - Start Phase 2 (state/history persistence) on a new feature branch after merge.
