@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readdir, stat, writeFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { extname, isAbsolute, relative, resolve } from "node:path";
 
@@ -160,7 +160,7 @@ export class SourceCodeTools {
     return {
       path: toPosixPath(relative(this.rootPath, safePath)),
       sizeBytes: fileStat.size,
-      truncated: fileStat.size > Buffer.byteLength(content),
+      truncated: fileStat.size > this.maxReadBytes,
       content,
     };
   }
@@ -288,12 +288,18 @@ export class SourceCodeTools {
   }
 
   private async readTextFileBounded(absPath: string, maxBytes: number): Promise<string> {
-    const buffer = await readFile(absPath);
-    const bounded = buffer.subarray(0, maxBytes);
-    if (bounded.includes(0)) {
-      throw new Error(`Binary file cannot be read as text: ${absPath}`);
+    const fileHandle = await open(absPath, "r");
+    try {
+      const buffer = Buffer.alloc(maxBytes);
+      const { bytesRead } = await fileHandle.read(buffer, 0, maxBytes, 0);
+      const bounded = buffer.subarray(0, bytesRead);
+      if (bounded.includes(0)) {
+        throw new Error(`Binary file cannot be read as text: ${absPath}`);
+      }
+      return bounded.toString("utf8");
+    } finally {
+      await fileHandle.close();
     }
-    return bounded.toString("utf8");
   }
 }
 
