@@ -137,3 +137,23 @@ test("RustMuleClient derives lookup stats from /events totals and canonical rati
   assert.equal(stats.timeoutsPerSent, 0.1);
   assert.equal(stats.outboundShaperDelayedTotal, 7);
 });
+
+test("RustMuleClient preserves explicit zero matched count without recv fallback", async () => {
+  global.fetch = async () =>
+    makeJsonResponse({
+      sent_reqs_total: 50,
+      tracked_out_matched_total: 0,
+      recv_ress_total: 9,
+      timeouts_total: 5,
+      tracked_out_unmatched_total: 0,
+      tracked_out_expired_total: 0,
+      outbound_shaper_delayed_total: 0,
+    });
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const stats = await client.getLookupStats();
+
+  assert.equal(stats.successful, 0);
+  assert.equal(stats.matchPerSent, 0);
+  assert.equal(stats.timeoutsPerSent, 0.1);
+});

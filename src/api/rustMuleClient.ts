@@ -200,6 +200,7 @@ export class RustMuleClient {
       typeof events["tracked_out_matched_total"] === "number"
         ? events["tracked_out_matched_total"]
         : 0;
+    const hasMatchedField = typeof events["tracked_out_matched_total"] === "number";
     const timeouts =
       typeof events["timeouts_total"] === "number" ? events["timeouts_total"] : 0;
     const unmatched =
@@ -215,12 +216,11 @@ export class RustMuleClient {
         ? events["outbound_shaper_delayed_total"]
         : 0;
 
-    const successful =
-      matched > 0
-        ? matched
-        : typeof events["recv_ress_total"] === "number"
-          ? events["recv_ress_total"]
-          : 0;
+    const successful = hasMatchedField
+      ? matched
+      : typeof events["recv_ress_total"] === "number"
+        ? events["recv_ress_total"]
+        : 0;
 
     const failed = timeouts + unmatched + expired;
 
