@@ -33,6 +33,11 @@
   - state merge persistence
   - retention trimming
   - restart persistence behavior
+- Addressed PR review hardening feedback:
+  - runtime store initialization in `index.ts` now degrades gracefully (warn + continue without persistence)
+  - runtime store mutations are serialized via internal queue to prevent concurrent read/modify/write data loss
+  - JSON writes are now atomic (tmp file + rename) to avoid partial file corruption on crash/interruption
+  - added concurrency regression tests for concurrent history appends and concurrent state updates
 
 ## Key Decisions
 - Default persistence paths follow architecture (`/data/mule-doctor/{state,history}.json`) with env overrides for development/deployment flexibility.
@@ -42,8 +47,8 @@
 ## Validation
 - `npm run check` passed on this branch:
   - TypeScript no-emit typecheck passed
-  - Tests passed (`12/12`)
+  - Tests passed (`14/14`)
 
 ## Next Steps
-- Open PR for Phase 2 state/history persistence.
+- Review and merge PR #6 for Phase 2 state/history persistence.
 - Start Phase 3 (network health scoring module) on a new feature branch after merge.

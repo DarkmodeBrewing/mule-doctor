@@ -3,7 +3,7 @@
  * Persistent runtime state/history storage for mule-doctor.
  */
 
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "fs/promises";
 import { dirname } from "path";
 import type { HistoryEntry, RuntimeState } from "../types/contracts.js";
 
@@ -23,6 +23,7 @@ export class RuntimeStore {
   private readonly statePath: string;
   private readonly historyPath: string;
   private readonly historyLimit: number;
+  private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(config: RuntimeStoreConfig = {}) {
     const dataDir = config.dataDir ?? DEFAULT_DATA_DIR;
@@ -42,14 +43,18 @@ export class RuntimeStore {
   }
 
   async saveState(state: RuntimeState): Promise<void> {
-    await this.writeJsonFile(this.statePath, state);
+    await this.enqueueMutation(async () => {
+      await this.writeJsonFile(this.statePath, state);
+    });
   }
 
   async updateState(patch: RuntimeState): Promise<RuntimeState> {
-    const current = await this.loadState();
-    const next: RuntimeState = { ...current, ...patch };
-    await this.saveState(next);
-    return next;
+    return this.enqueueMutation(async () => {
+      const current = await this.loadState();
+      const next: RuntimeState = { ...current, ...patch };
+      await this.writeJsonFile(this.statePath, next);
+      return next;
+    });
   }
 
   async loadHistory(): Promise<HistoryEntry[]> {
@@ -58,12 +63,14 @@ export class RuntimeStore {
   }
 
   async appendHistory(entry: HistoryEntry): Promise<void> {
-    const history = await this.loadHistory();
-    history.push(entry);
-    if (history.length > this.historyLimit) {
-      history.splice(0, history.length - this.historyLimit);
-    }
-    await this.writeJsonFile(this.historyPath, history);
+    await this.enqueueMutation(async () => {
+      const history = await this.loadHistory();
+      history.push(entry);
+      if (history.length > this.historyLimit) {
+        history.splice(0, history.length - this.historyLimit);
+      }
+      await this.writeJsonFile(this.historyPath, history);
+    });
   }
 
   async getRecentHistory(n = 10): Promise<HistoryEntry[]> {
@@ -93,7 +100,29 @@ export class RuntimeStore {
 
   private async writeJsonFile(path: string, value: unknown): Promise<void> {
     const serialized = JSON.stringify(value, null, 2) + "\n";
-    await writeFile(path, serialized, "utf8");
+    const tmpPath = `${path}.tmp-${process.pid}-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}`;
+    await writeFile(tmpPath, serialized, "utf8");
+    try {
+      await rename(tmpPath, path);
+    } catch (err) {
+      try {
+        await unlink(tmpPath);
+      } catch {
+        // no-op cleanup best effort
+      }
+      throw err;
+    }
+  }
+
+  private async enqueueMutation<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.mutationQueue.then(op, op);
+    this.mutationQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
   }
 }
 

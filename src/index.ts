@@ -67,13 +67,23 @@ async function main(): Promise<void> {
   const logWatcher = new LogWatcher(logPath);
   await logWatcher.start();
 
-  const runtimeStore = new RuntimeStore({
+  let runtimeStore: RuntimeStore | undefined;
+  const configuredRuntimeStore = new RuntimeStore({
     dataDir,
     statePath,
     historyPath,
     historyLimit,
   });
-  await runtimeStore.initialize();
+  try {
+    await configuredRuntimeStore.initialize();
+    runtimeStore = configuredRuntimeStore;
+  } catch (err) {
+    log(
+      "warn",
+      "index",
+      `Runtime store unavailable, continuing without persistence: ${String(err)}`
+    );
+  }
 
   const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher);
   const analyzer = new Analyzer(openaiKey, toolRegistry, { model: openaiModel });

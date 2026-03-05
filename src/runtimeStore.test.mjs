@@ -94,3 +94,47 @@ test("RuntimeStore retains history across instances (restart behavior)", async (
     await tmp.cleanup();
   }
 });
+
+test("RuntimeStore serializes concurrent history appends", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir, historyLimit: 100 });
+    await store.initialize();
+
+    await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        store.appendHistory({ timestamp: `t-${i + 1}`, peerCount: i + 1 })
+      )
+    );
+
+    const history = await store.loadHistory();
+    assert.equal(history.length, 20);
+    assert.deepEqual(
+      history.map((entry) => entry.timestamp),
+      Array.from({ length: 20 }, (_, i) => `t-${i + 1}`)
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("RuntimeStore serializes concurrent state updates", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir });
+    await store.initialize();
+
+    await Promise.all([
+      store.updateState({ lastRun: "2026-03-05T01:00:00.000Z" }),
+      store.updateState({ lastAlert: "timeout_spike" }),
+    ]);
+
+    const state = await store.loadState();
+    assert.equal(state.lastRun, "2026-03-05T01:00:00.000Z");
+    assert.equal(state.lastAlert, "timeout_spike");
+  } finally {
+    await tmp.cleanup();
+  }
+});
