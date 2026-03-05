@@ -17,6 +17,10 @@ async function makeTempDir() {
   };
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 test("UsageTracker records logs and aggregates daily/monthly totals", async () => {
   const tmp = await makeTempDir();
 
@@ -77,6 +81,54 @@ test("UsageTracker consumeDailyReport emits once per day", async () => {
     assert.equal(first.dateKey, "2026-03-05");
     assert.equal(first.today.calls, 1);
     assert.equal(second, null);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("UsageTracker consumeDailyReport includes queued records before reporting", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir });
+    await store.initialize();
+
+    const tracker = new UsageTracker({ runtimeStore: store, dataDir: tmp.dir });
+
+    const originalWriteRecordLog = tracker.writeRecordLog.bind(tracker);
+    let writeCount = 0;
+    tracker.writeRecordLog = async (record) => {
+      writeCount += 1;
+      if (writeCount === 2) {
+        await sleep(50);
+      }
+      await originalWriteRecordLog(record);
+    };
+
+    await tracker.record({
+      timestamp: "2026-03-05T01:00:00.000Z",
+      model: "gpt-5-mini",
+      tokensIn: 10,
+      tokensOut: 20,
+    });
+
+    const queuedRecord = tracker.record({
+      timestamp: "2026-03-05T01:05:00.000Z",
+      model: "gpt-5-mini",
+      tokensIn: 30,
+      tokensOut: 40,
+    });
+
+    await sleep(5);
+
+    const report = await tracker.consumeDailyReport(new Date("2026-03-05T08:00:00.000Z"));
+    await queuedRecord;
+
+    assert.ok(report);
+    assert.equal(report.dateKey, "2026-03-05");
+    assert.equal(report.today.calls, 2);
+    assert.equal(report.today.tokensIn, 40);
+    assert.equal(report.today.tokensOut, 60);
   } finally {
     await tmp.cleanup();
   }

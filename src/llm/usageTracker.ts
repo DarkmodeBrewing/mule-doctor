@@ -81,22 +81,30 @@ export class UsageTracker {
     if (!this.runtimeStore) return null;
 
     const dateKey = formatDateKey(now);
-    const summary = await this.getSummary(now);
-    if (summary.today.calls <= 0) return null;
-
-    let shouldSend = false;
-    await this.enqueue(async () => {
+    const monthKey = formatMonthKey(now);
+    return this.enqueue(async () => {
       const state = await this.runtimeStore!.loadState();
       const usage = normalizeUsageState(state.usage);
-      if (usage.lastReportDate === dateKey) {
-        return;
+      const today = usage.daily[dateKey] ?? emptyBucket();
+
+      if (today.calls <= 0) {
+        return null;
       }
+
+      if (usage.lastReportDate === dateKey) {
+        return null;
+      }
+
       usage.lastReportDate = dateKey;
       await this.runtimeStore!.updateState({ usage });
-      shouldSend = true;
-    });
 
-    return shouldSend ? summary : null;
+      return {
+        dateKey,
+        monthKey,
+        today,
+        month: usage.monthly[monthKey] ?? emptyBucket(),
+      };
+    });
   }
 
   private async updateAggregates(record: LlmUsageRecord): Promise<void> {
