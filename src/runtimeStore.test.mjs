@@ -1,0 +1,96 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { RuntimeStore } from "../dist/storage/runtimeStore.js";
+
+async function makeTempDir() {
+  const dir = await mkdtemp(join(tmpdir(), "mule-doctor-store-"));
+  return {
+    dir,
+    async cleanup() {
+      await rm(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+test("RuntimeStore initializes state/history files when missing", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir });
+    await store.initialize();
+
+    const stateRaw = await readFile(join(tmp.dir, "state.json"), "utf8");
+    const historyRaw = await readFile(join(tmp.dir, "history.json"), "utf8");
+
+    assert.deepEqual(JSON.parse(stateRaw), {});
+    assert.deepEqual(JSON.parse(historyRaw), []);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("RuntimeStore persists and merges runtime state", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir });
+    await store.initialize();
+
+    await store.updateState({ lastRun: "2026-03-05T00:00:00.000Z", logOffset: 10 });
+    await store.updateState({ lastAlert: "routing_imbalance" });
+
+    const state = await store.loadState();
+
+    assert.equal(state.lastRun, "2026-03-05T00:00:00.000Z");
+    assert.equal(state.logOffset, 10);
+    assert.equal(state.lastAlert, "routing_imbalance");
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("RuntimeStore enforces history retention limit", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir, historyLimit: 3 });
+    await store.initialize();
+
+    for (let i = 1; i <= 5; i++) {
+      await store.appendHistory({ timestamp: `t-${i}`, peerCount: i });
+    }
+
+    const history = await store.loadHistory();
+    assert.equal(history.length, 3);
+    assert.deepEqual(
+      history.map((entry) => entry.timestamp),
+      ["t-3", "t-4", "t-5"]
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("RuntimeStore retains history across instances (restart behavior)", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const first = new RuntimeStore({ dataDir: tmp.dir });
+    await first.initialize();
+    await first.appendHistory({ timestamp: "t-1", peerCount: 1 });
+
+    const second = new RuntimeStore({ dataDir: tmp.dir });
+    await second.initialize();
+    const history = await second.loadHistory();
+
+    assert.equal(history.length, 1);
+    assert.equal(history[0].timestamp, "t-1");
+    assert.equal(history[0].peerCount, 1);
+  } finally {
+    await tmp.cleanup();
+  }
+});

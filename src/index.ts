@@ -11,6 +11,7 @@ import { ToolRegistry } from "./tools/toolRegistry.js";
 import { Analyzer } from "./llm/analyzer.js";
 import { MattermostClient } from "./integrations/mattermost.js";
 import { Observer } from "./observer.js";
+import { RuntimeStore } from "./storage/runtimeStore.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -49,6 +50,10 @@ async function main(): Promise<void> {
   const apiPrefix = optionalEnv("RUST_MULE_API_PREFIX") ?? "/api/v1";
   const openaiModel = optionalEnv("OPENAI_MODEL");
   const intervalMs = parsePositiveIntEnv("OBSERVE_INTERVAL_MS");
+  const dataDir = optionalEnv("MULE_DOCTOR_DATA_DIR");
+  const statePath = optionalEnv("MULE_DOCTOR_STATE_PATH");
+  const historyPath = optionalEnv("MULE_DOCTOR_HISTORY_PATH");
+  const historyLimit = parsePositiveIntEnv("MULE_DOCTOR_HISTORY_LIMIT");
 
   // Build components
   const rustMuleClient = new RustMuleClient(
@@ -62,10 +67,23 @@ async function main(): Promise<void> {
   const logWatcher = new LogWatcher(logPath);
   await logWatcher.start();
 
+  const runtimeStore = new RuntimeStore({
+    dataDir,
+    statePath,
+    historyPath,
+    historyLimit,
+  });
+  await runtimeStore.initialize();
+
   const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher);
   const analyzer = new Analyzer(openaiKey, toolRegistry, { model: openaiModel });
   const mattermostClient = new MattermostClient(webhookUrl, analyzer);
-  const observer = new Observer(analyzer, mattermostClient, { intervalMs });
+  const observer = new Observer(analyzer, mattermostClient, {
+    intervalMs,
+    client: rustMuleClient,
+    logWatcher,
+    runtimeStore,
+  });
 
   // Graceful shutdown
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

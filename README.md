@@ -27,6 +27,10 @@ Optional:
 - `RUST_MULE_API_PREFIX` (defaults to `/api/v1`)
 - `OBSERVE_INTERVAL_MS` (defaults to `300000`, 5 minutes)
 - `OPENAI_MODEL` (defaults to `gpt-5-mini`)
+- `MULE_DOCTOR_DATA_DIR` (defaults to `/data/mule-doctor`)
+- `MULE_DOCTOR_STATE_PATH` (defaults to `/data/mule-doctor/state.json`)
+- `MULE_DOCTOR_HISTORY_PATH` (defaults to `/data/mule-doctor/history.json`)
+- `MULE_DOCTOR_HISTORY_LIMIT` (defaults to `500`)
 
 ## Scripts
 
@@ -40,4 +44,5 @@ Optional:
 ## Notes
 
 - `getRoutingBuckets` uses `/api/v1/debug/routing/buckets` and sends `X-Debug-Token` when `RUST_MULE_DEBUG_TOKEN_FILE` is configured. If debug endpoints are unavailable (403/404/501), mule-doctor logs a warning and continues with empty bucket data.
+- Runtime persistence auto-creates state/history files and appends one history snapshot per observer cycle.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

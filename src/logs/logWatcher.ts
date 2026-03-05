@@ -47,6 +47,11 @@ export class LogWatcher {
     return this.buffer.slice(-n);
   }
 
+  /** Current byte offset tracked in the log file. */
+  getOffset(): number {
+    return this.lastSize;
+  }
+
   /**
    * Read any new bytes appended to the file since the last read.
    * On the first call the last `maxLines` lines are ingested.
