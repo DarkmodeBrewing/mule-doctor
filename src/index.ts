@@ -9,6 +9,7 @@ import { RustMuleClient } from "./api/rustMuleClient.js";
 import { LogWatcher } from "./logs/logWatcher.js";
 import { ToolRegistry } from "./tools/toolRegistry.js";
 import { Analyzer } from "./llm/analyzer.js";
+import { UsageTracker } from "./llm/usageTracker.js";
 import { MattermostClient } from "./integrations/mattermost.js";
 import { Observer } from "./observer.js";
 import { RuntimeStore } from "./storage/runtimeStore.js";
@@ -38,6 +39,17 @@ function parsePositiveIntEnv(name: string): number | undefined {
   return parsed;
 }
 
+function parseNonNegativeFloatEnv(name: string): number | undefined {
+  const raw = optionalEnv(name);
+  if (raw === undefined) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    log("error", "index", `Invalid ${name}: expected a non-negative number, got "${raw}"`);
+    process.exit(1);
+  }
+  return parsed;
+}
+
 async function main(): Promise<void> {
   log("info", "index", "mule-doctor starting");
 
@@ -54,6 +66,9 @@ async function main(): Promise<void> {
   const statePath = optionalEnv("MULE_DOCTOR_STATE_PATH");
   const historyPath = optionalEnv("MULE_DOCTOR_HISTORY_PATH");
   const historyLimit = parsePositiveIntEnv("MULE_DOCTOR_HISTORY_LIMIT");
+  const llmLogDir = optionalEnv("MULE_DOCTOR_LLM_LOG_DIR") ?? dataDir;
+  const inputCostPer1k = parseNonNegativeFloatEnv("OPENAI_INPUT_COST_PER_1K");
+  const outputCostPer1k = parseNonNegativeFloatEnv("OPENAI_OUTPUT_COST_PER_1K");
 
   // Build components
   const rustMuleClient = new RustMuleClient(
@@ -86,7 +101,16 @@ async function main(): Promise<void> {
   }
 
   const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher, runtimeStore);
-  const analyzer = new Analyzer(openaiKey, toolRegistry, { model: openaiModel });
+  const usageTracker = new UsageTracker({
+    runtimeStore,
+    dataDir: llmLogDir,
+    inputCostPer1k,
+    outputCostPer1k,
+  });
+  const analyzer = new Analyzer(openaiKey, toolRegistry, {
+    model: openaiModel,
+    usageTracker,
+  });
   const mattermostClient = new MattermostClient(webhookUrl, analyzer);
   const observer = new Observer(analyzer, mattermostClient, {
     intervalMs,

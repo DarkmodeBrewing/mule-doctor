@@ -5,10 +5,31 @@
  */
 
 import type { Analyzer } from "../llm/analyzer.js";
+import type { UsageSummary } from "../llm/usageTracker.js";
 
 export interface MattermostCommandContext {
   command: string;
   triggeredBy?: string;
+}
+
+interface MattermostAttachment {
+  title: string;
+  color: string;
+  text: string;
+}
+
+interface MattermostPayload {
+  text: string;
+  attachments?: MattermostAttachment[];
+}
+
+export interface PeriodicReportInput {
+  summary: string;
+  healthScore?: number;
+  peerCount?: number;
+  routingBucketCount?: number;
+  lookupSuccessPct?: number;
+  lookupTimeoutPct?: number;
 }
 
 export class MattermostClient {
@@ -22,10 +43,71 @@ export class MattermostClient {
 
   /** Post a plain-text message to the configured Mattermost channel. */
   async post(text: string): Promise<void> {
+    await this.postPayload({ text });
+  }
+
+  async postPeriodicReport(report: PeriodicReportInput): Promise<void> {
+    const color = healthColor(report.healthScore);
+    const status = healthStatus(report.healthScore);
+    const metricsLines = [
+      metricLine("Health score", formatMaybe(report.healthScore, (v) => `${v}/100`)),
+      metricLine("Peers", formatMaybe(report.peerCount, (v) => String(v))),
+      metricLine("Routing buckets", formatMaybe(report.routingBucketCount, (v) => String(v))),
+      metricLine(
+        "Lookup success",
+        formatMaybe(report.lookupSuccessPct, (v) => `${v.toFixed(1)}%`)
+      ),
+      metricLine(
+        "Timeout rate",
+        formatMaybe(report.lookupTimeoutPct, (v) => `${v.toFixed(1)}%`)
+      ),
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n");
+
+    const summaryText = report.summary.trim().length > 0 ? report.summary : "(no summary)";
+    const payload: MattermostPayload = {
+      text: `mule-doctor\n\nNode status: ${status}`,
+      attachments: [
+        {
+          title: "Node Metrics",
+          color,
+          text: metricsLines || "No metrics available",
+        },
+        {
+          title: "Observations",
+          color: "#3498db",
+          text: summaryText,
+        },
+      ],
+    };
+    await this.postPayload(payload);
+  }
+
+  async postDailyUsageReport(summary: UsageSummary): Promise<void> {
+    const payload: MattermostPayload = {
+      text: "rust-mule spending report",
+      attachments: [
+        {
+          title: "Today's usage",
+          color: "#f1c40f",
+          text: usageBucketText(summary.today, summary.dateKey),
+        },
+        {
+          title: "Monthly usage",
+          color: "#3498db",
+          text: usageBucketText(summary.month, summary.monthKey),
+        },
+      ],
+    };
+    await this.postPayload(payload);
+  }
+
+  private async postPayload(payload: MattermostPayload): Promise<void> {
     const res = await fetch(this.webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       throw new Error(`Mattermost webhook error: ${res.status}`);
@@ -71,6 +153,43 @@ export class MattermostClient {
     const response = await this.analyzer.analyze(prompt);
     await this.post(response);
   }
+}
+
+function healthColor(score: number | undefined): string {
+  if (typeof score !== "number") return "#3498db";
+  if (score >= 80) return "#2ecc71";
+  if (score >= 60) return "#f1c40f";
+  return "#e74c3c";
+}
+
+function healthStatus(score: number | undefined): string {
+  if (typeof score !== "number") return "UNKNOWN";
+  if (score >= 80) return "HEALTHY";
+  if (score >= 60) return "WARNING";
+  return "DEGRADED";
+}
+
+function metricLine(label: string, value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return `${label}: ${value}`;
+}
+
+function formatMaybe<T>(value: T | undefined, formatter: (value: T) => string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  return formatter(value);
+}
+
+function usageBucketText(
+  bucket: { calls: number; tokensIn: number; tokensOut: number; estimatedCost: number },
+  key: string
+): string {
+  return [
+    `Period: ${key}`,
+    `Calls: ${bucket.calls}`,
+    `Tokens in: ${bucket.tokensIn}`,
+    `Tokens out: ${bucket.tokensOut}`,
+    `Estimated cost: $${bucket.estimatedCost.toFixed(6)}`,
+  ].join("\n");
 }
 
 function log(level: string, module: string, msg: string): void {

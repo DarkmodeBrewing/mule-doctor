@@ -147,10 +147,14 @@ Acceptance criteria:
    - tool registry contract tests
    - persistence and retention behavior
 2. Add CI checks for lint/type/test/build.
+   - Add GitHub Actions PR workflow (trigger: `pull_request` to `main`) that runs:
+     - `npm ci`
+     - `npm run check`
 3. Add smoke script for local end-to-end validation.
 
 Acceptance criteria:
 - CI validates all core behavior.
+- PR workflow fails fast on test/type/lint regressions before merge.
 - Regressions are caught before merge.
 
 ## API Clarifications Needed from rust-mule
@@ -169,4 +173,3 @@ Acceptance criteria:
 4. Phase 6 + Phase 7 (reporting + usage telemetry)
 5. Phase 5 (source tools)
 6. Phase 8 + Phase 9 (runtime hardening + CI)
-
