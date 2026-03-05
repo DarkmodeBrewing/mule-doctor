@@ -38,4 +38,18 @@ export interface RuntimeState {
   lastHealthScore?: number;
   logOffset?: number;
   lastAlert?: string;
+  usage?: RuntimeUsageState;
+}
+
+export interface UsageBucket {
+  calls: number;
+  tokensIn: number;
+  tokensOut: number;
+  estimatedCost: number;
+}
+
+export interface RuntimeUsageState {
+  daily: Record<string, UsageBucket>;
+  monthly: Record<string, UsageBucket>;
+  lastReportDate?: string;
 }

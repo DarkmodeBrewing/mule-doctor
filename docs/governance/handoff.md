@@ -1,50 +1,51 @@
 # Handoff
 
 ## Branch
-- `feature/phase4-tool-surface`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/8
+- `feature/phase6-7-reporting-telemetry`
+- PR: TBD (to be created with `gh pr create`)
 - Last updated: 2026-03-05
 
 ## Status
-- Phase 4 architecture implementation is in progress.
-- This branch completes the requested tool surface additions: `getHistory`, `searchLogs`, `triggerBootstrap`, and `traceLookup`.
+- Phase 6/7 architecture implementation is in progress.
+- This branch adds structured Mattermost reporting and LLM usage/cost telemetry with persisted daily/monthly aggregates.
 
 ## Completed Work
-- Extended `RustMuleClient` with debug command endpoints:
-  - `triggerBootstrap()`:
-    - `POST /api/v1/debug/bootstrap/restart` (expects `202` + `job_id`)
-    - polls `GET /api/v1/debug/bootstrap/jobs/{job_id}` until terminal status
-  - `traceLookup(target_id?)`:
-    - `POST /api/v1/debug/trace_lookup` (expects `202` + `trace_id`)
-    - polls `GET /api/v1/debug/trace_lookup/{trace_id}` until terminal status
-    - normalizes per-hop output (`peerQueried`, `distance`, `rttMs`, `contactsReturned`, `error`)
-- Added tool registry entries:
-  - `getHistory` (reads persisted history snapshots)
-  - `searchLogs` (safe bounded substring search over recent log buffer)
-  - `triggerBootstrap`
-  - `traceLookup`
-- Updated startup wiring so tool registry receives runtime store instance for history tool support.
-- Preserved structured tool response envelope contract (`{ tool, success, data|error }`).
+- Added LLM usage tracking module:
+  - `src/llm/usageTracker.ts`
+  - writes `/data/mule-doctor/LLM_<timestamp>.log` records
+  - tracks daily/monthly aggregate buckets in runtime state
+  - computes estimated cost from configurable per-1K token rates
+  - supports once-per-day usage report emission (`consumeDailyReport`)
+- Extended analyzer to emit telemetry:
+  - captures prompt/completion token usage from OpenAI responses
+  - records model/tokens/cost through `UsageTracker`
+  - exposes `consumeDailyUsageReport()` for observer scheduling
+- Upgraded Mattermost integration:
+  - structured periodic attachments with health color mapping
+  - metrics block + observations block payload format
+  - daily usage/spend attachments (today + monthly totals)
+- Updated observer loop:
+  - uses structured periodic report method
+  - emits one daily usage report when usage exists and not yet reported that UTC day
+- Added config wiring in startup:
+  - `MULE_DOCTOR_LLM_LOG_DIR`
+  - `OPENAI_INPUT_COST_PER_1K`
+  - `OPENAI_OUTPUT_COST_PER_1K`
 - Expanded tests:
-  - `src/rustMuleClient.test.mjs`:
-    - bootstrap debug flow + header/assertions
-    - trace lookup debug flow + hop normalization
-  - `src/toolRegistry.test.mjs`:
-    - `getHistory`
-    - `searchLogs`
-    - `triggerBootstrap`
-    - `traceLookup`
+  - `src/usageTracker.test.mjs` (log writing, aggregation, once-per-day report behavior)
+  - `src/mattermost.test.mjs` (periodic + usage attachment payloads)
 
 ## Key Decisions
-- Debug command tools intentionally do **not** downgrade failures to empty results; they surface explicit tool errors when auth/debug mode/polling fails.
-- `searchLogs` uses bounded in-memory substring matching to avoid command injection risk while still enabling targeted log pattern checks.
-- Polling is bounded and configurable via tool arguments (`pollIntervalMs`, `maxWaitMs`) with clamped ranges.
+- Keep usage pricing configurable via env rates to avoid hardcoding model pricing in code.
+- Usage reporting is UTC-day keyed and persisted in state so behavior survives restarts.
+- Daily usage report is emitted at most once per UTC day and only when calls > 0 for that day.
+- Periodic diagnostic report uses attachment colors aligned with architecture health semantics.
 
 ## Validation
 - `npm run check` passed on this branch:
   - TypeScript no-emit typecheck passed
-  - Tests passed (`25/25`)
+  - Tests passed (`30/30`)
 
 ## Next Steps
-- Open PR for Phase 4 tool surface completion.
-- Start Phase 6/7 (Mattermost structured reporting + LLM usage telemetry) after Phase 4 merge.
+- Open PR for Phase 6/7 structured reporting + telemetry.
+- Start Phase 8 (runtime/container layout alignment) after this PR merges.

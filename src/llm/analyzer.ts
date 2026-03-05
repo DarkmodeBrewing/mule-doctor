@@ -7,6 +7,10 @@
 
 import type { ToolRegistry } from "../tools/toolRegistry.js";
 import type { ToolResult } from "../types/contracts.js";
+import {
+  type UsageSummary,
+  type UsageTracker,
+} from "./usageTracker.js";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-5-mini";
@@ -27,6 +31,12 @@ interface ToolCall {
 }
 
 interface ChatResponse {
+  model?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
   choices: Array<{
     message: {
       role: string;
@@ -44,18 +54,21 @@ routing table status, and any anomalies visible in recent logs.`;
 
 export interface AnalyzerConfig {
   model?: string;
+  usageTracker?: UsageTracker;
 }
 
 export class Analyzer {
   private readonly apiKey: string;
   private readonly tools: ToolRegistry;
   private readonly model: string;
+  private readonly usageTracker: UsageTracker | undefined;
 
   constructor(apiKey: string, tools: ToolRegistry, config: AnalyzerConfig = {}) {
     this.apiKey = apiKey;
     this.tools = tools;
     const model = config.model?.trim();
     this.model = model && model.length > 0 ? model : DEFAULT_MODEL;
+    this.usageTracker = config.usageTracker;
   }
 
   /**
@@ -118,7 +131,28 @@ export class Analyzer {
       throw new Error(`OpenAI API error ${res.status}: ${text}`);
     }
 
-    return res.json() as Promise<ChatResponse>;
+    const response = (await res.json()) as ChatResponse;
+
+    if (this.usageTracker) {
+      const usage = response.usage ?? {};
+      const modelUsed = response.model ?? this.model;
+      try {
+        await this.usageTracker.record({
+          timestamp: new Date().toISOString(),
+          model: modelUsed,
+          tokensIn:
+            typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : 0,
+          tokensOut:
+            typeof usage.completion_tokens === "number"
+              ? usage.completion_tokens
+              : 0,
+        });
+      } catch (err) {
+        log("warn", "analyzer", `Usage tracking failed: ${String(err)}`);
+      }
+    }
+
+    return response;
   }
 
   private async executeToolCall(call: ToolCall): Promise<ToolResult> {
@@ -135,6 +169,11 @@ export class Analyzer {
       }
     }
     return this.tools.invoke(call.function.name, args);
+  }
+
+  async consumeDailyUsageReport(): Promise<UsageSummary | null> {
+    if (!this.usageTracker) return null;
+    return this.usageTracker.consumeDailyReport();
   }
 }
 

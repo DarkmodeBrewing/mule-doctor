@@ -31,6 +31,9 @@ Optional:
 - `MULE_DOCTOR_STATE_PATH` (defaults to `/data/mule-doctor/state.json`)
 - `MULE_DOCTOR_HISTORY_PATH` (defaults to `/data/mule-doctor/history.json`)
 - `MULE_DOCTOR_HISTORY_LIMIT` (defaults to `500`)
+- `MULE_DOCTOR_LLM_LOG_DIR` (defaults to `MULE_DOCTOR_DATA_DIR`, stores `LLM_<timestamp>.log`)
+- `OPENAI_INPUT_COST_PER_1K` (optional USD per 1K input tokens, default `0`)
+- `OPENAI_OUTPUT_COST_PER_1K` (optional USD per 1K output tokens, default `0`)
 
 ## Scripts
 
@@ -47,4 +50,5 @@ Optional:
 - Runtime persistence auto-creates state/history files and appends one history snapshot per observer cycle.
 - Observer now computes a deterministic network health score (peer count, bucket balance, lookup success, hop efficiency, error rate) and persists it as `lastHealthScore` + history entries.
 - Tool surface includes: `getHistory`, `searchLogs`, `triggerBootstrap`, and `traceLookup` (debug tools require bearer + `X-Debug-Token` and poll async job/trace status endpoints).
+- Analyzer records per-call LLM usage logs (`LLM_<timestamp>.log`), aggregates daily/monthly usage in state, and emits one Mattermost usage report per UTC day when usage exists.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

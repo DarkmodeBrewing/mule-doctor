@@ -11,6 +11,7 @@ import type { LogWatcher } from "./logs/logWatcher.js";
 import type { RuntimeStore } from "./storage/runtimeStore.js";
 import type { HistoryEntry, RuntimeState } from "./types/contracts.js";
 import { getNetworkHealth } from "./health/healthScore.js";
+import type { NetworkHealthResult } from "./health/healthScore.js";
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -19,6 +20,15 @@ export interface ObserverConfig {
   client?: RustMuleClient;
   logWatcher?: LogWatcher;
   runtimeStore?: RuntimeStore;
+}
+
+interface ObserverCycleContext {
+  nodeInfo: Record<string, unknown>;
+  peerCount: number;
+  routingBucketCount: number;
+  lookupStats: Record<string, unknown>;
+  networkHealth: NetworkHealthResult;
+  recentHistory: HistoryEntry[];
 }
 
 export class Observer {
@@ -71,10 +81,28 @@ export class Observer {
     const context = await this.collectAndPersistContext();
     const prompt = this.buildPrompt(context);
     const summary = await this.analyzer.analyze(prompt);
-    await this.mattermost.post(`### mule-doctor periodic report\n\n${summary}`);
+    await this.mattermost.postPeriodicReport({
+      summary,
+      healthScore: context?.networkHealth.score,
+      peerCount: context?.peerCount,
+      routingBucketCount: context?.routingBucketCount,
+      lookupSuccessPct:
+        typeof context?.networkHealth.components.lookup_success === "number"
+          ? context.networkHealth.components.lookup_success
+          : undefined,
+      lookupTimeoutPct:
+        typeof context?.lookupStats.timeoutsPerSent === "number"
+          ? context.lookupStats.timeoutsPerSent * 100
+          : undefined,
+    });
+
+    const usageSummary = await this.analyzer.consumeDailyUsageReport();
+    if (usageSummary) {
+      await this.mattermost.postDailyUsageReport(usageSummary);
+    }
   }
 
-  private async collectAndPersistContext(): Promise<Record<string, unknown> | undefined> {
+  private async collectAndPersistContext(): Promise<ObserverCycleContext | undefined> {
     if (!this.client || !this.runtimeStore || !this.logWatcher) {
       return undefined;
     }
@@ -133,7 +161,7 @@ export class Observer {
     }
   }
 
-  private buildPrompt(context: Record<string, unknown> | undefined): string {
+  private buildPrompt(context: ObserverCycleContext | undefined): string {
     if (!context) {
       return "Run a full diagnostic check on the rust-mule node and provide a concise status report.";
     }
