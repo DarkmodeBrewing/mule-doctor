@@ -49,3 +49,4 @@
 ## Next Steps
 - Open PR for Phase 6/7 structured reporting + telemetry.
 - Start Phase 8 (runtime/container layout alignment) after this PR merges.
+- Phase 9 follow-up task documented: add GitHub Actions PR CI workflow (`pull_request` on `main`) running `npm ci` and `npm run check`.
