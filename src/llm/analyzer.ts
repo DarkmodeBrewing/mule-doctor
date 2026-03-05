@@ -6,9 +6,10 @@
  */
 
 import type { ToolRegistry } from "../tools/toolRegistry.js";
+import type { ToolResult } from "../types/contracts.js";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const MODEL = "gpt-4o";
+const DEFAULT_MODEL = "gpt-5-mini";
 const MAX_TOOL_ROUNDS = 5;
 
 interface Message {
@@ -41,13 +42,20 @@ You have access to tools that can query the live node. Use them to gather releva
 provide a concise, structured diagnostic report covering: node health, peer connectivity,
 routing table status, and any anomalies visible in recent logs.`;
 
+export interface AnalyzerConfig {
+  model?: string;
+}
+
 export class Analyzer {
   private readonly apiKey: string;
   private readonly tools: ToolRegistry;
+  private readonly model: string;
 
-  constructor(apiKey: string, tools: ToolRegistry) {
+  constructor(apiKey: string, tools: ToolRegistry, config: AnalyzerConfig = {}) {
     this.apiKey = apiKey;
     this.tools = tools;
+    const model = config.model?.trim();
+    this.model = model && model.length > 0 ? model : DEFAULT_MODEL;
   }
 
   /**
@@ -73,16 +81,8 @@ export class Analyzer {
 
       // Execute all tool calls requested in this round.
       for (const call of msg.tool_calls) {
-        let result: string;
-        try {
-          const args = call.function.arguments
-            ? (JSON.parse(call.function.arguments) as Record<string, unknown>)
-            : {};
-          const data = await this.tools.invoke(call.function.name, args);
-          result = JSON.stringify(data);
-        } catch (err) {
-          result = `error: ${String(err)}`;
-        }
+        const toolResult = await this.executeToolCall(call);
+        const result = JSON.stringify(toolResult);
         log("info", "analyzer", `Tool ${call.function.name} → ${result.slice(0, 80)}…`);
         messages.push({
           role: "tool",
@@ -98,7 +98,7 @@ export class Analyzer {
 
   private async chatCompletion(messages: Message[]): Promise<ChatResponse> {
     const body = JSON.stringify({
-      model: MODEL,
+      model: this.model,
       messages,
       tools: this.tools.getDefinitions(),
       tool_choice: "auto",
@@ -119,6 +119,22 @@ export class Analyzer {
     }
 
     return res.json() as Promise<ChatResponse>;
+  }
+
+  private async executeToolCall(call: ToolCall): Promise<ToolResult> {
+    let args: Record<string, unknown> = {};
+    if (call.function.arguments && call.function.arguments.trim().length > 0) {
+      try {
+        args = JSON.parse(call.function.arguments) as Record<string, unknown>;
+      } catch (err) {
+        return {
+          tool: call.function.name,
+          success: false,
+          error: `Invalid tool arguments: ${String(err)}`,
+        };
+      }
+    }
+    return this.tools.invoke(call.function.name, args);
   }
 }
 

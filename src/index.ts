@@ -13,12 +13,28 @@ import { MattermostClient } from "./integrations/mattermost.js";
 import { Observer } from "./observer.js";
 
 function requireEnv(name: string): string {
-  const value = process.env[name];
+  const value = process.env[name]?.trim();
   if (!value) {
     log("error", "index", `Missing required environment variable: ${name}`);
     process.exit(1);
   }
   return value;
+}
+
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
+function parsePositiveIntEnv(name: string): number | undefined {
+  const raw = optionalEnv(name);
+  if (raw === undefined) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    log("error", "index", `Invalid ${name}: expected a positive integer, got "${raw}"`);
+    process.exit(1);
+  }
+  return parsed;
 }
 
 async function main(): Promise<void> {
@@ -28,25 +44,26 @@ async function main(): Promise<void> {
   const logPath = requireEnv("RUST_MULE_LOG_PATH");
   const openaiKey = requireEnv("OPENAI_API_KEY");
   const webhookUrl = requireEnv("MATTERMOST_WEBHOOK_URL");
-  const tokenPath = process.env["RUST_MULE_TOKEN_PATH"];
-  const rawApiPrefix = process.env["RUST_MULE_API_PREFIX"];
-  const apiPrefix =
-    rawApiPrefix && rawApiPrefix.trim().length > 0
-      ? rawApiPrefix.trim()
-      : "/api/v1";
-  const intervalMs = process.env["OBSERVE_INTERVAL_MS"]
-    ? parseInt(process.env["OBSERVE_INTERVAL_MS"], 10)
-    : undefined;
+  const tokenPath = optionalEnv("RUST_MULE_TOKEN_PATH");
+  const debugTokenPath = optionalEnv("RUST_MULE_DEBUG_TOKEN_FILE");
+  const apiPrefix = optionalEnv("RUST_MULE_API_PREFIX") ?? "/api/v1";
+  const openaiModel = optionalEnv("OPENAI_MODEL");
+  const intervalMs = parsePositiveIntEnv("OBSERVE_INTERVAL_MS");
 
   // Build components
-  const rustMuleClient = new RustMuleClient(apiUrl, tokenPath, apiPrefix);
+  const rustMuleClient = new RustMuleClient(
+    apiUrl,
+    tokenPath,
+    apiPrefix,
+    debugTokenPath
+  );
   await rustMuleClient.loadToken();
 
   const logWatcher = new LogWatcher(logPath);
   await logWatcher.start();
 
   const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher);
-  const analyzer = new Analyzer(openaiKey, toolRegistry);
+  const analyzer = new Analyzer(openaiKey, toolRegistry, { model: openaiModel });
   const mattermostClient = new MattermostClient(webhookUrl, analyzer);
   const observer = new Observer(analyzer, mattermostClient, { intervalMs });
 

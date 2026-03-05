@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { RustMuleClient } from "../dist/api/rustMuleClient.js";
 
@@ -18,6 +21,18 @@ function makeJsonResponse(body, status = 200) {
     },
     async text() {
       return JSON.stringify(body);
+    },
+  };
+}
+
+async function writeTempFile(filename, content) {
+  const dir = await mkdtemp(join(tmpdir(), "mule-doctor-"));
+  const filePath = join(dir, filename);
+  await writeFile(filePath, content, "utf8");
+  return {
+    filePath,
+    async cleanup() {
+      await rm(dir, { recursive: true, force: true });
     },
   };
 }
@@ -68,19 +83,57 @@ test("RustMuleClient returns [] when debug routing buckets endpoint is unavailab
   assert.deepEqual(buckets, []);
 });
 
-test("RustMuleClient derives lookup stats from status totals", async () => {
-  global.fetch = async () =>
-    makeJsonResponse({
+test("RustMuleClient sends X-Debug-Token on debug endpoints and tolerates 403", async () => {
+  const debugToken = await writeTempFile("debug.token", "debug-secret\n");
+  const calls = [];
+
+  try {
+    global.fetch = async (url, init) => {
+      calls.push({ url, init });
+      return makeJsonResponse({ code: 403 }, 403);
+    };
+
+    const client = new RustMuleClient(
+      "http://127.0.0.1:17835",
+      undefined,
+      "/api/v1",
+      debugToken.filePath
+    );
+    await client.loadToken();
+
+    const buckets = await client.getRoutingBuckets();
+
+    assert.deepEqual(buckets, []);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "http://127.0.0.1:17835/api/v1/debug/routing/buckets");
+    assert.equal(calls[0].init.headers["X-Debug-Token"], "debug-secret");
+  } finally {
+    await debugToken.cleanup();
+  }
+});
+
+test("RustMuleClient derives lookup stats from /events totals and canonical ratios", async () => {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(url);
+    return makeJsonResponse({
       sent_reqs_total: 100,
       tracked_out_matched_total: 60,
       timeouts_total: 10,
       tracked_out_unmatched_total: 5,
       tracked_out_expired_total: 15,
+      outbound_shaper_delayed_total: 7,
     });
+  };
 
   const client = new RustMuleClient("http://127.0.0.1:17835");
   const stats = await client.getLookupStats();
+
+  assert.equal(calls[0], "http://127.0.0.1:17835/api/v1/events");
   assert.equal(stats.total, 100);
   assert.equal(stats.successful, 60);
   assert.equal(stats.failed, 30);
+  assert.equal(stats.matchPerSent, 0.6);
+  assert.equal(stats.timeoutsPerSent, 0.1);
+  assert.equal(stats.outboundShaperDelayedTotal, 7);
 });
