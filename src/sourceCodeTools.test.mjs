@@ -88,3 +88,42 @@ test("SourceCodeTools readFile returns bounded content for large files", async (
     await tmp.cleanup();
   }
 });
+
+test("SourceCodeTools showFunction matches Rust functions and ignores JS patterns", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    await mkdir(join(tmp.dir, "src"), { recursive: true });
+    await writeFile(
+      join(tmp.dir, "src", "lib.rs"),
+      "pub(crate) async fn handshake() {}\nconst fn local_only() -> usize { 1 }\n",
+      "utf8"
+    );
+    await writeFile(join(tmp.dir, "src", "helper.js"), "function handshake() {}\n", "utf8");
+
+    const tools = new SourceCodeTools({ sourcePath: tmp.dir });
+    const result = await tools.showFunction("handshake");
+
+    assert.equal(result.totalMatches, 1);
+    assert.equal(result.matches[0].path, "src/lib.rs");
+    assert.equal(result.matches[0].signature.includes("fn handshake"), true);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("SourceCodeTools searchCode scans Rust-project text files", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    await mkdir(join(tmp.dir, "src"), { recursive: true });
+    await writeFile(join(tmp.dir, "src", "lib.rs"), "let id = \"needle\";\n", "utf8");
+    await writeFile(join(tmp.dir, "blob.json"), "{\"needle\": true}\n", "utf8");
+
+    const tools = new SourceCodeTools({ sourcePath: tmp.dir });
+    const result = await tools.searchCode("needle");
+
+    assert.equal(result.totalMatches, 1);
+    assert.equal(result.matches[0].path, "src/lib.rs");
+  } finally {
+    await tmp.cleanup();
+  }
+});

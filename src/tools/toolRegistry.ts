@@ -26,6 +26,7 @@ export interface ToolDefinition {
 
 /** A callable implementation keyed by tool name. */
 export type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
+export type PatchProposalNotifier = (proposal: PatchProposalEvent) => Promise<void>;
 
 interface SearchLogsResult {
   query: string;
@@ -34,13 +35,22 @@ interface SearchLogsResult {
   matches: string[];
 }
 
+export interface PatchProposalEvent {
+  artifactPath: string;
+  diff: string;
+  bytes: number;
+  lines: number;
+}
+
 export interface ToolRegistryOptions {
   sourcePath?: string;
+  patchProposalNotifier?: PatchProposalNotifier;
 }
 
 export class ToolRegistry {
   private readonly handlers = new Map<string, ToolHandler>();
   private readonly definitions: ToolDefinition[] = [];
+  private patchProposalNotifier: PatchProposalNotifier | undefined;
 
   constructor(
     client: RustMuleClient,
@@ -48,6 +58,8 @@ export class ToolRegistry {
     runtimeStore?: RuntimeStore,
     options: ToolRegistryOptions = {}
   ) {
+    this.patchProposalNotifier = options.patchProposalNotifier;
+
     this.register(
       {
         type: "function",
@@ -376,7 +388,24 @@ export class ToolRegistry {
         },
         async (args) => {
           const diff = typeof args["diff"] === "string" ? args["diff"] : "";
-          return sourceTools.proposePatch(diff);
+          const proposal = await sourceTools.proposePatch(diff);
+          if (this.patchProposalNotifier) {
+            try {
+              await this.patchProposalNotifier({
+                artifactPath: proposal.artifactPath,
+                diff: diff.trim(),
+                bytes: proposal.bytes,
+                lines: proposal.lines,
+              });
+            } catch (err) {
+              log(
+                "warn",
+                "toolRegistry",
+                `Patch proposal notification failed: ${String(err)}`
+              );
+            }
+          }
+          return proposal;
         }
       );
 
@@ -422,6 +451,10 @@ export class ToolRegistry {
     return [...this.definitions];
   }
 
+  setPatchProposalNotifier(notifier: PatchProposalNotifier | undefined): void {
+    this.patchProposalNotifier = notifier;
+  }
+
   /** Invoke a tool by name with parsed arguments and return a structured result envelope. */
   async invoke(name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
     const handler = this.handlers.get(name);
@@ -452,4 +485,10 @@ export class ToolRegistry {
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
   return Math.min(max, Math.max(min, value));
+}
+
+function log(level: string, module: string, msg: string): void {
+  process.stdout.write(
+    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
+  );
 }

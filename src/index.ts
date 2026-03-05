@@ -115,6 +115,9 @@ async function main(): Promise<void> {
     usageTracker,
   });
   const mattermostClient = new MattermostClient(webhookUrl, analyzer);
+  toolRegistry.setPatchProposalNotifier(async (proposal) => {
+    await mattermostClient.postPatchProposal(proposal);
+  });
   const observer = new Observer(analyzer, mattermostClient, {
     intervalMs,
     client: rustMuleClient,

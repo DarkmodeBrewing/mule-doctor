@@ -13,29 +13,15 @@ const DEFAULT_MAX_SCAN_FILE_BYTES = 256 * 1024;
 const PROPOSAL_DIR = ".mule-doctor/proposals";
 
 const EXCLUDED_DIRS = new Set([".git", "node_modules", "target", "dist", "build"]);
-const TEXT_EXTENSIONS = new Set([
+const RUST_PROJECT_EXTENSIONS = new Set([
   ".rs",
   ".toml",
   ".md",
   ".txt",
-  ".json",
-  ".yaml",
-  ".yml",
-  ".ts",
-  ".tsx",
-  ".js",
-  ".mjs",
-  ".cjs",
-  ".py",
-  ".go",
-  ".java",
-  ".kt",
   ".sh",
-  ".dockerfile",
   ".env",
-  ".sql",
 ]);
-const TEXT_FILENAMES = new Set(["Dockerfile", "Makefile", "Cargo.lock"]);
+const RUST_PROJECT_FILENAMES = new Set(["Cargo.toml", "Cargo.lock", "Makefile", "Dockerfile"]);
 
 interface SourceCodeToolsConfig {
   sourcePath: string;
@@ -171,15 +157,11 @@ export class SourceCodeTools {
       throw new Error("show_function requires non-empty name");
     }
 
-    const files = await this.listSourceFiles();
+    const files = await this.listRustSourceFiles();
     const escaped = escapeRegex(name);
-    const patterns = [
-      new RegExp(`^\\s*(?:pub\\s+)?(?:async\\s+)?fn\\s+${escaped}\\b`),
-      new RegExp(`^\\s*(?:export\\s+)?(?:async\\s+)?function\\s+${escaped}\\b`),
-      new RegExp(
-        `^\\s*(?:export\\s+)?(?:const|let|var)\\s+${escaped}\\s*=\\s*(?:async\\s*)?(?:\\(|function\\b)`
-      ),
-    ];
+    const rustFunctionPattern = new RegExp(
+      `^\\s*(?:(?:pub(?:\\([^)]*\\))?|const|async|unsafe|extern(?:\\s+\"[^\"]+\")?)\\s+)*fn\\s+${escaped}\\b`
+    );
 
     const matches: Array<{ path: string; line: number; signature: string }> = [];
     let totalMatches = 0;
@@ -189,7 +171,7 @@ export class SourceCodeTools {
       const lines = content.split("\n");
       for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index].trimEnd();
-        if (!patterns.some((pattern) => pattern.test(line))) continue;
+        if (!rustFunctionPattern.test(line)) continue;
         totalMatches += 1;
         if (matches.length < this.maxMatches) {
           matches.push({
@@ -256,7 +238,13 @@ export class SourceCodeTools {
 
   private async listSourceFiles(): Promise<SourceFile[]> {
     const files: SourceFile[] = [];
-    await walkDir(this.rootPath, this.rootPath, this.maxFiles, files);
+    await walkDir(this.rootPath, this.rootPath, this.maxFiles, files, isRustProjectTextFile);
+    return files;
+  }
+
+  private async listRustSourceFiles(): Promise<SourceFile[]> {
+    const files: SourceFile[] = [];
+    await walkDir(this.rootPath, this.rootPath, this.maxFiles, files, isRustSourceFile);
     return files;
   }
 
@@ -356,7 +344,8 @@ async function walkDir(
   rootPath: string,
   currentPath: string,
   maxFiles: number,
-  output: SourceFile[]
+  output: SourceFile[],
+  includeFile: (name: string) => boolean
 ): Promise<void> {
   if (output.length >= maxFiles) return;
 
@@ -370,12 +359,12 @@ async function walkDir(
     const absPath = resolve(currentPath, entry.name);
     if (entry.isDirectory()) {
       if (EXCLUDED_DIRS.has(entry.name)) continue;
-      await walkDir(rootPath, absPath, maxFiles, output);
+      await walkDir(rootPath, absPath, maxFiles, output, includeFile);
       continue;
     }
 
     if (!entry.isFile()) continue;
-    if (!isTextLikeFile(entry.name)) continue;
+    if (!includeFile(entry.name)) continue;
 
     output.push({
       absPath,
@@ -391,10 +380,14 @@ function clampPositive(value: number | undefined, fallback: number): number {
   return Math.round(value);
 }
 
-function isTextLikeFile(fileName: string): boolean {
-  if (TEXT_FILENAMES.has(fileName)) return true;
+function isRustProjectTextFile(fileName: string): boolean {
+  if (RUST_PROJECT_FILENAMES.has(fileName)) return true;
   const extension = extname(fileName).toLowerCase();
-  return TEXT_EXTENSIONS.has(extension);
+  return RUST_PROJECT_EXTENSIONS.has(extension);
+}
+
+function isRustSourceFile(fileName: string): boolean {
+  return extname(fileName).toLowerCase() === ".rs";
 }
 
 function escapeRegex(value: string): string {
