@@ -48,3 +48,7 @@
 - Run end-to-end validation with a stable rust-mule release once available (debug endpoints, token flows, observer/report loop).
 - Execute containerized smoke run (`docker compose`) with mounted `/data` and confirm persisted artifacts/state behavior.
 - Continue backlog from `docs/TASK.md` based on validation findings and any upstream rust-mule API changes.
+- Deferred follow-ups are now explicitly documented in `docs/TASK.md` under:
+  - End-to-end smoke harness
+  - Integration coverage for rust-mule API edge cases
+  - Runtime readiness validation

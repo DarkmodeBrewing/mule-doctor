@@ -173,3 +173,46 @@ Acceptance criteria:
 4. Phase 6 + Phase 7 (reporting + usage telemetry)
 5. Phase 5 (source tools)
 6. Phase 8 + Phase 9 (runtime hardening + CI)
+
+## Documented Next Tasks (Deferred, No Implementation Yet)
+
+These items are intentionally documented for follow-up and are not in progress.
+
+## Task A: End-to-End Smoke Harness
+
+1. Add a repeatable local smoke script that:
+   - boots the stack via `docker compose`
+   - waits for rust-mule + mule-doctor readiness
+   - validates key observer/tool flows
+   - verifies persisted artifacts under mounted `/data`
+2. Ensure clear pass/fail output and non-zero exit on failure.
+
+Acceptance criteria:
+- One command executes the smoke run end-to-end.
+- Script verifies state/history/proposal artifact creation.
+- Suitable for pre-release validation.
+
+## Task B: Integration Coverage for rust-mule API Edge Cases
+
+1. Add integration tests for debug endpoint behaviors:
+   - `403` for invalid debug token
+   - `404` when debug mode is disabled
+   - async `202 -> poll` flows for bootstrap and trace lookup
+2. Validate bearer-token rejection behavior (`403`) across relevant endpoints.
+
+Acceptance criteria:
+- Edge-case handling is covered by automated integration tests.
+- Regressions in debug/auth/polling behavior are caught before merge.
+
+## Task C: Runtime Readiness Validation
+
+1. Add a startup/readiness validation script/checklist for runtime prerequisites:
+   - required env vars
+   - token and debug-token file paths
+   - config file presence
+   - writable `/data` subpaths
+2. Fail fast with explicit operator-facing diagnostics when prerequisites are missing.
+
+Acceptance criteria:
+- Startup failures surface concrete missing prerequisites.
+- Operational setup issues are identified before observer loop begins.
