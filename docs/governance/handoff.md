@@ -1,34 +1,25 @@
 # Handoff
 
 ## Branch
-- `feature/phase8-runtime-layout`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/12
-- Last updated: 2026-03-05
+- `feature/phase9-pr-ci-gate`
+- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/13
+- Last updated: 2026-03-06
 
 ## Status
-- Phase 8 runtime/container layout alignment is in progress.
-- This branch aligns runtime paths, startup behavior, and production docs with architecture.
+- Phase 9 test/release hardening is in progress.
+- This branch adds the GitHub Actions PR CI gate for `main`.
 
 ## Completed Work
-- Reworked `Dockerfile` to architecture layout:
-  - builds rust-mule under `/opt/rust-mule` (configurable repo/ref build args; supports commit refs).
-  - builds mule-doctor under `/app`.
-  - uses multi-stage build to keep toolchains out of runtime image.
-  - provisions `/data` runtime paths and volume mount.
-  - sets container-default runtime env paths (`RUST_MULE_*`, `MULE_DOCTOR_*`).
-- Added `entrypoint.sh`:
-  - starts rust-mule with `/data/config.toml`.
-  - waits for token file before launching mule-doctor when token path is non-empty.
-  - supervises both processes and forwards shutdown.
-  - creates parent directory for configurable rust-mule log path.
-- Added `.dockerignore` to reduce build context noise.
-- Updated `README.md` with container runtime layout, startup flow, and production dependencies.
+- Added GitHub Actions workflow at `.github/workflows/pr-check.yml`:
+  - triggers on `pull_request` events targeting `main`.
+  - runs with Node.js 20 on `ubuntu-latest`.
+  - executes `npm ci` followed by `npm run check`.
+  - uses workflow concurrency to cancel superseded runs per PR.
+  - skips draft PRs until ready.
 
 ## Key Decisions
-- Use architecture-consistent absolute runtime paths (`/opt/rust-mule`, `/app`, `/data`) as container defaults.
-- Keep startup orchestration in entrypoint so rust-mule and mule-doctor are coupled in one container process model.
-- Use `/data` as persisted runtime source for config/token/log/state.
-- Runtime image runs as non-root (`mule`) and only includes runtime dependencies.
+- Keep CI gate minimal and architecture-aligned: enforce the existing project check command (`npm run check`) on PRs to `main`.
+- Use `npm ci` in CI for deterministic lockfile-based installs.
 
 ## Validation
 - `npm run check` passed on this branch:
@@ -36,8 +27,7 @@
   - Tests passed (`42/42`)
 
 ## Next Steps
-- Open PR for Phase 8 runtime/container layout alignment.
-- Start Phase 9 hardening:
-  - PR CI workflow (`pull_request` on `main`) running `npm ci` + `npm run check`.
-  - additional integration/smoke hardening tasks.
-- Phase 9 follow-up task remains: add GitHub Actions PR CI workflow (`pull_request` on `main`) running `npm ci` and `npm run check`.
+- After PR #13 merges, monitor the new Phase 9 PR CI gate on `main` and adjust as needed.
+- Continue remaining Phase 9 tasks:
+  - expand integration coverage where needed (observer/analyzer/tool-loop hardening).
+  - add local smoke script for end-to-end validation.
