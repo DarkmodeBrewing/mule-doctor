@@ -22,10 +22,11 @@ test("SourceCodeTools proposePatch stores artifact without mutating source file"
   const tmp = await makeTempSourceDir();
   try {
     await mkdir(join(tmp.dir, "src"), { recursive: true });
+    const proposalDir = join(tmp.dir, "proposals");
     const filePath = join(tmp.dir, "src", "lib.rs");
     await writeFile(filePath, "pub fn stable() {}\n", "utf8");
 
-    const tools = new SourceCodeTools({ sourcePath: tmp.dir });
+    const tools = new SourceCodeTools({ sourcePath: tmp.dir, proposalDir });
     const proposal = await tools.proposePatch(
       "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@\n-pub fn stable() {}\n+pub fn updated() {}\n"
     );
@@ -34,8 +35,8 @@ test("SourceCodeTools proposePatch stores artifact without mutating source file"
     assert.equal(after, "pub fn stable() {}\n");
     assert.equal(proposal.applied, false);
     assert.equal(proposal.mode, "proposal_only");
-    assert.equal(proposal.artifactPath.startsWith(".mule-doctor/proposals/"), true);
-    assert.equal(existsSync(join(tmp.dir, proposal.artifactPath)), true);
+    assert.equal(proposal.artifactPath.startsWith(`${proposalDir}/`), true);
+    assert.equal(existsSync(proposal.artifactPath), true);
   } finally {
     await tmp.cleanup();
   }

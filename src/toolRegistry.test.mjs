@@ -229,8 +229,10 @@ test("ToolRegistry propose_patch triggers patch proposal notifier with diff cont
   const tmp = await makeTempSourceDir();
   try {
     const notices = [];
+    const proposalDir = join(tmp.dir, "proposals");
     const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
       sourcePath: tmp.dir,
+      proposalDir,
       patchProposalNotifier: async (notice) => {
         notices.push(notice);
       },
@@ -242,7 +244,7 @@ test("ToolRegistry propose_patch triggers patch proposal notifier with diff cont
 
     assert.equal(result.success, true);
     assert.equal(notices.length, 1);
-    assert.equal(notices[0].artifactPath.startsWith(".mule-doctor/proposals/"), true);
+    assert.equal(notices[0].artifactPath.startsWith(`${proposalDir}/`), true);
     assert.equal(notices[0].diff, diff.trim());
     assert.equal(notices[0].bytes, result.data.bytes);
     assert.equal(notices[0].lines, result.data.lines);
@@ -254,8 +256,10 @@ test("ToolRegistry propose_patch triggers patch proposal notifier with diff cont
 test("ToolRegistry propose_patch succeeds even when notifier fails", async () => {
   const tmp = await makeTempSourceDir();
   try {
+    const proposalDir = join(tmp.dir, "proposals");
     const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
       sourcePath: tmp.dir,
+      proposalDir,
       patchProposalNotifier: async () => {
         throw new Error("webhook down");
       },
@@ -267,7 +271,7 @@ test("ToolRegistry propose_patch succeeds even when notifier fails", async () =>
 
     assert.equal(result.success, true);
     assert.equal(result.data.applied, false);
-    assert.equal(result.data.artifactPath.startsWith(".mule-doctor/proposals/"), true);
+    assert.equal(result.data.artifactPath.startsWith(`${proposalDir}/`), true);
   } finally {
     await tmp.cleanup();
   }

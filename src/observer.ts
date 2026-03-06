@@ -39,6 +39,7 @@ export class Observer {
   private readonly logWatcher: LogWatcher | undefined;
   private readonly runtimeStore: RuntimeStore | undefined;
   private timer: NodeJS.Timeout | undefined;
+  private started = false;
 
   constructor(
     analyzer: Analyzer,
@@ -55,25 +56,37 @@ export class Observer {
 
   /** Start the periodic observation loop. */
   start(): void {
+    if (this.started) {
+      log("warn", "observer", "Start requested while observer is already running");
+      return;
+    }
+    this.started = true;
     log("info", "observer", `Starting observation loop (interval: ${this.intervalMs}ms)`);
-    // Run immediately, then on a fixed cadence.
-    this.runCycle().catch((err) =>
-      log("error", "observer", `Cycle error: ${String(err)}`)
-    );
-    this.timer = setInterval(() => {
-      this.runCycle().catch((err) =>
-        log("error", "observer", `Cycle error: ${String(err)}`)
-      );
-    }, this.intervalMs);
+    // Run immediately, then schedule the next cycle after completion.
+    this.runCycleAndSchedule();
   }
 
   /** Stop the observation loop. */
   stop(): void {
+    this.started = false;
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = undefined;
     }
     log("info", "observer", "Stopped");
+  }
+
+  private runCycleAndSchedule(): void {
+    this.runCycle()
+      .catch((err) => log("error", "observer", `Cycle error: ${String(err)}`))
+      .finally(() => {
+        if (!this.started) return;
+        this.timer = setTimeout(() => {
+          this.timer = undefined;
+          if (!this.started) return;
+          this.runCycleAndSchedule();
+        }, this.intervalMs);
+      });
   }
 
   private async runCycle(): Promise<void> {
