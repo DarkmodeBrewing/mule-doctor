@@ -52,6 +52,7 @@ The Docker image follows the architecture runtime layout:
 - `/opt/rust-mule` – rust-mule source + compiled binary
 - `/app` – mule-doctor code and compiled JS
 - `/data` – runtime volume (state, logs, token, config)
+- runtime image includes `git`; bundled `/opt/rust-mule` keeps local `.git` history for read-only operations like `git_blame`, with `origin` remote removed to prevent accidental pushes
 
 Container defaults:
 

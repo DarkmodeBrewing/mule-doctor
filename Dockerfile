@@ -14,7 +14,7 @@ WORKDIR /opt
 RUN git clone "${RUST_MULE_REPO}" /opt/rust-mule \
     && cd /opt/rust-mule \
     && git checkout "${RUST_MULE_REF}" \
-    && rm -rf .git
+    && git remote remove origin
 
 WORKDIR /opt/rust-mule
 RUN cargo fetch
@@ -31,6 +31,7 @@ RUN npm run build
 FROM node:20-bookworm-slim AS runner
 
 RUN apt-get update && apt-get install -y \
+    git \
     ca-certificates \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*

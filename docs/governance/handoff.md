@@ -24,11 +24,16 @@
   - `ToolRegistry` passes `proposalDir` into `SourceCodeTools`.
 - Updated tests (`sourceCodeTools` + `toolRegistry`) to use temp proposal directories and assert absolute artifact paths.
 - Updated README runtime notes for the canonical proposal artifact location.
+- Updated container tooling for source-code operations:
+  - installed `git` in the runtime image (`runner` stage).
+  - retained `/opt/rust-mule/.git` metadata in the bundled source tree.
+  - removed rust-mule `origin` remote during image build to prevent accidental push from container context.
 
 ## Key Decisions
 - Use non-overlapping observer scheduling to avoid concurrent diagnostic cycles when analysis exceeds the configured interval.
 - Keep proposal artifacts on disk under `/data` by default for operational visibility and reviewer access.
 - Preserve test portability by injecting per-test temp `proposalDir` instead of writing to `/data` in test runs.
+- For bundled source safety, preserve local git history for `git_blame` while stripping `origin` remote.
 
 ## Validation
 - `npm run check` passes (typecheck + build + full test suite).
