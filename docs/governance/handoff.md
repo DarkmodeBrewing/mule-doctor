@@ -2,7 +2,7 @@
 
 ## Branch
 - `feature/phase9-pr-ci-gate`
-- PR: (to be created)
+- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/13
 - Last updated: 2026-03-06
 
 ## Status
