@@ -2,11 +2,11 @@
 
 ## Branch
 - `feature/nonoverlap-observer-proposal-dir`
-- PR: (pending)
+- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/15
 - Last updated: 2026-03-06
 
 ## Status
-- In progress; ready to open PR.
+- PR opened; awaiting review.
 - This branch hardens observer scheduling and aligns `propose_patch` artifact storage with runtime `/data`.
 
 ## Completed Work
