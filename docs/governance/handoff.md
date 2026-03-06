@@ -27,7 +27,7 @@
   - Tests passed (`42/42`)
 
 ## Next Steps
-- Open PR for Phase 9 PR CI gate.
+- After PR #13 merges, monitor the new Phase 9 PR CI gate on `main` and adjust as needed.
 - Continue remaining Phase 9 tasks:
   - expand integration coverage where needed (observer/analyzer/tool-loop hardening).
   - add local smoke script for end-to-end validation.
