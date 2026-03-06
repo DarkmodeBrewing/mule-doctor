@@ -98,7 +98,7 @@ export class SourceCodeTools {
     this.maxMatches = clampPositive(config.maxMatches, DEFAULT_MAX_MATCHES);
     this.maxReadBytes = clampPositive(config.maxReadBytes, DEFAULT_MAX_READ_BYTES);
     this.maxScanFileBytes = clampPositive(config.maxScanFileBytes, DEFAULT_MAX_SCAN_FILE_BYTES);
-    this.proposalDir = resolve(config.proposalDir ?? DEFAULT_PROPOSAL_DIR);
+    this.proposalDir = resolveProposalDir(config.proposalDir, this.rootPath);
   }
 
   async searchCode(queryRaw: string): Promise<SearchCodeResult> {
@@ -394,6 +394,20 @@ function isRustSourceFile(fileName: string): boolean {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function resolveProposalDir(proposalDirRaw: string | undefined, rootPath: string): string {
+  if (proposalDirRaw === undefined) {
+    return resolve(DEFAULT_PROPOSAL_DIR);
+  }
+  const proposalDir = proposalDirRaw.trim();
+  if (!proposalDir) {
+    throw new Error("proposalDir must be non-empty when provided");
+  }
+  if (isAbsolute(proposalDir)) {
+    return resolve(proposalDir);
+  }
+  return resolve(rootPath, proposalDir);
 }
 
 function toPosixPath(value: string): string {

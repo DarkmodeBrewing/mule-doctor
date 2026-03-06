@@ -147,3 +147,39 @@ test("Observer start uses non-overlapping scheduling for long cycles", async () 
   assert.equal(analyzer.calls <= 2, true);
   assert.equal(mattermost.periodicCalls, analyzer.calls);
 });
+
+test("Observer ignores duplicate start calls", async () => {
+  const analyzer = new SlowAnalyzer(40);
+  const mattermost = new CountingMattermost();
+  const observer = new Observer(analyzer, mattermost, { intervalMs: 10 });
+
+  observer.start();
+  observer.start();
+  await sleep(20);
+  observer.stop();
+  await sleep(60);
+
+  assert.equal(analyzer.calls, 1);
+  assert.equal(mattermost.periodicCalls, 1);
+});
+
+test("Observer stop then start waits for in-flight cycle before next cycle", async () => {
+  const analyzer = new SlowAnalyzer(60);
+  const mattermost = new CountingMattermost();
+  const observer = new Observer(analyzer, mattermost, { intervalMs: 1000 });
+
+  observer.start();
+  await sleep(15);
+  observer.stop();
+  observer.start();
+
+  await sleep(20);
+  assert.equal(analyzer.calls, 1);
+
+  await sleep(90);
+  observer.stop();
+  await sleep(20);
+
+  assert.equal(analyzer.calls, 2);
+  assert.equal(mattermost.periodicCalls, 2);
+});

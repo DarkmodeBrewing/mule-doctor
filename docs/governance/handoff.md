@@ -28,6 +28,11 @@
   - installed `git` in the runtime image (`runner` stage).
   - retained `/opt/rust-mule/.git` metadata in the bundled source tree.
   - removed rust-mule `origin` remote during image build to prevent accidental push from container context.
+- Addressed PR #15 review feedback:
+  - normalized/validated `proposalDir` handling (`undefined` -> default, relative -> source-root relative, empty string rejected).
+  - strengthened observer scheduling semantics across `stop()` + `start()` transitions with in-flight cycle/generation guards.
+  - added tests for duplicate `start()` and `stop()`/`start()` while a cycle is in flight.
+  - clarified README wording that proposal artifact path is default/configurable.
 
 ## Key Decisions
 - Use non-overlapping observer scheduling to avoid concurrent diagnostic cycles when analysis exceeds the configured interval.
@@ -39,5 +44,5 @@
 - `npm run check` passes (typecheck + build + full test suite).
 
 ## Next Steps
-- Open PR and process review feedback.
+- Resolve remaining PR threads and merge after approvals.
 - After merge, continue end-to-end runtime validation once rust-mule stable release is available.

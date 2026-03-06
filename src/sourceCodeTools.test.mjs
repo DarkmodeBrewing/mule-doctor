@@ -42,6 +42,40 @@ test("SourceCodeTools proposePatch stores artifact without mutating source file"
   }
 });
 
+test("SourceCodeTools resolves relative proposalDir against source root", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    await mkdir(join(tmp.dir, "src"), { recursive: true });
+    const filePath = join(tmp.dir, "src", "lib.rs");
+    await writeFile(filePath, "pub fn stable() {}\n", "utf8");
+
+    const tools = new SourceCodeTools({ sourcePath: tmp.dir, proposalDir: "relative-proposals" });
+    const proposal = await tools.proposePatch(
+      "diff --git a/src/lib.rs b/src/lib.rs\n@@\n-pub fn stable() {}\n+pub fn updated() {}\n"
+    );
+
+    assert.equal(
+      proposal.artifactPath.startsWith(`${join(tmp.dir, "relative-proposals")}/`),
+      true
+    );
+    assert.equal(existsSync(proposal.artifactPath), true);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("SourceCodeTools rejects empty proposalDir when provided", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    assert.throws(
+      () => new SourceCodeTools({ sourcePath: tmp.dir, proposalDir: "   " }),
+      /proposalDir must be non-empty when provided/
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("SourceCodeTools gitBlame returns commit metadata for file+line", async () => {
   const tmp = await makeTempSourceDir();
   try {
