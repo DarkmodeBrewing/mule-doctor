@@ -1,13 +1,14 @@
 # Handoff
 
 ## Branch
-- `feature/nonoverlap-observer-proposal-dir`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/15
+- `main` (current integrated state)
+- Last merged PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/15
 - Last updated: 2026-03-06
 
 ## Status
-- PR opened; awaiting review.
-- This branch hardens observer scheduling and aligns `propose_patch` artifact storage with runtime `/data`.
+- PR #15 is merged into `main` (merge commit: `394882361f688159d7842c4d66242613a9ebf5aa`).
+- Observer scheduling + source proposal artifact path/runtime tooling changes are integrated.
+- Current phase is runtime validation against a stable rust-mule release window.
 
 ## Completed Work
 - Updated observer loop scheduling to prevent overlapping cycles:
@@ -44,5 +45,6 @@
 - `npm run check` passes (typecheck + build + full test suite).
 
 ## Next Steps
-- Resolve remaining PR threads and merge after approvals.
-- After merge, continue end-to-end runtime validation once rust-mule stable release is available.
+- Run end-to-end validation with a stable rust-mule release once available (debug endpoints, token flows, observer/report loop).
+- Execute containerized smoke run (`docker compose`) with mounted `/data` and confirm persisted artifacts/state behavior.
+- Continue backlog from `docs/TASK.md` based on validation findings and any upstream rust-mule API changes.
