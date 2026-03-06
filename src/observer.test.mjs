@@ -17,6 +17,10 @@ async function makeTempDir() {
   };
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 class StubAnalyzer {
   async analyze() {
     return "ok";
@@ -65,6 +69,37 @@ class StubLogWatcher {
   }
 }
 
+class SlowAnalyzer {
+  constructor(delayMs = 35) {
+    this.delayMs = delayMs;
+    this.calls = 0;
+  }
+
+  async analyze() {
+    this.calls += 1;
+    await sleep(this.delayMs);
+    return "ok";
+  }
+
+  async consumeDailyUsageReport() {
+    return null;
+  }
+}
+
+class CountingMattermost {
+  constructor() {
+    this.periodicCalls = 0;
+  }
+
+  async postPeriodicReport() {
+    this.periodicCalls += 1;
+  }
+
+  async postDailyUsageReport() {
+    return;
+  }
+}
+
 test("Observer persists health score and includes it in cycle context", async () => {
   const tmp = await makeTempDir();
 
@@ -96,4 +131,55 @@ test("Observer persists health score and includes it in cycle context", async ()
   } finally {
     await tmp.cleanup();
   }
+});
+
+test("Observer start uses non-overlapping scheduling for long cycles", async () => {
+  const analyzer = new SlowAnalyzer(35);
+  const mattermost = new CountingMattermost();
+  const observer = new Observer(analyzer, mattermost, { intervalMs: 10 });
+
+  observer.start();
+  await sleep(65);
+  observer.stop();
+  await sleep(50);
+
+  assert.equal(analyzer.calls >= 1, true);
+  assert.equal(analyzer.calls <= 2, true);
+  assert.equal(mattermost.periodicCalls, analyzer.calls);
+});
+
+test("Observer ignores duplicate start calls", async () => {
+  const analyzer = new SlowAnalyzer(40);
+  const mattermost = new CountingMattermost();
+  const observer = new Observer(analyzer, mattermost, { intervalMs: 10 });
+
+  observer.start();
+  observer.start();
+  await sleep(20);
+  observer.stop();
+  await sleep(60);
+
+  assert.equal(analyzer.calls, 1);
+  assert.equal(mattermost.periodicCalls, 1);
+});
+
+test("Observer stop then start waits for in-flight cycle before next cycle", async () => {
+  const analyzer = new SlowAnalyzer(60);
+  const mattermost = new CountingMattermost();
+  const observer = new Observer(analyzer, mattermost, { intervalMs: 1000 });
+
+  observer.start();
+  await sleep(15);
+  observer.stop();
+  observer.start();
+
+  await sleep(20);
+  assert.equal(analyzer.calls, 1);
+
+  await sleep(90);
+  observer.stop();
+  await sleep(20);
+
+  assert.equal(analyzer.calls, 2);
+  assert.equal(mattermost.periodicCalls, 2);
 });

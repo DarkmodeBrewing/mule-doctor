@@ -1,30 +1,48 @@
 # Handoff
 
 ## Branch
-- `feature/docker-compose-runtime`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/14
+- `feature/nonoverlap-observer-proposal-dir`
+- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/15
 - Last updated: 2026-03-06
 
 ## Status
-- Runtime usability follow-up is in progress.
-- This branch adds a Docker Compose runtime definition with host-mapped `/data`.
+- PR opened; awaiting review.
+- This branch hardens observer scheduling and aligns `propose_patch` artifact storage with runtime `/data`.
 
 ## Completed Work
-- Added `docker-compose.yml`:
-  - builds the local `Dockerfile`.
-  - maps host `./data` to container `/data`.
-  - wires runtime env vars for rust-mule + mule-doctor.
-  - includes `RUST_MULE_DEBUG_TOKEN_FILE` and token/config path defaults under `/data`.
+- Updated observer loop scheduling to prevent overlapping cycles:
+  - replaced fixed `setInterval` cycle dispatch with chained `setTimeout` after each cycle finishes.
+  - added duplicate-start guard (`started` flag).
+  - stop now clears pending timeout and disables follow-up scheduling.
+- Added observer test coverage for non-overlapping behavior with a slow analyzer.
+- Updated source proposal handling:
+  - `propose_patch` now writes artifacts to `/data/mule-doctor/proposals` by default.
+  - `SourceCodeTools` now accepts explicit `proposalDir` override.
+  - `artifactPath` now returns absolute path to the saved patch.
+- Wired proposal directory through app/tool wiring:
+  - `index.ts` computes `${MULE_DOCTOR_DATA_DIR || "/data/mule-doctor"}/proposals`.
+  - `ToolRegistry` passes `proposalDir` into `SourceCodeTools`.
+- Updated tests (`sourceCodeTools` + `toolRegistry`) to use temp proposal directories and assert absolute artifact paths.
+- Updated README runtime notes for the canonical proposal artifact location.
+- Updated container tooling for source-code operations:
+  - installed `git` in the runtime image (`runner` stage).
+  - retained `/opt/rust-mule/.git` metadata in the bundled source tree.
+  - removed rust-mule `origin` remote during image build to prevent accidental push from container context.
+- Addressed PR #15 review feedback:
+  - normalized/validated `proposalDir` handling (`undefined` -> default, relative -> source-root relative, empty string rejected).
+  - strengthened observer scheduling semantics across `stop()` + `start()` transitions with in-flight cycle/generation guards.
+  - added tests for duplicate `start()` and `stop()`/`start()` while a cycle is in flight.
+  - clarified README wording that proposal artifact path is default/configurable.
 
 ## Key Decisions
-- Keep Compose minimal and aligned to the current image entrypoint/runtime defaults.
-- Keep all mutable runtime artifacts on the host via `./data:/data`.
+- Use non-overlapping observer scheduling to avoid concurrent diagnostic cycles when analysis exceeds the configured interval.
+- Keep proposal artifacts on disk under `/data` by default for operational visibility and reviewer access.
+- Preserve test portability by injecting per-test temp `proposalDir` instead of writing to `/data` in test runs.
+- For bundled source safety, preserve local git history for `git_blame` while stripping `origin` remote.
 
 ## Validation
-- Compose file added and ready for `docker compose up --build` runs.
+- `npm run check` passes (typecheck + build + full test suite).
 
 ## Next Steps
-- Open PR for Docker Compose runtime definition.
-- After merge, continue remaining Phase 9 hardening:
-  - add local smoke script for end-to-end validation.
-  - expand integration coverage where needed (observer/analyzer/tool-loop hardening).
+- Resolve remaining PR threads and merge after approvals.
+- After merge, continue end-to-end runtime validation once rust-mule stable release is available.

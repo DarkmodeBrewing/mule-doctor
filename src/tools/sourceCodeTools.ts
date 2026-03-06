@@ -10,7 +10,7 @@ const DEFAULT_MAX_FILES = 2000;
 const DEFAULT_MAX_MATCHES = 200;
 const DEFAULT_MAX_READ_BYTES = 64 * 1024;
 const DEFAULT_MAX_SCAN_FILE_BYTES = 256 * 1024;
-const PROPOSAL_DIR = ".mule-doctor/proposals";
+const DEFAULT_PROPOSAL_DIR = "/data/mule-doctor/proposals";
 
 const EXCLUDED_DIRS = new Set([".git", "node_modules", "target", "dist", "build"]);
 const RUST_PROJECT_EXTENSIONS = new Set([
@@ -25,6 +25,7 @@ const RUST_PROJECT_FILENAMES = new Set(["Cargo.toml", "Cargo.lock", "Makefile", 
 
 interface SourceCodeToolsConfig {
   sourcePath: string;
+  proposalDir?: string;
   maxFiles?: number;
   maxMatches?: number;
   maxReadBytes?: number;
@@ -85,6 +86,7 @@ export class SourceCodeTools {
   private readonly maxMatches: number;
   private readonly maxReadBytes: number;
   private readonly maxScanFileBytes: number;
+  private readonly proposalDir: string;
 
   constructor(config: SourceCodeToolsConfig) {
     if (!config.sourcePath || !config.sourcePath.trim()) {
@@ -96,6 +98,7 @@ export class SourceCodeTools {
     this.maxMatches = clampPositive(config.maxMatches, DEFAULT_MAX_MATCHES);
     this.maxReadBytes = clampPositive(config.maxReadBytes, DEFAULT_MAX_READ_BYTES);
     this.maxScanFileBytes = clampPositive(config.maxScanFileBytes, DEFAULT_MAX_SCAN_FILE_BYTES);
+    this.proposalDir = resolveProposalDir(config.proposalDir, this.rootPath);
   }
 
   async searchCode(queryRaw: string): Promise<SearchCodeResult> {
@@ -197,12 +200,11 @@ export class SourceCodeTools {
       throw new Error("propose_patch requires non-empty diff");
     }
 
-    const proposalRoot = resolve(this.rootPath, PROPOSAL_DIR);
-    await mkdir(proposalRoot, { recursive: true });
+    await mkdir(this.proposalDir, { recursive: true });
 
     const timestamp = new Date().toISOString().replace(/[.:]/g, "-");
     const artifactName = `proposal-${timestamp}.patch`;
-    const artifactAbsPath = resolve(proposalRoot, artifactName);
+    const artifactAbsPath = resolve(this.proposalDir, artifactName);
     await writeFile(artifactAbsPath, diff + "\n", "utf8");
 
     return {
@@ -210,7 +212,7 @@ export class SourceCodeTools {
       applied: false,
       bytes: Buffer.byteLength(diff, "utf8"),
       lines: diff.split("\n").length,
-      artifactPath: toPosixPath(relative(this.rootPath, artifactAbsPath)),
+      artifactPath: toPosixPath(artifactAbsPath),
       message: "Patch proposal saved for human review. No source files were modified.",
     };
   }
@@ -392,6 +394,20 @@ function isRustSourceFile(fileName: string): boolean {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function resolveProposalDir(proposalDirRaw: string | undefined, rootPath: string): string {
+  if (proposalDirRaw === undefined) {
+    return resolve(DEFAULT_PROPOSAL_DIR);
+  }
+  const proposalDir = proposalDirRaw.trim();
+  if (!proposalDir) {
+    throw new Error("proposalDir must be non-empty when provided");
+  }
+  if (isAbsolute(proposalDir)) {
+    return resolve(proposalDir);
+  }
+  return resolve(rootPath, proposalDir);
 }
 
 function toPosixPath(value: string): string {

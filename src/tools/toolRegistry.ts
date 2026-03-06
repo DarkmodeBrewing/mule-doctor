@@ -44,6 +44,7 @@ export interface PatchProposalEvent {
 
 export interface ToolRegistryOptions {
   sourcePath?: string;
+  proposalDir?: string;
   patchProposalNotifier?: PatchProposalNotifier;
 }
 
@@ -290,7 +291,10 @@ export class ToolRegistry {
     );
 
     if (options.sourcePath) {
-      const sourceTools = new SourceCodeTools({ sourcePath: options.sourcePath });
+      const sourceTools = new SourceCodeTools({
+        sourcePath: options.sourcePath,
+        proposalDir: options.proposalDir,
+      });
 
       this.register(
         {

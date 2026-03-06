@@ -39,6 +39,9 @@ export class Observer {
   private readonly logWatcher: LogWatcher | undefined;
   private readonly runtimeStore: RuntimeStore | undefined;
   private timer: NodeJS.Timeout | undefined;
+  private started = false;
+  private cycleInFlight: Promise<void> | undefined;
+  private generation = 0;
 
   constructor(
     analyzer: Analyzer,
@@ -55,25 +58,58 @@ export class Observer {
 
   /** Start the periodic observation loop. */
   start(): void {
+    if (this.started) {
+      log("warn", "observer", "Start requested while observer is already running");
+      return;
+    }
+    this.started = true;
+    this.generation += 1;
     log("info", "observer", `Starting observation loop (interval: ${this.intervalMs}ms)`);
-    // Run immediately, then on a fixed cadence.
-    this.runCycle().catch((err) =>
-      log("error", "observer", `Cycle error: ${String(err)}`)
-    );
-    this.timer = setInterval(() => {
-      this.runCycle().catch((err) =>
-        log("error", "observer", `Cycle error: ${String(err)}`)
-      );
-    }, this.intervalMs);
+    // Run immediately, then schedule the next cycle after completion.
+    this.maybeStartCycle();
   }
 
   /** Stop the observation loop. */
   stop(): void {
+    this.started = false;
+    this.generation += 1;
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = undefined;
     }
     log("info", "observer", "Stopped");
+  }
+
+  private maybeStartCycle(): void {
+    if (!this.started || this.timer) {
+      return;
+    }
+
+    if (this.cycleInFlight) {
+      const inFlight = this.cycleInFlight;
+      inFlight.finally(() => {
+        this.maybeStartCycle();
+      });
+      return;
+    }
+
+    const cycleGeneration = this.generation;
+    this.cycleInFlight = this.runCycle()
+      .catch((err) => log("error", "observer", `Cycle error: ${String(err)}`))
+      .finally(() => {
+        this.cycleInFlight = undefined;
+        if (!this.started) return;
+        if (this.generation !== cycleGeneration) {
+          // Start/stop happened while this cycle was in-flight; immediately evaluate next step.
+          this.maybeStartCycle();
+          return;
+        }
+        this.timer = setTimeout(() => {
+          this.timer = undefined;
+          if (!this.started) return;
+          this.maybeStartCycle();
+        }, this.intervalMs);
+      });
   }
 
   private async runCycle(): Promise<void> {
