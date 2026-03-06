@@ -1,33 +1,30 @@
 # Handoff
 
 ## Branch
-- `feature/phase9-pr-ci-gate`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/13
+- `feature/docker-compose-runtime`
+- PR: (to be created)
 - Last updated: 2026-03-06
 
 ## Status
-- Phase 9 test/release hardening is in progress.
-- This branch adds the GitHub Actions PR CI gate for `main`.
+- Runtime usability follow-up is in progress.
+- This branch adds a Docker Compose runtime definition with host-mapped `/data`.
 
 ## Completed Work
-- Added GitHub Actions workflow at `.github/workflows/pr-check.yml`:
-  - triggers on `pull_request` events targeting `main`.
-  - runs with Node.js 20 on `ubuntu-latest`.
-  - executes `npm ci` followed by `npm run check`.
-  - uses workflow concurrency to cancel superseded runs per PR.
-  - skips draft PRs until ready.
+- Added `docker-compose.yml`:
+  - builds the local `Dockerfile`.
+  - maps host `./data` to container `/data`.
+  - wires runtime env vars for rust-mule + mule-doctor.
+  - includes `RUST_MULE_DEBUG_TOKEN_FILE` and token/config path defaults under `/data`.
 
 ## Key Decisions
-- Keep CI gate minimal and architecture-aligned: enforce the existing project check command (`npm run check`) on PRs to `main`.
-- Use `npm ci` in CI for deterministic lockfile-based installs.
+- Keep Compose minimal and aligned to the current image entrypoint/runtime defaults.
+- Keep all mutable runtime artifacts on the host via `./data:/data`.
 
 ## Validation
-- `npm run check` passed on this branch:
-  - TypeScript no-emit typecheck passed
-  - Tests passed (`42/42`)
+- Compose file added and ready for `docker compose up --build` runs.
 
 ## Next Steps
-- After PR #13 merges, monitor the new Phase 9 PR CI gate on `main` and adjust as needed.
-- Continue remaining Phase 9 tasks:
-  - expand integration coverage where needed (observer/analyzer/tool-loop hardening).
+- Open PR for Docker Compose runtime definition.
+- After merge, continue remaining Phase 9 hardening:
   - add local smoke script for end-to-end validation.
+  - expand integration coverage where needed (observer/analyzer/tool-loop hardening).
