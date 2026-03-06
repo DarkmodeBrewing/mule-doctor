@@ -1,32 +1,34 @@
 # Handoff
 
 ## Branch
-- `feature/rust-source-tools-alignment`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/11
+- `feature/phase8-runtime-layout`
+- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/12
 - Last updated: 2026-03-05
 
 ## Status
-- Phase 5 follow-up alignment for Rust projects is in progress.
-- This branch narrows source tool behavior so it is explicitly Rust-project oriented.
+- Phase 8 runtime/container layout alignment is in progress.
+- This branch aligns runtime paths, startup behavior, and production docs with architecture.
 
 ## Completed Work
-- Updated `src/tools/sourceCodeTools.ts`:
-  - narrowed search scanning scope to Rust-project text files.
-  - narrowed `showFunction(name)` to Rust function signatures only.
-  - added dedicated Rust-source file scanning for function lookup (`.rs` only).
-- Added patch-notification wiring for `propose_patch`:
-  - `ToolRegistry` now supports a patch proposal notifier callback.
-  - `MattermostClient` now posts patch proposal metadata and diff content.
-  - `index.ts` wires `propose_patch` events to Mattermost notifications.
-- Added Rust-alignment tests in `src/sourceCodeTools.test.mjs`:
-  - verifies JS-style function declarations are ignored by `showFunction`.
-  - verifies `searchCode` scans Rust-project files and excludes non-Rust blobs like `.json`.
-- Added notifier tests in `src/toolRegistry.test.mjs` and patch message payload test in `src/mattermost.test.mjs`.
-- Updated `README.md` to document Rust-oriented source-tool behavior explicitly.
+- Reworked `Dockerfile` to architecture layout:
+  - builds rust-mule under `/opt/rust-mule` (configurable repo/ref build args; supports commit refs).
+  - builds mule-doctor under `/app`.
+  - uses multi-stage build to keep toolchains out of runtime image.
+  - provisions `/data` runtime paths and volume mount.
+  - sets container-default runtime env paths (`RUST_MULE_*`, `MULE_DOCTOR_*`).
+- Added `entrypoint.sh`:
+  - starts rust-mule with `/data/config.toml`.
+  - waits for token file before launching mule-doctor when token path is non-empty.
+  - supervises both processes and forwards shutdown.
+  - creates parent directory for configurable rust-mule log path.
+- Added `.dockerignore` to reduce build context noise.
+- Updated `README.md` with container runtime layout, startup flow, and production dependencies.
 
 ## Key Decisions
-- Source tools remain opt-in behind `RUST_MULE_SOURCE_PATH`.
-- Source inspection behavior should default to Rust project conventions instead of generic multi-language heuristics.
+- Use architecture-consistent absolute runtime paths (`/opt/rust-mule`, `/app`, `/data`) as container defaults.
+- Keep startup orchestration in entrypoint so rust-mule and mule-doctor are coupled in one container process model.
+- Use `/data` as persisted runtime source for config/token/log/state.
+- Runtime image runs as non-root (`mule`) and only includes runtime dependencies.
 
 ## Validation
 - `npm run check` passed on this branch:
@@ -34,6 +36,8 @@
   - Tests passed (`42/42`)
 
 ## Next Steps
-- Open PR for Rust-source-tools alignment follow-up.
-- Continue with Phase 8 (runtime/container layout alignment) after this fix merges.
+- Open PR for Phase 8 runtime/container layout alignment.
+- Start Phase 9 hardening:
+  - PR CI workflow (`pull_request` on `main`) running `npm ci` + `npm run check`.
+  - additional integration/smoke hardening tasks.
 - Phase 9 follow-up task remains: add GitHub Actions PR CI workflow (`pull_request` on `main`) running `npm ci` and `npm run check`.
