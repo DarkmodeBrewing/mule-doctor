@@ -11,14 +11,16 @@
 
 ## Completed Work
 - Reworked `Dockerfile` to architecture layout:
-  - builds rust-mule under `/opt/rust-mule` (configurable repo/ref build args).
+  - builds rust-mule under `/opt/rust-mule` (configurable repo/ref build args; supports commit refs).
   - builds mule-doctor under `/app`.
+  - uses multi-stage build to keep toolchains out of runtime image.
   - provisions `/data` runtime paths and volume mount.
   - sets container-default runtime env paths (`RUST_MULE_*`, `MULE_DOCTOR_*`).
 - Added `entrypoint.sh`:
   - starts rust-mule with `/data/config.toml`.
-  - waits for token file before launching mule-doctor.
+  - waits for token file before launching mule-doctor when token path is non-empty.
   - supervises both processes and forwards shutdown.
+  - creates parent directory for configurable rust-mule log path.
 - Added `.dockerignore` to reduce build context noise.
 - Updated `README.md` with container runtime layout, startup flow, and production dependencies.
 
@@ -26,6 +28,7 @@
 - Use architecture-consistent absolute runtime paths (`/opt/rust-mule`, `/app`, `/data`) as container defaults.
 - Keep startup orchestration in entrypoint so rust-mule and mule-doctor are coupled in one container process model.
 - Use `/data` as persisted runtime source for config/token/log/state.
+- Runtime image runs as non-root (`mule`) and only includes runtime dependencies.
 
 ## Validation
 - `npm run check` passed on this branch:

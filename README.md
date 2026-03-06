@@ -64,8 +64,10 @@ Container defaults:
 Entrypoint behavior:
 
 1. Starts rust-mule (`/opt/rust-mule/target/release/rust-mule --config /data/config.toml`)
-2. Waits for token file (`/data/token` by default)
+2. Waits for token file when `RUST_MULE_TOKEN_PATH` is non-empty (`/data/token` by default)
 3. Starts mule-doctor (`node /app/dist/index.js`)
+
+To disable bearer-token wait/auth for container runs, set `RUST_MULE_TOKEN_PATH` to an empty value.
 
 Required production runtime inputs:
 
