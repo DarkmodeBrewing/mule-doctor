@@ -9,6 +9,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Stats } from "node:fs";
 import { redactLine, redactText } from "../logs/redaction.js";
 import type {
+  DiagnosticTargetRef,
   ManagedInstanceAnalysisResult,
   ManagedInstanceDiagnosticSnapshot,
   ManagedInstanceRecord,
@@ -59,6 +60,11 @@ export interface ManagedInstanceAnalysis {
   analyze(id: string): Promise<ManagedInstanceAnalysisResult>;
 }
 
+export interface DiagnosticTargetControl {
+  getActiveTarget(): Promise<DiagnosticTargetRef>;
+  setActiveTarget(target: DiagnosticTargetRef): Promise<DiagnosticTargetRef>;
+}
+
 export interface OperatorConsoleConfig {
   authToken?: string;
   host?: string;
@@ -72,6 +78,7 @@ export interface OperatorConsoleConfig {
   managedInstances?: ManagedInstanceControl;
   managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
   managedInstanceAnalysis?: ManagedInstanceAnalysis;
+  diagnosticTarget?: DiagnosticTargetControl;
 }
 
 export class OperatorConsoleServer {
@@ -87,6 +94,7 @@ export class OperatorConsoleServer {
   private readonly managedInstances: ManagedInstanceControl | undefined;
   private readonly managedInstanceDiagnostics: ManagedInstanceDiagnostics | undefined;
   private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
+  private readonly diagnosticTarget: DiagnosticTargetControl | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -111,6 +119,7 @@ export class OperatorConsoleServer {
     this.managedInstances = config.managedInstances;
     this.managedInstanceDiagnostics = config.managedInstanceDiagnostics;
     this.managedInstanceAnalysis = config.managedInstanceAnalysis;
+    this.diagnosticTarget = config.diagnosticTarget;
     this.startedAt = new Date().toISOString();
   }
 
@@ -243,6 +252,11 @@ export class OperatorConsoleServer {
       return;
     }
 
+    if (path === "/api/observer/target") {
+      await this.handleDiagnosticTarget(req, res);
+      return;
+    }
+
     if (path.startsWith("/api/instances/")) {
       await this.handleInstanceAction(req, res, path);
       return;
@@ -333,6 +347,34 @@ export class OperatorConsoleServer {
     }
 
     sendJson(res, 404, { ok: false, error: "not found" });
+  }
+
+  private async handleDiagnosticTarget(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!this.diagnosticTarget) {
+      sendJson(res, 501, { ok: false, error: "diagnostic target control unavailable" });
+      return;
+    }
+
+    if (req.method === "GET") {
+      const target = await this.diagnosticTarget.getActiveTarget();
+      sendJson(res, 200, { ok: true, target });
+      return;
+    }
+
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+
+    const payload = await readJsonBody(req);
+    const target = await handleManagedInstanceErrors(() =>
+      this.diagnosticTarget!.setActiveTarget({
+        kind:
+          (typeof payload.kind === "string" ? payload.kind : "external") as DiagnosticTargetRef["kind"],
+        instanceId: typeof payload.instanceId === "string" ? payload.instanceId : undefined,
+      }),
+    );
+    sendJson(res, 200, { ok: true, target });
   }
 
   private async handleInstancesCollection(
@@ -947,6 +989,8 @@ async function handleManagedInstanceErrors<T>(op: () => Promise<T>): Promise<T> 
     }
     if (
       err.message.startsWith("Invalid managed instance") ||
+      err.message.startsWith("Unsupported diagnostic target kind") ||
+      err.message.includes("requires an instanceId") ||
       err.message.includes("already exists") ||
       err.message.includes("already reserved") ||
       err.message.includes("already in use") ||
@@ -954,6 +998,9 @@ async function handleManagedInstanceErrors<T>(op: () => Promise<T>): Promise<T> 
       err.message.includes("outside the allowed range")
     ) {
       throw new RequestError(400, err.message);
+    }
+    if (err.message.includes("targeting is unavailable")) {
+      throw new RequestError(501, err.message);
     }
     throw err;
   }

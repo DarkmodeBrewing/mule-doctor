@@ -18,6 +18,7 @@ import { OperatorConsoleServer } from "./operatorConsole/server.js";
 import { InstanceManager } from "./instances/instanceManager.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
 import { ManagedInstanceAnalysisService } from "./instances/managedInstanceAnalysis.js";
+import { DiagnosticTargetService } from "./instances/diagnosticTargetService.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -185,6 +186,10 @@ async function main(): Promise<void> {
           proposalDir,
         })
       : undefined;
+  const diagnosticTarget = new DiagnosticTargetService({
+    runtimeStore,
+    instanceManager: managedInstances,
+  });
   let operatorConsole: OperatorConsoleServer | undefined;
   if (uiEnabled) {
     operatorConsole = new OperatorConsoleServer({
@@ -199,6 +204,7 @@ async function main(): Promise<void> {
       managedInstances,
       managedInstanceDiagnostics,
       managedInstanceAnalysis,
+      diagnosticTarget,
     });
     try {
       await operatorConsole.start();

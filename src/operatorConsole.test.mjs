@@ -144,6 +144,27 @@ class StubManagedInstanceAnalysis {
   }
 }
 
+class StubDiagnosticTargetControl {
+  constructor() {
+    this.target = { kind: "external" };
+  }
+
+  async getActiveTarget() {
+    return this.target;
+  }
+
+  async setActiveTarget(target) {
+    if (target.kind === "managed_instance" && target.instanceId !== "a") {
+      throw new Error(`Managed instance not found: ${target.instanceId}`);
+    }
+    this.target =
+      target.kind === "managed_instance"
+        ? { kind: "managed_instance", instanceId: target.instanceId }
+        : { kind: "external" };
+    return this.target;
+  }
+}
+
 test("OperatorConsoleServer reports 501 for instance detail routes when control is unavailable", async () => {
   const tmp = await makeTempDir();
   try {
@@ -179,6 +200,57 @@ test("OperatorConsoleServer reports 501 for instance detail routes when control 
       headers: { Cookie: cookie },
     });
     assert.equal(diagnosticsRes.status, 200);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer gets and sets the active diagnostic target", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstances: new StubManagedInstances(),
+      diagnosticTarget: new StubDiagnosticTargetControl(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const getRes = await fetch(`${server.publicAddress()}/api/observer/target`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(getRes.status, 200);
+    assert.deepEqual(await getRes.json(), {
+      ok: true,
+      target: { kind: "external" },
+    });
+
+    const setRes = await fetch(`${server.publicAddress()}/api/observer/target`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Origin: server.publicAddress(),
+      },
+      body: JSON.stringify({ kind: "managed_instance", instanceId: "a" }),
+    });
+    assert.equal(setRes.status, 200);
+    assert.deepEqual(await setRes.json(), {
+      ok: true,
+      target: { kind: "managed_instance", instanceId: "a" },
+    });
 
     await server.stop();
   } finally {

@@ -146,6 +146,17 @@ instance-management layer.
 
 mule-doctor runs a periodic diagnostic loop.
 
+The observer must resolve an explicit active diagnostic target before each
+scheduled cycle. The active target can be either:
+
+- the externally configured rust-mule client
+- one selected mule-doctor-managed local test instance
+
+The selected target must be persisted in mule-doctor runtime state so restart
+behavior is deterministic. If the selected managed instance is unavailable,
+diagnostics should degrade gracefully and report that target as unavailable
+without stopping mule-doctor itself.
+
 Example workflow:
 
 1. Collect node metrics from the rust-mule API
@@ -264,6 +275,7 @@ State includes:
 - last health score
 - log read offset
 - last alert issued
+- active diagnostic target
 
 Example state object:
 
@@ -272,7 +284,10 @@ Example state object:
   "lastRun": "2026-03-05T12:05:00Z",
   "lastHealthScore": 89,
   "logOffset": 2483291,
-  "lastAlert": "routing_imbalance"
+  "lastAlert": "routing_imbalance",
+  "activeDiagnosticTarget": {
+    "kind": "external"
+  }
 }
 ```
 
@@ -414,6 +429,12 @@ The `InstanceManager` is responsible for:
 
 The observer, runtime store, and reporting layers must be extended to support
 per-instance namespacing once this phase begins.
+
+When managed-instance observation is enabled, mule-doctor must still have a
+single explicit active diagnostic target for the scheduled observer loop. The
+operator console may inspect many instances, but the periodic analyzer/reporting
+path should only observe one target at a time until broader multi-instance
+comparison semantics are designed.
 
 ---
 

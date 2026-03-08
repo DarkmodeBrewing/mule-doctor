@@ -38,7 +38,15 @@ export interface RuntimeState {
   lastHealthScore?: number;
   logOffset?: number;
   lastAlert?: string;
+  activeDiagnosticTarget?: DiagnosticTargetRef;
   usage?: RuntimeUsageState;
+}
+
+export type DiagnosticTargetKind = "external" | "managed_instance";
+
+export interface DiagnosticTargetRef {
+  kind: DiagnosticTargetKind;
+  instanceId?: string;
 }
 
 export interface UsageBucket {
