@@ -34,6 +34,7 @@ Optional:
 - `MULE_DOCTOR_HISTORY_LIMIT` (defaults to `500`)
 - `MULE_DOCTOR_LLM_LOG_DIR` (defaults to `MULE_DOCTOR_DATA_DIR`, stores `LLM_<timestamp>.log`)
 - `MULE_DOCTOR_UI_ENABLED` (defaults to `false`; enables built-in operator console when `true`)
+- `MULE_DOCTOR_UI_AUTH_TOKEN` (required when `MULE_DOCTOR_UI_ENABLED=true`; protects the operator console UI and `/api/*` routes)
 - `MULE_DOCTOR_UI_HOST` (defaults to `127.0.0.1`; use `0.0.0.0` in container for host access)
 - `MULE_DOCTOR_UI_PORT` (defaults to `18080`)
 - `MULE_DOCTOR_UI_LOG_BUFFER_LINES` (defaults to `2000`, in-memory app-log line buffer for UI)
@@ -70,6 +71,7 @@ Container defaults:
 - `RUST_MULE_SOURCE_PATH=/opt/rust-mule`
 - `MULE_DOCTOR_DATA_DIR=/data/mule-doctor`
 - `MULE_DOCTOR_UI_ENABLED=false`
+- `MULE_DOCTOR_UI_AUTH_TOKEN` must be supplied if the UI is enabled
 - `MULE_DOCTOR_UI_HOST=127.0.0.1`
 - `MULE_DOCTOR_UI_PORT=18080`
 
@@ -88,9 +90,11 @@ Required production runtime inputs:
 Operator console (optional):
 
 - `GET /` serves a read-only UI for operator inspection.
+- The UI and `/api/*` routes are guarded by `MULE_DOCTOR_UI_AUTH_TOKEN`.
 - JSON endpoints include `/api/health`, `/api/logs/app`, `/api/logs/rust-mule`, `/api/llm/logs`, and `/api/proposals`.
+- Live log streaming is available through SSE at `/api/stream/app` and `/api/stream/rust-mule`.
 - Docker compose maps UI port `${MULE_DOCTOR_UI_PORT:-18080}`, but keeps the UI disabled by default.
-- To access the console from the host, explicitly set `MULE_DOCTOR_UI_ENABLED=true` and keep `MULE_DOCTOR_UI_HOST=0.0.0.0` inside the container.
+- To access the console from the host, explicitly set `MULE_DOCTOR_UI_ENABLED=true`, provide `MULE_DOCTOR_UI_AUTH_TOKEN`, and keep `MULE_DOCTOR_UI_HOST=0.0.0.0` inside the container.
 - Do not expose the console directly on untrusted networks; place it behind an authenticated or access-restricted reverse proxy if remote access is needed.
 
 ## Notes

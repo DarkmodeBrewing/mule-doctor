@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/operator-console-phase1`
+- `feature/operator-console-phase2`
 - PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; implementing first operator-console slice (read-only web UI + endpoints).
-- PR #20 and PR #21 are merged to `main`.
+- In progress; implementing operator-console phase 2 (auth guard + live log streaming).
+- PR #22 is merged to `main`.
 
 ## Completed Work
 
@@ -96,6 +96,16 @@
     - tightened filename validation for console file reads and strengthened resolved-path escape checks.
     - added focused test coverage for stdout log buffer chunk handling and restore behavior.
     - updated compose/docs so unauthenticated UI exposure is opt-in instead of default.
+- Operator console phase 2 underway:
+  - adding token-based auth for the UI shell and all `/api/*` routes.
+  - adding SSE streams for live app-log and rust-mule-log viewing.
+  - extending UI to support authenticated access and live stream consumption.
+  - expanding test coverage for auth and stream behavior.
+- Documentation updated for the next architectural direction:
+  - architecture now explicitly documents the operator console as part of the system.
+  - architecture now distinguishes external observation mode from future mule-doctor-managed local test instances.
+  - backlog now includes `InstanceManager` and operator-console control-plane tasks for multi-instance rust-mule supervision.
+  - backlog now also includes splitting the operator-console frontend into static assets instead of inline HTML in server code.
 
 ## Key Decisions
 
@@ -103,6 +113,8 @@
 - Keep proposal artifacts on disk under `/data` by default for operational visibility and reviewer access.
 - Preserve test portability by injecting per-test temp `proposalDir` instead of writing to `/data` in test runs.
 - For bundled source safety, preserve local git history for `git_blame` while stripping `origin` remote.
+- Keep external rust-mule nodes observer-only, while allowing future controlled lifecycle actions only for mule-doctor-owned local test instances.
+- Use a bounded `InstanceManager` as the future control plane rather than allowing the UI to shell out directly.
 
 ## Validation
 
@@ -111,5 +123,6 @@
 
 ## Next Steps
 
-- Process remaining PR feedback for operator console phase 1 and merge once approved.
-- Phase 2 target: add auth guard for UI and live streaming (SSE/WebSocket) for logs.
+- Finish PR for operator console phase 2 and process review feedback.
+- After phase 2, first document and implement the `InstanceManager` data model before adding instance lifecycle controls to the UI.
+- Before the control-plane UI grows further, split the operator-console frontend out of inline server templates into static assets.

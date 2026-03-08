@@ -7,12 +7,14 @@ const DEFAULT_MAX_LINES = 2000;
 
 export interface AppLogBuffer {
   getRecentLines(n?: number): string[];
+  subscribe(listener: (line: string) => void): () => void;
   restore(): void;
 }
 
 export function installStdoutLogBuffer(maxLinesRaw?: number): AppLogBuffer {
   const maxLines = clampInt(maxLinesRaw, DEFAULT_MAX_LINES, 100, 20_000);
   const lines: string[] = [];
+  const listeners = new Set<(line: string) => void>();
   let partial = "";
 
   const originalWrite = process.stdout.write.bind(process.stdout);
@@ -31,6 +33,19 @@ export function installStdoutLogBuffer(maxLinesRaw?: number): AppLogBuffer {
       partial = partial.slice(newlineIndex + 1);
       if (!line) continue;
       lines.push(line);
+      for (const listener of Array.from(listeners)) {
+        try {
+          listener(line);
+        } catch (err) {
+          listeners.delete(listener);
+          try {
+            const message = err instanceof Error ? err.stack || err.message : String(err);
+            process.stderr.write(`AppLogBuffer listener error: ${message}\n`);
+          } catch {
+            // Ignore stderr write failures; stdout capture must not break logging.
+          }
+        }
+      }
       if (lines.length > maxLines) {
         lines.splice(0, lines.length - maxLines);
       }
@@ -58,7 +73,14 @@ export function installStdoutLogBuffer(maxLinesRaw?: number): AppLogBuffer {
       const bounded = clampInt(n, 200, 1, maxLines);
       return lines.slice(-bounded);
     },
+    subscribe(listener: (line: string) => void): () => void {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     restore(): void {
+      listeners.clear();
       process.stdout.write = originalWrite as typeof process.stdout.write;
     },
   };
