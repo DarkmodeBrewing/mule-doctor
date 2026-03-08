@@ -342,6 +342,40 @@ saveState(state);
 
 ---
 
+# Operator Event Timeline
+
+File:
+
+`/data/mule-doctor/operator-events.json`
+
+This JSON file stores a bounded recent timeline of operator and scheduler events, separate from
+metric history and separate from raw logs.
+
+Event classes include:
+
+- active diagnostic target changes
+- operator-triggered scheduled runs
+- observer cycle start
+- observer cycle completion with outcome
+
+Example event entry:
+
+```
+{
+  "timestamp": "2026-03-05T12:10:00Z",
+  "type": "observer_cycle_completed",
+  "message": "Observer cycle completed successfully for managed instance a",
+  "target": {
+    "kind": "managed_instance",
+    "instanceId": "a"
+  },
+  "outcome": "success",
+  "actor": "operator_console"
+}
+```
+
+---
+
 # LLM Tools
 
 ### getHistory

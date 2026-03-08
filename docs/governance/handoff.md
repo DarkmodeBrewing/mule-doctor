@@ -186,3 +186,7 @@
   - store `currentCycleStartedAt` and `currentCycleTarget` while a cycle is running
   - store `lastCycleStartedAt`, `lastCycleCompletedAt`, `lastCycleDurationMs`, and `lastCycleOutcome`
   - render a scheduler card in the console so operators can inspect execution state without reading raw logs
+- Add a bounded operator event timeline:
+  - persist recent operator/scheduler events in `operator-events.json`
+  - include target changes, run-now requests, cycle start, and cycle outcome
+  - expose the timeline through the operator console as a concise audit trail

@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import { RuntimeStore } from "../dist/storage/runtimeStore.js";
 import { DiagnosticTargetService } from "../dist/instances/diagnosticTargetService.js";
+import { OperatorEventLog } from "../dist/operatorConsole/operatorEventLog.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-target-"));
@@ -49,6 +50,7 @@ test("DiagnosticTargetService persists managed instance targets", async () => {
     const service = new DiagnosticTargetService({
       runtimeStore,
       instanceManager: new StubInstanceManager(),
+      eventLog: new OperatorEventLog(runtimeStore),
     });
     const target = await service.setActiveTarget({
       kind: "managed_instance",
@@ -58,6 +60,11 @@ test("DiagnosticTargetService persists managed instance targets", async () => {
     assert.deepEqual(target, { kind: "managed_instance", instanceId: "a" });
     assert.deepEqual(await service.getActiveTarget(), target);
     assert.deepEqual((await runtimeStore.loadState()).activeDiagnosticTarget, target);
+    const events = await runtimeStore.loadEvents();
+    assert.equal(events.length, 1);
+    assert.equal(events[0].type, "diagnostic_target_changed");
+    assert.deepEqual(events[0].target, target);
+    assert.equal(events[0].message, "Active diagnostic target changed to managed instance a");
   } finally {
     await tmp.cleanup();
   }

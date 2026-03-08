@@ -34,6 +34,21 @@ export interface HistoryEntry {
   healthScore?: number;
 }
 
+export type OperatorEventType =
+  | "diagnostic_target_changed"
+  | "observer_run_requested"
+  | "observer_cycle_started"
+  | "observer_cycle_completed";
+
+export interface OperatorEventEntry {
+  timestamp: string;
+  type: OperatorEventType;
+  message: string;
+  target?: DiagnosticTargetRef;
+  outcome?: ObserverCycleOutcome;
+  actor?: string;
+}
+
 export interface RuntimeState {
   lastRun?: string;
   lastHealthScore?: number;

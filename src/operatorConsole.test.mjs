@@ -194,6 +194,41 @@ class StubObserverControl {
   }
 }
 
+class StubOperatorEvents {
+  constructor() {
+    this.events = [
+      {
+        timestamp: "2026-03-08T02:00:00.000Z",
+        type: "diagnostic_target_changed",
+        message: "Active diagnostic target changed to managed instance a",
+        target: { kind: "managed_instance", instanceId: "a" },
+        actor: "operator_console",
+      },
+    ];
+  }
+
+  async listRecent(limit = 20) {
+    return this.events.slice(-limit);
+  }
+
+  async append(event) {
+    this.events.push({
+      timestamp: "2026-03-08T02:10:00.000Z",
+      ...event,
+    });
+  }
+}
+
+class ThrowingOperatorEvents {
+  async listRecent() {
+    return [];
+  }
+
+  async append() {
+    throw new Error("operator events unavailable");
+  }
+}
+
 test("OperatorConsoleServer reports 501 for instance detail routes when control is unavailable", async () => {
   const tmp = await makeTempDir();
   try {
@@ -287,6 +322,41 @@ test("OperatorConsoleServer gets and sets the active diagnostic target", async (
   }
 });
 
+test("OperatorConsoleServer returns operator event history", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      operatorEvents: new StubOperatorEvents(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/operator/events?limit=10`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(res.status, 200);
+    const payload = await res.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.events.length, 1);
+    assert.equal(payload.events[0].type, "diagnostic_target_changed");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("OperatorConsoleServer triggers observer run-now and reports scheduler status", async () => {
   const tmp = await makeTempDir();
   try {
@@ -294,6 +364,7 @@ test("OperatorConsoleServer triggers observer run-now and reports scheduler stat
     await writeFile(rustLogPath, "", "utf8");
 
     const observerControl = new StubObserverControl();
+    const operatorEvents = new StubOperatorEvents();
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
       host: "127.0.0.1",
@@ -304,6 +375,8 @@ test("OperatorConsoleServer triggers observer run-now and reports scheduler stat
       getAppLogs: () => [],
       subscribeToAppLogs: () => () => {},
       observerControl,
+      operatorEvents,
+      diagnosticTarget: new StubDiagnosticTargetControl(),
     });
     await server.start();
 
@@ -323,6 +396,8 @@ test("OperatorConsoleServer triggers observer run-now and reports scheduler stat
     assert.equal(runPayload.scheduler.cycleInFlight, true);
     assert.equal(runPayload.scheduler.currentCycleStartedAt, "2026-03-08T02:10:00.000Z");
     assert.deepEqual(runPayload.scheduler.currentCycleTarget, { kind: "external" });
+    assert.equal(operatorEvents.events.length, 2);
+    assert.equal(operatorEvents.events[1].type, "observer_run_requested");
 
     const secondRunRes = await fetch(`${server.publicAddress()}/api/observer/run`, {
       method: "POST",
@@ -334,6 +409,49 @@ test("OperatorConsoleServer triggers observer run-now and reports scheduler stat
       body: "{}",
     });
     assert.equal(secondRunRes.status, 409);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer still returns 202 when run-now event logging fails", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const observerControl = new StubObserverControl();
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      observerControl,
+      operatorEvents: new ThrowingOperatorEvents(),
+      diagnosticTarget: new StubDiagnosticTargetControl(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const runRes = await fetch(`${server.publicAddress()}/api/observer/run`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Origin: server.publicAddress(),
+      },
+      body: "{}",
+    });
+    assert.equal(runRes.status, 202);
+    const runPayload = await runRes.json();
+    assert.equal(runPayload.ok, true);
+    assert.equal(runPayload.scheduler.cycleInFlight, true);
 
     await server.stop();
   } finally {
@@ -447,6 +565,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       managedInstances: new StubManagedInstances(),
       managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
       managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
+      operatorEvents: new StubOperatorEvents(),
     });
     await server.start();
 
@@ -471,6 +590,9 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
 
     const unauthorizedInstancesRes = await fetch(`${baseUrl}/api/instances`);
     assert.equal(unauthorizedInstancesRes.status, 401);
+
+    const unauthorizedEventsRes = await fetch(`${baseUrl}/api/operator/events`);
+    assert.equal(unauthorizedEventsRes.status, 401);
 
     const cookie = await loginAndGetCookie(baseUrl);
 
@@ -502,6 +624,14 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       lastCycleDurationMs: 120000,
       lastCycleOutcome: "unavailable",
     });
+
+    const operatorEventsRes = await fetch(`${baseUrl}/api/operator/events`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(operatorEventsRes.status, 200);
+    const operatorEvents = await operatorEventsRes.json();
+    assert.equal(operatorEvents.events.length, 1);
+    assert.equal(operatorEvents.events[0].type, "diagnostic_target_changed");
 
     const staticUiRes = await fetch(`${baseUrl}/static/operatorConsole/app.js`, {
       headers: { Cookie: cookie },

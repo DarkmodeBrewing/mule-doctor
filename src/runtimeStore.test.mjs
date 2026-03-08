@@ -25,9 +25,11 @@ test("RuntimeStore initializes state/history files when missing", async () => {
 
     const stateRaw = await readFile(join(tmp.dir, "state.json"), "utf8");
     const historyRaw = await readFile(join(tmp.dir, "history.json"), "utf8");
+    const eventsRaw = await readFile(join(tmp.dir, "operator-events.json"), "utf8");
 
     assert.deepEqual(JSON.parse(stateRaw), {});
     assert.deepEqual(JSON.parse(historyRaw), []);
+    assert.deepEqual(JSON.parse(eventsRaw), []);
   } finally {
     await tmp.cleanup();
   }
@@ -134,6 +136,60 @@ test("RuntimeStore serializes concurrent state updates", async () => {
     const state = await store.loadState();
     assert.equal(state.lastRun, "2026-03-05T01:00:00.000Z");
     assert.equal(state.lastAlert, "timeout_spike");
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("RuntimeStore enforces operator event retention limit", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir, eventsLimit: 3 });
+    await store.initialize();
+
+    for (let i = 1; i <= 5; i++) {
+      await store.appendEvent({
+        timestamp: `t-${i}`,
+        type: "observer_cycle_started",
+        message: `event-${i}`,
+      });
+    }
+
+    const events = await store.loadEvents();
+    assert.equal(events.length, 3);
+    assert.deepEqual(
+      events.map((entry) => entry.timestamp),
+      ["t-3", "t-4", "t-5"],
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("RuntimeStore serializes concurrent operator event appends", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir, eventsLimit: 100 });
+    await store.initialize();
+
+    await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        store.appendEvent({
+          timestamp: `t-${i + 1}`,
+          type: "observer_cycle_completed",
+          message: `event-${i + 1}`,
+        }),
+      ),
+    );
+
+    const events = await store.loadEvents();
+    assert.equal(events.length, 20);
+    assert.deepEqual(
+      events.map((entry) => entry.timestamp),
+      Array.from({ length: 20 }, (_, i) => `t-${i + 1}`),
+    );
   } finally {
     await tmp.cleanup();
   }

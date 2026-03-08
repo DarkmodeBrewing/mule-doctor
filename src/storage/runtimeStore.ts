@@ -5,36 +5,45 @@
 
 import { mkdir, readFile, rename, unlink, writeFile } from "fs/promises";
 import { dirname } from "path";
-import type { HistoryEntry, RuntimeState } from "../types/contracts.js";
+import type { HistoryEntry, OperatorEventEntry, RuntimeState } from "../types/contracts.js";
 
 const DEFAULT_DATA_DIR = "/data/mule-doctor";
 const DEFAULT_STATE_FILE = "state.json";
 const DEFAULT_HISTORY_FILE = "history.json";
+const DEFAULT_EVENTS_FILE = "operator-events.json";
 const DEFAULT_HISTORY_LIMIT = 500;
+const DEFAULT_EVENTS_LIMIT = 200;
 
 export interface RuntimeStoreConfig {
   dataDir?: string;
   statePath?: string;
   historyPath?: string;
+  eventsPath?: string;
   historyLimit?: number;
+  eventsLimit?: number;
 }
 
 export class RuntimeStore {
   private readonly statePath: string;
   private readonly historyPath: string;
+  private readonly eventsPath: string;
   private readonly historyLimit: number;
+  private readonly eventsLimit: number;
   private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(config: RuntimeStoreConfig = {}) {
     const dataDir = config.dataDir ?? DEFAULT_DATA_DIR;
     this.statePath = config.statePath ?? `${dataDir}/${DEFAULT_STATE_FILE}`;
     this.historyPath = config.historyPath ?? `${dataDir}/${DEFAULT_HISTORY_FILE}`;
+    this.eventsPath = config.eventsPath ?? `${dataDir}/${DEFAULT_EVENTS_FILE}`;
     this.historyLimit = config.historyLimit ?? DEFAULT_HISTORY_LIMIT;
+    this.eventsLimit = config.eventsLimit ?? DEFAULT_EVENTS_LIMIT;
   }
 
   async initialize(): Promise<void> {
     await this.ensureJsonFile(this.statePath, "{}\n");
     await this.ensureJsonFile(this.historyPath, "[]\n");
+    await this.ensureJsonFile(this.eventsPath, "[]\n");
   }
 
   async loadState(): Promise<RuntimeState> {
@@ -77,6 +86,28 @@ export class RuntimeStore {
     const history = await this.loadHistory();
     if (n <= 0) return [];
     return history.slice(-n);
+  }
+
+  async loadEvents(): Promise<OperatorEventEntry[]> {
+    const events = await this.readJsonFile<OperatorEventEntry[]>(this.eventsPath);
+    return Array.isArray(events) ? events : [];
+  }
+
+  async appendEvent(entry: OperatorEventEntry): Promise<void> {
+    await this.enqueueMutation(async () => {
+      const events = await this.loadEvents();
+      events.push(entry);
+      if (events.length > this.eventsLimit) {
+        events.splice(0, events.length - this.eventsLimit);
+      }
+      await this.writeJsonFile(this.eventsPath, events);
+    });
+  }
+
+  async getRecentEvents(n = 20): Promise<OperatorEventEntry[]> {
+    const events = await this.loadEvents();
+    if (n <= 0) return [];
+    return events.slice(-n);
   }
 
   private async ensureJsonFile(path: string, defaultContent: string): Promise<void> {

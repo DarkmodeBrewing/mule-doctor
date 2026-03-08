@@ -251,6 +251,29 @@ ul {
   gap: 8px;
 }
 
+.event-list li {
+  border: 1px solid rgba(48, 67, 88, 0.8);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #08111a;
+}
+
+.event-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.event-line strong {
+  color: var(--text);
+}
+
+.event-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 li button {
   width: 100%;
   text-align: left;
