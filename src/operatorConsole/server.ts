@@ -7,7 +7,10 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { open, readFile, readdir, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Stats } from "node:fs";
-import type { ManagedInstanceRecord } from "../types/contracts.js";
+import type {
+  ManagedInstanceDiagnosticSnapshot,
+  ManagedInstanceRecord,
+} from "../types/contracts.js";
 
 const AUTH_COOKIE_NAME = "mule_doctor_ui_token";
 const DEFAULT_UI_HOST = "127.0.0.1";
@@ -46,6 +49,10 @@ export interface ManagedInstanceControl {
   restartInstance(id: string): Promise<ManagedInstanceRecord>;
 }
 
+export interface ManagedInstanceDiagnostics {
+  getSnapshot(id: string): Promise<ManagedInstanceDiagnosticSnapshot>;
+}
+
 export interface OperatorConsoleConfig {
   authToken?: string;
   host?: string;
@@ -57,6 +64,7 @@ export interface OperatorConsoleConfig {
   subscribeToAppLogs?: (listener: (line: string) => void) => () => void;
   rustMuleStreamPollMs?: number;
   managedInstances?: ManagedInstanceControl;
+  managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
 }
 
 export class OperatorConsoleServer {
@@ -70,6 +78,7 @@ export class OperatorConsoleServer {
   private readonly subscribeToAppLogs: ((listener: (line: string) => void) => () => void) | undefined;
   private readonly rustMuleStreamPollMs: number;
   private readonly managedInstances: ManagedInstanceControl | undefined;
+  private readonly managedInstanceDiagnostics: ManagedInstanceDiagnostics | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -92,6 +101,7 @@ export class OperatorConsoleServer {
       60_000,
     );
     this.managedInstances = config.managedInstances;
+    this.managedInstanceDiagnostics = config.managedInstanceDiagnostics;
     this.startedAt = new Date().toISOString();
   }
 
@@ -353,11 +363,6 @@ export class OperatorConsoleServer {
     res: ServerResponse,
     path: string,
   ): Promise<void> {
-    if (!this.managedInstances) {
-      sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
-      return;
-    }
-
     const suffix = path.slice("/api/instances/".length);
     const [idRaw, action] = suffix.split("/");
     const id = decodeURIComponent(idRaw ?? "").trim();
@@ -405,6 +410,27 @@ export class OperatorConsoleServer {
         },
         lines: content.map(redactLine),
       });
+      return;
+    }
+
+    if (action === "diagnostics") {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      if (!this.managedInstanceDiagnostics) {
+        sendJson(res, 501, { ok: false, error: "managed instance diagnostics unavailable" });
+        return;
+      }
+      const snapshot = await handleManagedInstanceErrors(() =>
+        this.managedInstanceDiagnostics!.getSnapshot(id),
+      );
+      sendJson(res, 200, { ok: true, snapshot });
+      return;
+    }
+
+    if (!this.managedInstances) {
+      sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
       return;
     }
 

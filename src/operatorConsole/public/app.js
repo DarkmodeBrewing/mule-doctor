@@ -2,6 +2,8 @@
 
 const LOG_LINE_LIMIT = 250;
 const INSTANCE_DETAIL_PLACEHOLDER = "Select an instance to inspect details.";
+const INSTANCE_DIAGNOSTICS_PLACEHOLDER =
+  "Select an instance to inspect diagnostics for that managed rust-mule node.";
 const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
 let selectedInstanceId = null;
 
@@ -183,6 +185,7 @@ async function refreshInstances() {
       if (!exists) {
         selectedInstanceId = null;
         setText("instance-detail", "Selected instance no longer exists.");
+        setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
         setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
       }
     }
@@ -228,19 +231,23 @@ async function createInstance(event) {
 async function inspectInstance(id) {
   selectedInstanceId = id;
   try {
-    const [detail, logs] = await Promise.all([
+    const [detail, diagnostics, logs] = await Promise.all([
       fetchJson(`/api/instances/${encodeURIComponent(id)}`),
+      fetchJson(`/api/instances/${encodeURIComponent(id)}/diagnostics`),
       fetchJson(`/api/instances/${encodeURIComponent(id)}/logs?lines=${LOG_LINE_LIMIT}`),
     ]);
     setText("instance-detail", JSON.stringify(detail.instance, null, 2));
+    setText("instance-diagnostics", JSON.stringify(diagnostics.snapshot, null, 2));
     setText("instance-logs", logs.lines.join("\n") || "No per-instance rust-mule lines available.");
   } catch (err) {
     setText("instance-detail", `Failed to load instance detail: ${String(err)}`);
+    setText("instance-diagnostics", `Failed to load diagnostics: ${String(err)}`);
     setText("instance-logs", `Failed to load instance logs: ${String(err)}`);
   }
 }
 
 setText("instance-detail", INSTANCE_DETAIL_PLACEHOLDER);
+setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
 setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 
 function connectStream(url, targetId, statusId) {

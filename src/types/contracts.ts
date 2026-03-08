@@ -94,3 +94,18 @@ export interface ManagedInstanceRecord {
   lastExit?: ManagedInstanceExitState;
   lastError?: string;
 }
+
+export interface ManagedInstanceDiagnosticSnapshot {
+  instanceId: string;
+  observedAt: string;
+  available: boolean;
+  reason?: string;
+  nodeInfo?: Record<string, unknown>;
+  peerCount?: number;
+  routingBucketCount?: number;
+  lookupStats?: Record<string, unknown>;
+  networkHealth?: {
+    score: number;
+    components: Record<string, number>;
+  };
+}
