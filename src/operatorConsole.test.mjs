@@ -16,6 +16,19 @@ async function makeTempDir() {
   };
 }
 
+async function loginAndGetCookie(baseUrl) {
+  const loginRes = await fetch(`${baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token: "ui-secret" }),
+    redirect: "manual",
+  });
+  assert.equal(loginRes.status, 303);
+  const cookie = loginRes.headers.get("set-cookie");
+  assert.ok(cookie);
+  return cookie;
+}
+
 async function readSseUntil(stream, predicate, timeoutMs = 2000) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -95,10 +108,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     const unauthorizedHealthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(unauthorizedHealthRes.status, 401);
 
-    const loginRes = await fetch(`${baseUrl}/auth/login?token=ui-secret`, { redirect: "manual" });
-    assert.equal(loginRes.status, 303);
-    const cookie = loginRes.headers.get("set-cookie");
-    assert.ok(cookie);
+    const cookie = await loginAndGetCookie(baseUrl);
 
     const healthRes = await fetch(`${baseUrl}/api/health`, {
       headers: { Cookie: cookie },
@@ -142,6 +152,17 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     });
     assert.equal(invalidDriveLikePathRes.status, 400);
 
+    const malformedCookieHealthRes = await fetch(`${baseUrl}/api/health`, {
+      headers: { Cookie: "mule_doctor_ui_token=%E0%A4%A" },
+    });
+    assert.equal(malformedCookieHealthRes.status, 401);
+
+    const unauthenticatedLogoutRes = await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      redirect: "manual",
+    });
+    assert.equal(unauthenticatedLogoutRes.status, 401);
+
     await server.stop();
   } finally {
     await tmp.cleanup();
@@ -172,7 +193,10 @@ test("OperatorConsoleServer streams app logs over SSE", async () => {
     });
     await server.start();
 
-    const streamRes = await fetch(`${server.publicAddress()}/api/stream/app?token=ui-secret&lines=10`);
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const streamRes = await fetch(`${server.publicAddress()}/api/stream/app?lines=10`, {
+      headers: { Cookie: cookie },
+    });
     assert.equal(streamRes.status, 200);
     assert.equal(streamRes.headers.get("content-type"), "text/event-stream; charset=utf-8");
 
@@ -214,7 +238,10 @@ test("OperatorConsoleServer streams rust-mule log updates over SSE", async () =>
     });
     await server.start();
 
-    const streamRes = await fetch(`${server.publicAddress()}/api/stream/rust-mule?token=ui-secret&lines=10`);
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const streamRes = await fetch(`${server.publicAddress()}/api/stream/rust-mule?lines=10`, {
+      headers: { Cookie: cookie },
+    });
     assert.equal(streamRes.status, 200);
 
     const snapshot = await readSseUntil(streamRes.body, ({ event }) => event === "snapshot");

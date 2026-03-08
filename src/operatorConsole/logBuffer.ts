@@ -33,8 +33,18 @@ export function installStdoutLogBuffer(maxLinesRaw?: number): AppLogBuffer {
       partial = partial.slice(newlineIndex + 1);
       if (!line) continue;
       lines.push(line);
-      for (const listener of listeners) {
-        listener(line);
+      for (const listener of Array.from(listeners)) {
+        try {
+          listener(line);
+        } catch (err) {
+          listeners.delete(listener);
+          try {
+            const message = err instanceof Error ? err.stack || err.message : String(err);
+            process.stderr.write(`AppLogBuffer listener error: ${message}\n`);
+          } catch {
+            // Ignore stderr write failures; stdout capture must not break logging.
+          }
+        }
       }
       if (lines.length > maxLines) {
         lines.splice(0, lines.length - maxLines);

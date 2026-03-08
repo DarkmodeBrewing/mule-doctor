@@ -142,15 +142,19 @@ export class OperatorConsoleServer {
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://operator-console.local");
     const path = url.pathname;
-    const auth = this.authenticate(req, url);
+    const auth = this.authenticate(req);
 
     if (path === "/auth/login") {
-      this.handleLogin(url, res);
+      await this.handleLogin(req, res);
       return;
     }
 
     if (path === "/auth/logout") {
-      this.handleLogout(res);
+      if (!auth.ok) {
+        sendJson(res, 401, { ok: false, error: "operator console authentication required" });
+        return;
+      }
+      this.handleLogout(req, res);
       return;
     }
 
@@ -273,21 +277,26 @@ export class OperatorConsoleServer {
     sendJson(res, 404, { ok: false, error: "not found" });
   }
 
-  private authenticate(req: IncomingMessage, url: URL): AuthState {
+  private authenticate(req: IncomingMessage): AuthState {
     if (!this.authToken) return { ok: true };
 
     const cookieToken = getCookie(req.headers.cookie, AUTH_COOKIE_NAME);
     const bearerToken = getBearerToken(req.headers.authorization);
     const headerToken = getHeaderValue(req.headers, "x-operator-token");
-    const queryToken = url.searchParams.get("token") ?? undefined;
-    const provided = [cookieToken, bearerToken, headerToken, queryToken].find(
+    const provided = [cookieToken, bearerToken, headerToken].find(
       (candidate) => candidate !== undefined && candidate.length > 0,
     );
     return { ok: provided === this.authToken };
   }
 
-  private handleLogin(url: URL, res: ServerResponse): void {
-    const token = url.searchParams.get("token")?.trim();
+  private async handleLogin(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+
+    const form = await readFormBody(req);
+    const token = form.get("token")?.trim();
     if (!this.authToken) {
       redirect(res, "/");
       return;
@@ -307,7 +316,11 @@ export class OperatorConsoleServer {
     res.end();
   }
 
-  private handleLogout(res: ServerResponse): void {
+  private handleLogout(req: IncomingMessage, res: ServerResponse): void {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
     res.statusCode = 303;
     applySecurityHeaders(res);
     res.setHeader(
@@ -367,7 +380,10 @@ export class OperatorConsoleServer {
 
     let lastOffset = await getFileSize(this.rustMuleLogPath);
     let partial = "";
-    const poller = setInterval(() => {
+    let stopped = false;
+    let pollTimer: NodeJS.Timeout | undefined;
+    const runPoll = () => {
+      if (stopped) return;
       void (async () => {
         const next = await readStreamChunk(this.rustMuleLogPath, lastOffset, partial, MAX_FILE_BYTES);
         lastOffset = next.nextOffset;
@@ -377,14 +393,20 @@ export class OperatorConsoleServer {
         }
       })().catch(() => {
         // Keep the stream alive across transient file-read errors.
+      }).finally(() => {
+        if (!stopped) {
+          pollTimer = setTimeout(runPoll, this.rustMuleStreamPollMs);
+        }
       });
-    }, this.rustMuleStreamPollMs);
+    };
+    pollTimer = setTimeout(runPoll, this.rustMuleStreamPollMs);
     const heartbeat = setInterval(() => {
       res.write(": heartbeat\n\n");
     }, DEFAULT_STREAM_HEARTBEAT_MS);
 
     this.registerStream(req, res, () => {
-      clearInterval(poller);
+      stopped = true;
+      if (pollTimer) clearTimeout(pollTimer);
       clearInterval(heartbeat);
     });
   }
@@ -637,15 +659,23 @@ function getCookie(rawCookieHeader: string | undefined, cookieName: string): str
   for (const cookie of cookies) {
     const [name, ...valueParts] = cookie.trim().split("=");
     if (name !== cookieName) continue;
-    return decodeURIComponent(valueParts.join("="));
+    try {
+      return decodeURIComponent(valueParts.join("="));
+    } catch {
+      return undefined;
+    }
   }
   return undefined;
 }
 
 function getBearerToken(rawHeader: string | undefined): string | undefined {
   if (!rawHeader) return undefined;
-  const match = /^bearer\s+(.+)$/i.exec(rawHeader.trim());
-  return match?.[1];
+  const trimmed = rawHeader.trim();
+  if (trimmed.length < 8) return undefined;
+  const prefix = trimmed.slice(0, 7);
+  if (prefix.toLowerCase() !== "bearer ") return undefined;
+  const token = trimmed.slice(7).trim();
+  return token.length > 0 ? token : undefined;
 }
 
 function getHeaderValue(
@@ -655,6 +685,14 @@ function getHeaderValue(
   const rawValue = headers[name];
   if (typeof rawValue === "string") return rawValue;
   return Array.isArray(rawValue) ? rawValue[0] : undefined;
+}
+
+async function readFormBody(req: IncomingMessage): Promise<URLSearchParams> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
+  }
+  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
 }
 
 function applySecurityHeaders(res: ServerResponse): void {
@@ -783,7 +821,7 @@ function renderLoginHtml(errorMessage?: string): string {
   </style>
 </head>
 <body>
-  <form class="panel" method="GET" action="/auth/login">
+  <form class="panel" method="POST" action="/auth/login">
     <h1>mule-doctor operator console</h1>
     ${errorBanner}
     <label for="token">Operator token</label>
@@ -971,7 +1009,9 @@ function renderIndexHtml(): string {
         </div>
         <div class="controls">
           <button id="refresh-all">Refresh all</button>
-          <a class="ghost" href="/auth/logout">Log out</a>
+          <form method="POST" action="/auth/logout">
+            <button class="ghost" type="submit">Log out</button>
+          </form>
         </div>
       </div>
       <pre id="health">Loading health...</pre>
@@ -1061,8 +1101,14 @@ function renderIndexHtml(): string {
       for (const file of files) {
         const li = document.createElement("li");
         const button = document.createElement("button");
+        const title = document.createElement("strong");
+        const meta = document.createElement("span");
         const updated = file.updatedAt ? new Date(file.updatedAt).toLocaleString() : "unknown";
-        button.innerHTML = "<strong>" + file.name + "</strong><span class=\\"file-meta\\">" + file.sizeBytes + " bytes • " + updated + "</span>";
+        title.textContent = file.name;
+        meta.className = "file-meta";
+        meta.textContent = file.sizeBytes + " bytes • " + updated;
+        button.appendChild(title);
+        button.appendChild(meta);
         button.onclick = () => onClick(file.name);
         li.appendChild(button);
         ul.appendChild(li);

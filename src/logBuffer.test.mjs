@@ -44,3 +44,43 @@ test("installStdoutLogBuffer captures chunked writes and restores stdout", async
     process.stdout.write = originalWrite;
   }
 });
+
+test("installStdoutLogBuffer isolates listener failures", async () => {
+  const originalWrite = process.stdout.write;
+  const originalStderrWrite = process.stderr.write;
+  const stderrChunks = [];
+
+  process.stdout.write = ((chunk, ...args) => {
+    const callback = args.find((arg) => typeof arg === "function");
+    if (typeof callback === "function") {
+      callback();
+    }
+    return true;
+  });
+  process.stderr.write = ((chunk, ...args) => {
+    stderrChunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+    const callback = args.find((arg) => typeof arg === "function");
+    if (typeof callback === "function") {
+      callback();
+    }
+    return true;
+  });
+
+  try {
+    const buffer = installStdoutLogBuffer(100);
+    const observed = [];
+    buffer.subscribe(() => {
+      throw new Error("boom");
+    });
+    buffer.subscribe((line) => observed.push(line));
+
+    process.stdout.write("hello\n");
+
+    assert.deepEqual(observed, ["hello"]);
+    assert.equal(stderrChunks.join("").includes("AppLogBuffer listener error"), true);
+    buffer.restore();
+  } finally {
+    process.stdout.write = originalWrite;
+    process.stderr.write = originalStderrWrite;
+  }
+});
