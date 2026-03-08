@@ -68,6 +68,32 @@ function renderFileList(targetId, files, onClick) {
   }
 }
 
+function targetLabel(target) {
+  if (!target || target.kind === "external") {
+    return "external configured rust-mule client";
+  }
+  return `managed instance ${target.instanceId}`;
+}
+
+function describeTarget(target) {
+  return `Active diagnostic target: ${targetLabel(target)}`;
+}
+
+function sameTarget(left, right) {
+  if (!left || !right) return false;
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "external") return true;
+  return left.instanceId === right.instanceId;
+}
+
+function isUnavailableObservedTarget(target) {
+  return (
+    sameTarget(target, currentObserver?.lastObservedTarget) &&
+    typeof currentObserver?.lastHealthScore === "number" &&
+    currentObserver.lastHealthScore <= 0
+  );
+}
+
 function renderInstanceList(instances) {
   const ul = document.getElementById("instance-list");
   ul.replaceChildren();
@@ -115,13 +141,11 @@ function renderInstanceList(instances) {
     stop.onclick = () => mutateInstance(instance.id, "stop");
     restart.onclick = () => mutateInstance(instance.id, "restart");
 
-    const isScheduledTarget =
-      currentScheduledTarget?.kind === "managed_instance" &&
-      currentScheduledTarget.instanceId === instance.id;
-    const isUnavailableTarget =
-      isScheduledTarget &&
-      typeof currentObserver?.lastHealthScore === "number" &&
-      currentObserver.lastHealthScore <= 0;
+    const scheduledTarget =
+      currentScheduledTarget?.kind === "managed_instance" ? currentScheduledTarget : undefined;
+    const instanceTarget = { kind: "managed_instance", instanceId: instance.id };
+    const isScheduledTarget = sameTarget(scheduledTarget, instanceTarget);
+    const isUnavailableTarget = isScheduledTarget && isUnavailableObservedTarget(instanceTarget);
 
     if (instance.status === "running") {
       start.disabled = true;
@@ -163,13 +187,6 @@ function setInstanceFeedback(text, isError = false) {
   const element = document.getElementById("instance-feedback");
   element.textContent = text;
   element.className = isError ? "status" : "muted";
-}
-
-function describeTarget(target) {
-  if (!target || target.kind === "external") {
-    return "Active diagnostic target: external configured rust-mule client";
-  }
-  return `Active diagnostic target: managed instance ${target.instanceId}`;
 }
 
 function renderHealth(data) {
@@ -309,12 +326,12 @@ function renderTargetStatusCard(errorText) {
   }
 
   const lines = [];
-  lines.push(renderTargetStatusLine("Scheduled", describeTarget(currentScheduledTarget)));
+  lines.push(renderTargetStatusLine("Scheduled", targetLabel(currentScheduledTarget)));
   lines.push(
     renderTargetStatusLine(
       "Last observed",
       currentObserver?.lastObservedTarget
-        ? describeTarget(currentObserver.lastObservedTarget)
+        ? targetLabel(currentObserver.lastObservedTarget)
         : "unknown",
     ),
   );
@@ -327,13 +344,7 @@ function renderTargetStatusCard(errorText) {
     ),
   );
   lines.push(renderTargetStatusLine("Last run", currentObserver?.lastRun || "unknown"));
-  if (
-    currentScheduledTarget?.kind === "managed_instance" &&
-    currentObserver?.lastObservedTarget?.kind === "managed_instance" &&
-    currentScheduledTarget.instanceId === currentObserver.lastObservedTarget.instanceId &&
-    typeof currentObserver.lastHealthScore === "number" &&
-    currentObserver.lastHealthScore <= 0
-  ) {
+  if (isUnavailableObservedTarget(currentScheduledTarget)) {
     lines.push(renderTargetStatusLine("State", "unavailable"));
     element.className = "target-status-card";
   } else {
