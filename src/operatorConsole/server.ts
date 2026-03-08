@@ -66,6 +66,11 @@ export interface DiagnosticTargetControl {
   setActiveTarget(target: DiagnosticTargetRef): Promise<DiagnosticTargetRef>;
 }
 
+export interface ObserverControl {
+  getStatus(): { started: boolean; cycleInFlight: boolean; intervalMs: number };
+  triggerRunNow(): { accepted: boolean; reason?: string };
+}
+
 export interface OperatorConsoleConfig {
   authToken?: string;
   host?: string;
@@ -81,6 +86,7 @@ export interface OperatorConsoleConfig {
   managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
   managedInstanceAnalysis?: ManagedInstanceAnalysis;
   diagnosticTarget?: DiagnosticTargetControl;
+  observerControl?: ObserverControl;
 }
 
 export class OperatorConsoleServer {
@@ -98,6 +104,7 @@ export class OperatorConsoleServer {
   private readonly managedInstanceDiagnostics: ManagedInstanceDiagnostics | undefined;
   private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
   private readonly diagnosticTarget: DiagnosticTargetControl | undefined;
+  private readonly observerControl: ObserverControl | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -124,6 +131,7 @@ export class OperatorConsoleServer {
     this.managedInstanceDiagnostics = config.managedInstanceDiagnostics;
     this.managedInstanceAnalysis = config.managedInstanceAnalysis;
     this.diagnosticTarget = config.diagnosticTarget;
+    this.observerControl = config.observerControl;
     this.startedAt = new Date().toISOString();
   }
 
@@ -261,6 +269,11 @@ export class OperatorConsoleServer {
       return;
     }
 
+    if (path === "/api/observer/run") {
+      await this.handleObserverRun(req, res);
+      return;
+    }
+
     if (path.startsWith("/api/instances/")) {
       await this.handleInstanceAction(req, res, path);
       return;
@@ -278,6 +291,7 @@ export class OperatorConsoleServer {
         startedAt: this.startedAt,
         now: new Date().toISOString(),
         uptimeSec: Math.round(process.uptime()),
+        scheduler: this.observerControl?.getStatus(),
         observer: runtimeState
           ? {
               activeDiagnosticTarget: runtimeState.activeDiagnosticTarget,
@@ -363,6 +377,28 @@ export class OperatorConsoleServer {
     }
 
     sendJson(res, 404, { ok: false, error: "not found" });
+  }
+
+  private async handleObserverRun(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!this.observerControl) {
+      sendJson(res, 501, { ok: false, error: "observer control unavailable" });
+      return;
+    }
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+
+    const result = this.observerControl.triggerRunNow();
+    if (!result.accepted) {
+      sendJson(res, 409, { ok: false, error: result.reason ?? "observer run not accepted" });
+      return;
+    }
+    sendJson(res, 202, {
+      ok: true,
+      accepted: true,
+      scheduler: this.observerControl.getStatus(),
+    });
   }
 
   private async handleDiagnosticTarget(req: IncomingMessage, res: ServerResponse): Promise<void> {

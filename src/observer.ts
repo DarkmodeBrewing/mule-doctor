@@ -30,6 +30,17 @@ export interface ObserverConfig {
   analyzerFactory?: AnalyzerFactory;
 }
 
+export interface ObserverStatus {
+  started: boolean;
+  cycleInFlight: boolean;
+  intervalMs: number;
+}
+
+export interface ObserverRunNowResult {
+  accepted: boolean;
+  reason?: string;
+}
+
 interface ObserverCycleContext {
   targetLabel: string;
   nodeInfo: Record<string, unknown>;
@@ -89,6 +100,29 @@ export class Observer {
       this.timer = undefined;
     }
     log("info", "observer", "Stopped");
+  }
+
+  getStatus(): ObserverStatus {
+    return {
+      started: this.started,
+      cycleInFlight: Boolean(this.cycleInFlight),
+      intervalMs: this.intervalMs,
+    };
+  }
+
+  triggerRunNow(): ObserverRunNowResult {
+    if (!this.started) {
+      return { accepted: false, reason: "observer is not running" };
+    }
+    if (this.cycleInFlight) {
+      return { accepted: false, reason: "observer cycle already in progress" };
+    }
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+    this.maybeStartCycle();
+    return { accepted: true };
   }
 
   private maybeStartCycle(): void {

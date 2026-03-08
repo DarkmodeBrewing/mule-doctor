@@ -323,3 +323,39 @@ test("Observer stop then start waits for in-flight cycle before next cycle", asy
   assert.equal(analyzer.calls, 2);
   assert.equal(mattermost.periodicCalls, 2);
 });
+
+test("Observer triggerRunNow accepts when idle and rejects when unavailable", async () => {
+  const analyzer = new SlowAnalyzer(10);
+  const mattermost = new CountingMattermost();
+  const observer = new Observer(analyzer, mattermost, { intervalMs: 1000 });
+
+  assert.equal(observer.triggerRunNow().accepted, false);
+
+  observer.start();
+  await sleep(30);
+  assert.equal(analyzer.calls, 1);
+
+  const accepted = observer.triggerRunNow();
+  assert.equal(accepted.accepted, true);
+  await sleep(30);
+  observer.stop();
+  await sleep(20);
+
+  assert.equal(analyzer.calls, 2);
+  assert.equal(mattermost.periodicCalls, 2);
+});
+
+test("Observer triggerRunNow rejects while a cycle is already in progress", async () => {
+  const observer = new Observer(new SlowAnalyzer(40), new CountingMattermost(), {
+    intervalMs: 1000,
+  });
+
+  observer.start();
+  await sleep(10);
+  const result = observer.triggerRunNow();
+  observer.stop();
+  await sleep(50);
+
+  assert.equal(result.accepted, false);
+  assert.match(result.reason, /already in progress/);
+});

@@ -320,7 +320,8 @@ Acceptance criteria:
 5. Decide and document Mattermost semantics:
    - whether reports follow the active target
    - how the active target is labeled in notifications
-6. Keep failure handling non-fatal:
+6. Add a bounded operator action to trigger the scheduled observer cycle immediately.
+7. Keep failure handling non-fatal:
    - stopped managed instance
    - missing token files
    - version-dependent 404 endpoints
@@ -332,3 +333,4 @@ Acceptance criteria:
 - mule-doctor restarts with the previously selected target intact.
 - Scheduled observation uses the selected target without crashing when that target is unavailable.
 - Reports and runtime state identify which target was observed.
+- Operator can trigger a one-off scheduled-cycle run without changing the background scheduler model.
