@@ -144,9 +144,40 @@ function describeTarget(target) {
   return `Active diagnostic target: managed instance ${target.instanceId}`;
 }
 
+function renderHealth(data) {
+  const observerLines = [];
+  if (data.observer) {
+    observerLines.push(describeTarget(data.observer.activeDiagnosticTarget));
+    observerLines.push(
+      `Last observed target: ${describeTarget(data.observer.lastObservedTarget).replace("Active diagnostic target: ", "")}`,
+    );
+    observerLines.push(`Last run: ${data.observer.lastRun || "unknown"}`);
+    observerLines.push(
+      `Last health score: ${
+        typeof data.observer.lastHealthScore === "number" ? data.observer.lastHealthScore : "unknown"
+      }`,
+    );
+  }
+
+  setText(
+    "health",
+    [
+      `Started at: ${data.startedAt}`,
+      `Now: ${data.now}`,
+      `Uptime (sec): ${data.uptimeSec}`,
+      observerLines.length ? "" : null,
+      ...observerLines,
+      "",
+      JSON.stringify(data.paths, null, 2),
+    ]
+      .filter((line) => line !== null)
+      .join("\n"),
+  );
+}
+
 async function refreshHealth() {
   const data = await fetchJson("/api/health");
-  setText("health", JSON.stringify(data, null, 2));
+  renderHealth(data);
 }
 
 async function refreshAppLogs() {

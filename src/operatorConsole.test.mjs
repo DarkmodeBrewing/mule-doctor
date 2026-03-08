@@ -336,6 +336,12 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       llmLogDir: llmDir,
       proposalDir,
       getAppLogs: () => ['{"msg":"api_key=topsecret"}'],
+      getRuntimeState: async () => ({
+        activeDiagnosticTarget: { kind: "managed_instance", instanceId: "a" },
+        lastObservedTarget: { kind: "managed_instance", instanceId: "a" },
+        lastRun: "2026-03-08T03:00:00.000Z",
+        lastHealthScore: 0,
+      }),
       subscribeToAppLogs: () => () => {},
       rustMuleStreamPollMs: 25,
       managedInstances: new StubManagedInstances(),
@@ -376,6 +382,12 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(healthRes.headers.get("x-content-type-options"), "nosniff");
     const health = await healthRes.json();
     assert.equal(health.ok, true);
+    assert.deepEqual(health.observer, {
+      activeDiagnosticTarget: { kind: "managed_instance", instanceId: "a" },
+      lastObservedTarget: { kind: "managed_instance", instanceId: "a" },
+      lastRun: "2026-03-08T03:00:00.000Z",
+      lastHealthScore: 0,
+    });
 
     const staticUiRes = await fetch(`${baseUrl}/static/operatorConsole/app.js`, {
       headers: { Cookie: cookie },

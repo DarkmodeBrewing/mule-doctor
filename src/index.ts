@@ -226,6 +226,7 @@ async function main(): Promise<void> {
       llmLogDir: llmLogDir ?? resolvedDataDir,
       proposalDir,
       getAppLogs: (n) => appLogBuffer?.getRecentLines(n) ?? [],
+      getRuntimeState: runtimeStore ? () => runtimeStore.loadState() : undefined,
       subscribeToAppLogs: appLogBuffer ? (listener) => appLogBuffer.subscribe(listener) : undefined,
       managedInstances,
       managedInstanceDiagnostics,

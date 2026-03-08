@@ -13,6 +13,7 @@ import type {
   ManagedInstanceAnalysisResult,
   ManagedInstanceDiagnosticSnapshot,
   ManagedInstanceRecord,
+  RuntimeState,
 } from "../types/contracts.js";
 
 const AUTH_COOKIE_NAME = "mule_doctor_ui_token";
@@ -73,6 +74,7 @@ export interface OperatorConsoleConfig {
   llmLogDir: string;
   proposalDir: string;
   getAppLogs: (n?: number) => string[];
+  getRuntimeState?: () => Promise<RuntimeState>;
   subscribeToAppLogs?: (listener: (line: string) => void) => () => void;
   rustMuleStreamPollMs?: number;
   managedInstances?: ManagedInstanceControl;
@@ -89,6 +91,7 @@ export class OperatorConsoleServer {
   private readonly llmLogDir: string;
   private readonly proposalDir: string;
   private readonly getAppLogs: (n?: number) => string[];
+  private readonly getRuntimeState: (() => Promise<RuntimeState>) | undefined;
   private readonly subscribeToAppLogs: ((listener: (line: string) => void) => () => void) | undefined;
   private readonly rustMuleStreamPollMs: number;
   private readonly managedInstances: ManagedInstanceControl | undefined;
@@ -109,6 +112,7 @@ export class OperatorConsoleServer {
     this.llmLogDir = config.llmLogDir;
     this.proposalDir = config.proposalDir;
     this.getAppLogs = config.getAppLogs;
+    this.getRuntimeState = config.getRuntimeState;
     this.subscribeToAppLogs = config.subscribeToAppLogs;
     this.rustMuleStreamPollMs = clampInt(
       config.rustMuleStreamPollMs,
@@ -268,11 +272,20 @@ export class OperatorConsoleServer {
     }
 
     if (path === "/api/health") {
+      const runtimeState = this.getRuntimeState ? await this.getRuntimeState() : undefined;
       sendJson(res, 200, {
         ok: true,
         startedAt: this.startedAt,
         now: new Date().toISOString(),
         uptimeSec: Math.round(process.uptime()),
+        observer: runtimeState
+          ? {
+              activeDiagnosticTarget: runtimeState.activeDiagnosticTarget,
+              lastObservedTarget: runtimeState.lastObservedTarget,
+              lastRun: runtimeState.lastRun,
+              lastHealthScore: runtimeState.lastHealthScore,
+            }
+          : undefined,
         paths: {
           rustMuleLogPath: this.rustMuleLogPath,
           llmLogDir: this.llmLogDir,

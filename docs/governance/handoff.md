@@ -140,6 +140,7 @@
   - recording `lastObservedTarget` in runtime state and labeling history entries with the observed target
   - labeling periodic Mattermost reports with the observed target
   - emitting explicit degraded/unavailable reports with `healthScore=0` when the selected target cannot be resolved at cycle start
+  - surfacing observer target/runtime state in the operator-console health endpoint and UI
 
 ## Key Decisions
 
@@ -168,4 +169,4 @@
 - Finish the active-target foundation slice:
   - review
   - merge
-- Surface `lastObservedTarget` and unavailable-target state more clearly in the operator console health view if operators need it.
+- Open the PR for active-target routing and process review feedback.
