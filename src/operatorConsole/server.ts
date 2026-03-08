@@ -60,6 +60,21 @@ export interface ManagedInstanceDiagnostics {
   getSnapshot(id: string): Promise<ManagedInstanceDiagnosticSnapshot>;
 }
 
+interface ManagedInstanceComparisonResponse {
+  left: {
+    instance: ConsoleManagedInstanceRecord;
+    snapshot: ManagedInstanceDiagnosticSnapshot;
+  };
+  right: {
+    instance: ConsoleManagedInstanceRecord;
+    snapshot: ManagedInstanceDiagnosticSnapshot;
+  };
+}
+
+type ConsoleManagedInstanceRecord = Omit<ManagedInstanceRecord, "runtime"> & {
+  runtime: Omit<ManagedInstanceRecord["runtime"], "logPath">;
+};
+
 export interface ManagedInstanceAnalysis {
   analyze(id: string): Promise<ManagedInstanceAnalysisResult>;
 }
@@ -302,6 +317,11 @@ export class OperatorConsoleServer {
       return;
     }
 
+    if (path === "/api/instances/compare") {
+      await this.handleInstanceComparison(req, url, res);
+      return;
+    }
+
     if (path.startsWith("/api/instances/")) {
       await this.handleInstanceAction(req, res, path);
       return;
@@ -494,6 +514,63 @@ export class OperatorConsoleServer {
         ...event,
         message: redactText(event.message),
       })),
+    });
+  }
+
+  private async handleInstanceComparison(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.managedInstances || !this.managedInstanceDiagnostics) {
+      sendJson(res, 501, { ok: false, error: "managed instance comparison unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+
+    const leftId = url.searchParams.get("left")?.trim();
+    const rightId = url.searchParams.get("right")?.trim();
+    if (!leftId || !rightId) {
+      sendJson(res, 400, { ok: false, error: "left and right managed instance ids are required" });
+      return;
+    }
+    if (leftId === rightId) {
+      sendJson(res, 400, { ok: false, error: "left and right managed instance ids must differ" });
+      return;
+    }
+
+    const comparison = await handleManagedInstanceErrors(async (): Promise<ManagedInstanceComparisonResponse> => {
+      const instances = await this.managedInstances!.listInstances();
+      const leftInstance = instances.find((instance) => instance.id === leftId);
+      const rightInstance = instances.find((instance) => instance.id === rightId);
+      if (!leftInstance) {
+        throw new Error(`Managed instance not found: ${leftId}`);
+      }
+      if (!rightInstance) {
+        throw new Error(`Managed instance not found: ${rightId}`);
+      }
+      const [leftSnapshot, rightSnapshot] = await Promise.all([
+        this.managedInstanceDiagnostics!.getSnapshot(leftId),
+        this.managedInstanceDiagnostics!.getSnapshot(rightId),
+      ]);
+      return {
+        left: {
+          instance: redactInstanceForConsole(leftInstance),
+          snapshot: leftSnapshot,
+        },
+        right: {
+          instance: redactInstanceForConsole(rightInstance),
+          snapshot: rightSnapshot,
+        },
+      };
+    });
+
+    sendJson(res, 200, {
+      ok: true,
+      comparison,
     });
   }
 
@@ -858,6 +935,21 @@ export class OperatorConsoleServer {
 
 function sanitizeCycleOutcome(value: RuntimeState["lastCycleOutcome"]): ObserverCycleOutcome | undefined {
   return value === "success" || value === "unavailable" || value === "error" ? value : undefined;
+}
+
+function redactInstanceForConsole(instance: ManagedInstanceRecord): ConsoleManagedInstanceRecord {
+  return {
+    ...instance,
+    runtime: omitLogPath(instance.runtime),
+  };
+}
+
+function omitLogPath(
+  runtime: ManagedInstanceRecord["runtime"],
+): Omit<ManagedInstanceRecord["runtime"], "logPath"> {
+  const { logPath, ...rest } = runtime;
+  void logPath;
+  return rest;
 }
 
 function log(level: string, module: string, msg: string): void {

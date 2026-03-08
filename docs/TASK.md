@@ -336,6 +336,10 @@ Acceptance criteria:
    - run-now requests
    - cycle start
    - cycle completion outcome
+10. Add a read-only managed-instance comparison view:
+   - compare two managed instances side by side
+   - reuse diagnostics snapshots rather than changing the scheduler model
+   - keep scheduled observation single-target
 
 Acceptance criteria:
 
@@ -346,3 +350,4 @@ Acceptance criteria:
 - Operator can trigger a one-off scheduled-cycle run without changing the background scheduler model.
 - Operator console shows scheduler execution state without requiring raw log inspection.
 - Operator console shows a bounded event timeline for recent control and scheduler actions.
+- Operator can compare two managed instances in the console without changing the active scheduled target.

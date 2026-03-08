@@ -190,3 +190,7 @@
   - persist recent operator/scheduler events in `operator-events.json`
   - include target changes, run-now requests, cycle start, and cycle outcome
   - expose the timeline through the operator console as a concise audit trail
+- Add a read-only managed-instance comparison view:
+  - compare two managed instances using existing diagnostics snapshots
+  - keep the observer scheduler single-target
+  - do not tie comparison to target selection or new control actions

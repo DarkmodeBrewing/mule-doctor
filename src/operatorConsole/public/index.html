@@ -87,6 +87,20 @@
       </article>
       <article class="card">
         <div class="row">
+          <h2>Instance Compare</h2>
+          <div class="controls">
+            <button id="refresh-instance-compare">Refresh compare</button>
+          </div>
+        </div>
+        <div class="instance-form">
+          <select id="compare-left"></select>
+          <select id="compare-right"></select>
+          <button id="run-instance-compare" type="button">Compare instances</button>
+        </div>
+        <pre id="instance-compare" class="muted">Select two managed instances to compare.</pre>
+      </article>
+      <article class="card">
+        <div class="row">
           <h2>App Logs</h2>
           <div class="controls">
             <span id="app-stream-status" class="status">connecting</span>

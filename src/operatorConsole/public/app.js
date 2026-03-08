@@ -136,6 +136,7 @@ function isUnavailableObservedTarget(target) {
 }
 
 function renderInstanceList(instances) {
+  renderComparisonSelectors(instances);
   const ul = document.getElementById("instance-list");
   ul.replaceChildren();
   if (!instances.length) {
@@ -222,6 +223,64 @@ function renderInstanceList(instances) {
     li.appendChild(wrapper);
     ul.appendChild(li);
   }
+}
+
+function renderComparisonSelectors(instances) {
+  const left = document.getElementById("compare-left");
+  const right = document.getElementById("compare-right");
+  const previousLeft = left.value;
+  const previousRight = right.value;
+  left.replaceChildren();
+  right.replaceChildren();
+
+  const placeholderLeft = document.createElement("option");
+  placeholderLeft.value = "";
+  placeholderLeft.textContent = "Select left instance";
+  left.appendChild(placeholderLeft);
+
+  const placeholderRight = document.createElement("option");
+  placeholderRight.value = "";
+  placeholderRight.textContent = "Select right instance";
+  right.appendChild(placeholderRight);
+
+  for (const instance of instances) {
+    const optionLeft = document.createElement("option");
+    optionLeft.value = instance.id;
+    optionLeft.textContent = `${instance.id} (${instance.status})`;
+    left.appendChild(optionLeft);
+
+    const optionRight = document.createElement("option");
+    optionRight.value = instance.id;
+    optionRight.textContent = `${instance.id} (${instance.status})`;
+    right.appendChild(optionRight);
+  }
+
+  if (instances.some((instance) => instance.id === previousLeft)) {
+    left.value = previousLeft;
+  }
+  if (instances.some((instance) => instance.id === previousRight)) {
+    right.value = previousRight;
+  }
+}
+
+function summarizeComparisonSide(side) {
+  const snapshot = side.snapshot;
+  const instance = side.instance;
+  return {
+    id: instance.id,
+    status: instance.status,
+    api: `${instance.apiHost}:${instance.apiPort}`,
+    pid: instance.currentProcess?.pid || null,
+    available: snapshot.available,
+    reason: snapshot.reason || null,
+    observedAt: snapshot.observedAt,
+    peerCount: snapshot.peerCount ?? null,
+    routingBucketCount: snapshot.routingBucketCount ?? null,
+    healthScore: snapshot.networkHealth?.score ?? null,
+    lookup: snapshot.lookupStats || null,
+    lastError: instance.lastError || null,
+    lastExit: instance.lastExit || null,
+  };
 }
 
 function setInstanceFeedback(text, isError = false) {
@@ -355,6 +414,34 @@ async function refreshInstances() {
     renderInstanceList([]);
     setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
     renderTargetStatusCard();
+  }
+}
+
+async function refreshInstanceCompare() {
+  const left = document.getElementById("compare-left").value;
+  const right = document.getElementById("compare-right").value;
+  if (!left || !right) {
+    setText("instance-compare", "Select two managed instances to compare.");
+    return;
+  }
+  try {
+    const data = await fetchJson(
+      `/api/instances/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`,
+    );
+    setText(
+      "instance-compare",
+      JSON.stringify(
+        {
+          comparedAt: new Date().toISOString(),
+          left: summarizeComparisonSide(data.comparison.left),
+          right: summarizeComparisonSide(data.comparison.right),
+        },
+        null,
+        2,
+      ),
+    );
+  } catch (err) {
+    setText("instance-compare", `Failed to compare instances: ${String(err)}`);
   }
 }
 
@@ -620,6 +707,7 @@ setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
 setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
 setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
+setText("instance-compare", "Select two managed instances to compare.");
 renderTargetStatusCard();
 renderSchedulerStatusCard();
 renderOperatorEvents([]);
@@ -663,9 +751,13 @@ document.getElementById("refresh-rust").onclick = refreshRustLogs;
 document.getElementById("refresh-llm-list").onclick = refreshLlmList;
 document.getElementById("refresh-proposals").onclick = refreshProposalList;
 document.getElementById("refresh-instances").onclick = refreshInstances;
+document.getElementById("refresh-instance-compare").onclick = refreshInstanceCompare;
 document.getElementById("refresh-target-status").onclick = refreshHealth;
 document.getElementById("refresh-scheduler-status").onclick = refreshHealth;
 document.getElementById("refresh-operator-events").onclick = refreshOperatorEvents;
+document.getElementById("run-instance-compare").onclick = () => {
+  void refreshInstanceCompare();
+};
 document.getElementById("run-observer-now").onclick = () => {
   void runObserverNow();
 };
