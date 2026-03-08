@@ -402,7 +402,6 @@ export class OperatorConsoleServer {
         instance: {
           id: instance.id,
           status: instance.status,
-          logPath: instance.runtime.logPath,
         },
         lines: content.map(redactLine),
       });
@@ -447,7 +446,10 @@ export class OperatorConsoleServer {
   }
 
   private async findManagedInstance(id: string): Promise<ManagedInstanceRecord | undefined> {
-    return (await this.managedInstances?.listInstances())?.find((candidate) => candidate.id === id);
+    if (!this.managedInstances) {
+      throw new Error("Managed instances are not configured for this server.");
+    }
+    return (await this.managedInstances.listInstances()).find((candidate) => candidate.id === id);
   }
 
   private authenticate(req: IncomingMessage): AuthState {

@@ -1,6 +1,8 @@
 /* global document, EventSource, window */
 
 const LOG_LINE_LIMIT = 250;
+const INSTANCE_DETAIL_PLACEHOLDER = "Select an instance to inspect details.";
+const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
 let selectedInstanceId = null;
 
 async function fetchJson(url) {
@@ -181,7 +183,7 @@ async function refreshInstances() {
       if (!exists) {
         selectedInstanceId = null;
         setText("instance-detail", "Selected instance no longer exists.");
-        setText("instance-logs", "Select an instance to inspect per-instance rust-mule logs.");
+        setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
       }
     }
   } catch (err) {
@@ -237,6 +239,9 @@ async function inspectInstance(id) {
     setText("instance-logs", `Failed to load instance logs: ${String(err)}`);
   }
 }
+
+setText("instance-detail", INSTANCE_DETAIL_PLACEHOLDER);
+setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });

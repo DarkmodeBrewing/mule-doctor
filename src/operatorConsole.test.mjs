@@ -265,6 +265,21 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(instanceLogsRes.status, 200);
     const instanceLogs = await instanceLogsRes.json();
     assert.equal(Array.isArray(instanceLogs.lines), true);
+    assert.equal("logPath" in instanceLogs.instance, false);
+
+    const invalidLinesRes = await fetch(`${baseUrl}/api/instances/a/logs?lines=not-a-number`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(invalidLinesRes.status, 200);
+    const invalidLines = await invalidLinesRes.json();
+    assert.equal(Array.isArray(invalidLines.lines), true);
+
+    const outOfRangeLinesRes = await fetch(`${baseUrl}/api/instances/a/logs?lines=999999`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(outOfRangeLinesRes.status, 200);
+    const outOfRangeLines = await outOfRangeLinesRes.json();
+    assert.equal(Array.isArray(outOfRangeLines.lines), true);
 
     const createRes = await fetch(`${baseUrl}/api/instances`, {
       method: "POST",
