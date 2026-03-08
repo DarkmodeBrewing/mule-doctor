@@ -1,6 +1,9 @@
 /* global document, EventSource, window */
 
 const LOG_LINE_LIMIT = 250;
+const INSTANCE_DETAIL_PLACEHOLDER = "Select an instance to inspect details.";
+const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
+let selectedInstanceId = null;
 
 async function fetchJson(url) {
   const res = await fetch(url, { credentials: "same-origin" });
@@ -78,17 +81,20 @@ function renderInstanceList(instances) {
     const start = document.createElement("button");
     const stop = document.createElement("button");
     const restart = document.createElement("button");
+    const inspect = document.createElement("button");
 
     wrapper.className = "instance-entry";
     controls.className = "controls";
     title.textContent = `${instance.id} (${instance.status})`;
     meta.className = "file-meta";
-    meta.textContent = `${instance.apiHost}:${instance.apiPort}`;
+    meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}`;
 
+    inspect.textContent = "Inspect";
     start.textContent = "Start";
     stop.textContent = "Stop";
     restart.textContent = "Restart";
 
+    inspect.onclick = () => inspectInstance(instance.id);
     start.onclick = () => mutateInstance(instance.id, "start");
     stop.onclick = () => mutateInstance(instance.id, "stop");
     restart.onclick = () => mutateInstance(instance.id, "restart");
@@ -99,6 +105,7 @@ function renderInstanceList(instances) {
       stop.disabled = true;
     }
 
+    controls.appendChild(inspect);
     controls.appendChild(start);
     controls.appendChild(stop);
     controls.appendChild(restart);
@@ -171,6 +178,14 @@ async function refreshInstances() {
   try {
     const data = await fetchJson("/api/instances");
     renderInstanceList(data.instances);
+    if (selectedInstanceId) {
+      const exists = data.instances.some((instance) => instance.id === selectedInstanceId);
+      if (!exists) {
+        selectedInstanceId = null;
+        setText("instance-detail", "Selected instance no longer exists.");
+        setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
+      }
+    }
   } catch (err) {
     renderInstanceList([]);
     setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
@@ -182,6 +197,7 @@ async function mutateInstance(id, action) {
     const data = await postJson(`/api/instances/${encodeURIComponent(id)}/${action}`);
     setInstanceFeedback(`${action} succeeded for ${data.instance.id}`);
     await refreshInstances();
+    await inspectInstance(data.instance.id);
   } catch (err) {
     setInstanceFeedback(String(err), true);
   }
@@ -203,10 +219,29 @@ async function createInstance(event) {
     form.reset();
     setInstanceFeedback(`created planned instance ${data.instance.id}`);
     await refreshInstances();
+    await inspectInstance(data.instance.id);
   } catch (err) {
     setInstanceFeedback(String(err), true);
   }
 }
+
+async function inspectInstance(id) {
+  selectedInstanceId = id;
+  try {
+    const [detail, logs] = await Promise.all([
+      fetchJson(`/api/instances/${encodeURIComponent(id)}`),
+      fetchJson(`/api/instances/${encodeURIComponent(id)}/logs?lines=${LOG_LINE_LIMIT}`),
+    ]);
+    setText("instance-detail", JSON.stringify(detail.instance, null, 2));
+    setText("instance-logs", logs.lines.join("\n") || "No per-instance rust-mule lines available.");
+  } catch (err) {
+    setText("instance-detail", `Failed to load instance detail: ${String(err)}`);
+    setText("instance-logs", `Failed to load instance logs: ${String(err)}`);
+  }
+}
+
+setText("instance-detail", INSTANCE_DETAIL_PLACEHOLDER);
+setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });

@@ -102,6 +102,17 @@ label {
   padding: 14px;
 }
 
+.instance-form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.instance-entry {
+  display: grid;
+  gap: 6px;
+}
+
 .card h2 {
   font-size: 1rem;
   color: var(--accent);

@@ -371,12 +371,40 @@ export class OperatorConsoleServer {
         sendJson(res, 405, { ok: false, error: "method not allowed" });
         return;
       }
-      const instance = (await this.managedInstances.listInstances()).find((candidate) => candidate.id === id);
+      const instance = await this.findManagedInstance(id);
       if (!instance) {
         sendJson(res, 404, { ok: false, error: `managed instance not found: ${id}` });
         return;
       }
       sendJson(res, 200, { ok: true, instance });
+      return;
+    }
+
+    if (action === "logs") {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      const instance = await this.findManagedInstance(id);
+      if (!instance) {
+        sendJson(res, 404, { ok: false, error: `managed instance not found: ${id}` });
+        return;
+      }
+      const lines = clampInt(
+        parseInt(new URL(req.url ?? "/", "http://operator-console.local").searchParams.get("lines") ?? "", 10),
+        DEFAULT_LOG_LINES,
+        1,
+        MAX_LOG_LINES,
+      );
+      const content = await readTailLines(instance.runtime.logPath, lines, MAX_FILE_BYTES);
+      sendJson(res, 200, {
+        ok: true,
+        instance: {
+          id: instance.id,
+          status: instance.status,
+        },
+        lines: content.map(redactLine),
+      });
       return;
     }
 
@@ -415,6 +443,13 @@ export class OperatorConsoleServer {
     } catch {
       return false;
     }
+  }
+
+  private async findManagedInstance(id: string): Promise<ManagedInstanceRecord | undefined> {
+    if (!this.managedInstances) {
+      throw new Error("Managed instances are not configured for this server.");
+    }
+    return (await this.managedInstances.listInstances()).find((candidate) => candidate.id === id);
   }
 
   private authenticate(req: IncomingMessage): AuthState {
