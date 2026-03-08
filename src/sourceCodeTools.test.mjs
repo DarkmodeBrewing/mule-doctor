@@ -148,6 +148,7 @@ test("SourceCodeTools searchCode scans Rust-project text files", async () => {
   try {
     await mkdir(join(tmp.dir, "src"), { recursive: true });
     await writeFile(join(tmp.dir, "src", "lib.rs"), 'let id = "needle";\n', "utf8");
+    await writeFile(join(tmp.dir, ".env"), 'SECRET_NEEDLE="needle"\n', "utf8");
     await writeFile(join(tmp.dir, "blob.json"), '{"needle": true}\n', "utf8");
 
     const tools = new SourceCodeTools({ sourcePath: tmp.dir });
@@ -155,6 +156,38 @@ test("SourceCodeTools searchCode scans Rust-project text files", async () => {
 
     assert.equal(result.totalMatches, 1);
     assert.equal(result.matches[0].path, "src/lib.rs");
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("SourceCodeTools blocks sensitive files for read_file and git_blame", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    await writeFile(join(tmp.dir, ".env"), "API_KEY=secret\n", "utf8");
+    execFileSync("git", ["init"], { cwd: tmp.dir });
+    execFileSync("git", ["config", "user.name", "Mule Doctor"], { cwd: tmp.dir });
+    execFileSync("git", ["config", "user.email", "mule@example.com"], { cwd: tmp.dir });
+    execFileSync("git", ["add", "."], { cwd: tmp.dir });
+    execFileSync("git", ["commit", "-m", "init"], { cwd: tmp.dir });
+
+    const tools = new SourceCodeTools({ sourcePath: tmp.dir });
+    await assert.rejects(() => tools.readFile(".env"), /read_file blocked for sensitive path/);
+    await assert.rejects(() => tools.gitBlame(".env", 1), /git_blame blocked for sensitive path/);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("SourceCodeTools reject oversized patch proposals", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    const tools = new SourceCodeTools({
+      sourcePath: tmp.dir,
+      proposalDir: join(tmp.dir, "proposals"),
+    });
+    const largeDiff = "x".repeat(300_000);
+    await assert.rejects(() => tools.proposePatch(largeDiff), /propose_patch diff exceeds/);
   } finally {
     await tmp.cleanup();
   }

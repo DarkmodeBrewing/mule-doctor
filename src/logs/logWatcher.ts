@@ -68,7 +68,6 @@ export class LogWatcher {
 
     // If the file was truncated or never read, re-seed from the beginning.
     const start = fileSize < this.lastSize ? 0 : this.lastSize;
-    this.lastSize = fileSize;
 
     const stream = createReadStream(this.filePath, {
       start,
@@ -76,11 +75,17 @@ export class LogWatcher {
     });
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
-    for await (const line of rl) {
-      this.buffer.push(line);
-      if (this.buffer.length > this.maxLines) {
-        this.buffer.shift();
+    try {
+      for await (const line of rl) {
+        this.buffer.push(line);
+        if (this.buffer.length > this.maxLines) {
+          this.buffer.shift();
+        }
       }
+      // Only advance offset after a successful stream read to avoid skipping bytes.
+      this.lastSize = fileSize;
+    } catch (err) {
+      log("warn", "logWatcher", `Failed to read ${this.filePath}: ${String(err)}`);
     }
   }
 }

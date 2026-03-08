@@ -17,12 +17,12 @@ Required:
 
 - `RUST_MULE_API_URL` (example: `http://127.0.0.1:17835`)
 - `RUST_MULE_LOG_PATH` (example: `/home/coder/mule-a/data/logs/rust-mule.log`)
+- `RUST_MULE_TOKEN_PATH` (API bearer token file path)
 - `OPENAI_API_KEY`
 - `MATTERMOST_WEBHOOK_URL`
 
 Optional:
 
-- `RUST_MULE_TOKEN_PATH` (API bearer token file path; defaults to no bearer auth)
 - `RUST_MULE_DEBUG_TOKEN_FILE` (debug token file path; required by rust-mule debug endpoints via `X-Debug-Token`)
 - `RUST_MULE_SOURCE_PATH` (enables Rust-project source inspection tools scoped to this repository path)
 - `RUST_MULE_API_PREFIX` (defaults to `/api/v1`)
@@ -69,10 +69,8 @@ Container defaults:
 Entrypoint behavior:
 
 1. Starts rust-mule (`/opt/rust-mule/target/release/rust-mule --config /data/config.toml`)
-2. Waits for token file when `RUST_MULE_TOKEN_PATH` is non-empty (`/data/token` by default)
+2. Waits for token file at `RUST_MULE_TOKEN_PATH` (`/data/token` by default)
 3. Starts mule-doctor (`node /app/dist/index.js`)
-
-To disable bearer-token wait/auth for container runs, set `RUST_MULE_TOKEN_PATH` to an empty value.
 
 Required production runtime inputs:
 
@@ -87,8 +85,10 @@ Required production runtime inputs:
 - Observer now computes a deterministic network health score (peer count, bucket balance, lookup success, hop efficiency, error rate) and persists it as `lastHealthScore` + history entries.
 - Tool surface includes: `getHistory`, `searchLogs`, `triggerBootstrap`, and `traceLookup` (debug tools require bearer + `X-Debug-Token` and poll async job/trace status endpoints).
 - Source tools are enabled only when `RUST_MULE_SOURCE_PATH` is set: `search_code`, `read_file`, `show_function`, `propose_patch`, and `git_blame`.
-- Source scanning is Rust-project oriented (`.rs` and core Rust project text files), and `show_function` resolves Rust function signatures.
+- Source scanning is Rust-project oriented (`.rs` and core Rust project text files), excludes sensitive files (for example `.env` and key material), and `show_function` resolves Rust function signatures.
 - File access is sandboxed to the configured source root and `propose_patch` stores proposal artifacts under `/data/mule-doctor/proposals` by default (configurable via `MULE_DOCTOR_DATA_DIR`) for review.
+- `read_file` and `git_blame` block sensitive paths (for example `.env` and `.git` content).
+- `propose_patch` enforces a maximum diff size to avoid oversized artifact writes.
 - When `propose_patch` is used, mule-doctor also posts a Mattermost notification containing proposal metadata and diff content for quick reviewer access.
 - Analyzer records per-call LLM usage logs (`LLM_<timestamp>.log`), aggregates daily/monthly usage in state, and emits one Mattermost usage report per UTC day when usage exists.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

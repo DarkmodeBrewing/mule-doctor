@@ -10,11 +10,17 @@ const DEFAULT_MAX_FILES = 2000;
 const DEFAULT_MAX_MATCHES = 200;
 const DEFAULT_MAX_READ_BYTES = 64 * 1024;
 const DEFAULT_MAX_SCAN_FILE_BYTES = 256 * 1024;
+const MAX_PROPOSAL_BYTES = 256 * 1024;
 const DEFAULT_PROPOSAL_DIR = "/data/mule-doctor/proposals";
 
 const EXCLUDED_DIRS = new Set([".git", "node_modules", "target", "dist", "build"]);
-const RUST_PROJECT_EXTENSIONS = new Set([".rs", ".toml", ".md", ".txt", ".sh", ".env"]);
+const RUST_PROJECT_EXTENSIONS = new Set([".rs", ".toml", ".md", ".txt", ".sh"]);
 const RUST_PROJECT_FILENAMES = new Set(["Cargo.toml", "Cargo.lock", "Makefile", "Dockerfile"]);
+const SENSITIVE_PATH_PATTERNS = [
+  /(^|\/)\.git(\/|$)/i,
+  /(^|\/)\.env(\..*)?$/i,
+  /\.(pem|key|p12|pfx)$/i,
+];
 
 interface SourceCodeToolsConfig {
   sourcePath: string;
@@ -134,13 +140,15 @@ export class SourceCodeTools {
   async readFile(pathRaw: string): Promise<ReadFileResult> {
     const safePath = this.resolveUserPath(pathRaw);
     await this.assertPathWithinRoot(safePath);
+    const relPath = toPosixPath(relative(this.rootPath, safePath));
+    this.assertPathAllowed(relPath, "read_file");
     const fileStat = await stat(safePath);
     if (!fileStat.isFile()) {
       throw new Error(`read_file path is not a regular file: ${pathRaw}`);
     }
     const content = await this.readTextFileBounded(safePath, this.maxReadBytes);
     return {
-      path: toPosixPath(relative(this.rootPath, safePath)),
+      path: relPath,
       sizeBytes: fileStat.size,
       truncated: fileStat.size > this.maxReadBytes,
       content,
@@ -192,6 +200,12 @@ export class SourceCodeTools {
     if (!diff) {
       throw new Error("propose_patch requires non-empty diff");
     }
+    const bytes = Buffer.byteLength(diff, "utf8");
+    if (bytes > MAX_PROPOSAL_BYTES) {
+      throw new Error(
+        `propose_patch diff exceeds ${MAX_PROPOSAL_BYTES} bytes; split into smaller proposals`,
+      );
+    }
 
     await mkdir(this.proposalDir, { recursive: true });
 
@@ -203,7 +217,7 @@ export class SourceCodeTools {
     return {
       mode: "proposal_only",
       applied: false,
-      bytes: Buffer.byteLength(diff, "utf8"),
+      bytes,
       lines: diff.split("\n").length,
       artifactPath: toPosixPath(artifactAbsPath),
       message: "Patch proposal saved for human review. No source files were modified.",
@@ -215,6 +229,7 @@ export class SourceCodeTools {
     await this.assertPathWithinRoot(safePath);
     const line = clampPositive(lineRaw, 1);
     const relPath = toPosixPath(relative(this.rootPath, safePath));
+    this.assertPathAllowed(relPath, "git_blame");
     const args = ["blame", "-L", `${line},${line}`, "--porcelain", "--", relPath];
 
     try {
@@ -279,6 +294,12 @@ export class SourceCodeTools {
       return bounded.toString("utf8");
     } finally {
       await fileHandle.close();
+    }
+  }
+
+  private assertPathAllowed(relPath: string, operation: string): void {
+    if (isSensitiveRelativePath(relPath)) {
+      throw new Error(`${operation} blocked for sensitive path: ${relPath}`);
     }
   }
 }
@@ -357,10 +378,12 @@ async function walkDir(
 
     if (!entry.isFile()) continue;
     if (!includeFile(entry.name)) continue;
+    const relPath = toPosixPath(relative(rootPath, absPath));
+    if (isSensitiveRelativePath(relPath)) continue;
 
     output.push({
       absPath,
-      relPath: toPosixPath(relative(rootPath, absPath)),
+      relPath,
     });
   }
 }
@@ -402,6 +425,11 @@ function resolveProposalDir(proposalDirRaw: string | undefined, rootPath: string
 
 function toPosixPath(value: string): string {
   return value.replaceAll("\\", "/");
+}
+
+function isSensitiveRelativePath(relPath: string): boolean {
+  const normalized = toPosixPath(relPath);
+  return SENSITIVE_PATH_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
 async function realpathSyncSafe(path: string): Promise<string> {

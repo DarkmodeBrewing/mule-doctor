@@ -243,3 +243,22 @@ test("RustMuleClient traceLookup posts and returns normalized hops", async () =>
     await debugToken.cleanup();
   }
 });
+
+test("RustMuleClient loadToken fails when configured auth token file is missing", async () => {
+  const client = new RustMuleClient("http://127.0.0.1:17835", "/does/not/exist/token");
+
+  await assert.rejects(() => client.loadToken(), /Failed to load auth token/);
+});
+
+test("RustMuleClient times out HTTP requests with a bounded timeout", async () => {
+  global.fetch = async (_url, init = {}) =>
+    new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => {
+        reject(new DOMException("Aborted", "AbortError"));
+      });
+    });
+
+  const client = new RustMuleClient("http://127.0.0.1:17835", undefined, "/api/v1", undefined, 200);
+
+  await assert.rejects(() => client.getNodeInfo(), /timed out after 200ms/);
+});
