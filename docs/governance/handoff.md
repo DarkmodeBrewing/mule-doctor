@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/operator-console-static-ui`
+- `feature/instance-manager-foundation`
 - PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; splitting the operator-console frontend into static assets served by the existing backend.
-- PR #23 is merged to `main`.
+- In progress; implementing the non-risky `InstanceManager` foundation for mule-doctor-managed local test instances.
+- PR #24 is merged to `main`.
 
 ## Completed Work
 
@@ -110,6 +110,11 @@
   - moving the frontend into `src/operatorConsole/public/`
   - serving HTML/CSS/JS statically from the existing Node server
   - preserving the current auth, API, and SSE behavior while simplifying `server.ts`
+- Instance-manager foundation underway:
+  - adding persisted managed-instance metadata separate from process launch
+  - adding deterministic runtime directory planning under `/data/instances/<id>`
+  - reserving unique API ports for planned instances
+  - explicitly deferring process spawn/config generation details until rust-mule startup behavior is confirmed
 
 ## Key Decisions
 
@@ -119,6 +124,7 @@
 - For bundled source safety, preserve local git history for `git_blame` while stripping `origin` remote.
 - Keep external rust-mule nodes observer-only, while allowing future controlled lifecycle actions only for mule-doctor-owned local test instances.
 - Use a bounded `InstanceManager` as the future control plane rather than allowing the UI to shell out directly.
+- Build `InstanceManager` in two steps: first metadata/path/port planning, then process lifecycle once rust-mule startup assumptions are verified.
 
 ## Validation
 
@@ -127,5 +133,5 @@
 
 ## Next Steps
 
-- Finish PR for the operator-console static asset split and process review feedback.
-- After that, move on to the `InstanceManager` data model before adding instance lifecycle controls to the UI.
+- Finish PR for the `InstanceManager` foundation and process review feedback.
+- After that, inspect rust-mule startup/config behavior before implementing managed process launch and operator-console lifecycle controls.
