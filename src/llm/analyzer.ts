@@ -146,6 +146,16 @@ function log(level: string, module: string, msg: string): void {
 }
 
 function formatError(err: unknown): string {
+  if (err instanceof OpenAI.APIError) {
+    const details = [`status=${err.status ?? "unknown"}`];
+    if (typeof err.code === "string" || typeof err.code === "number") {
+      details.push(`code=${String(err.code)}`);
+    }
+    if (typeof err.type === "string" && err.type.length > 0) {
+      details.push(`type=${err.type}`);
+    }
+    return `${details.join(" ")}: ${err.message}`;
+  }
   if (err instanceof Error) {
     return err.message;
   }

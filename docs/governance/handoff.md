@@ -51,6 +51,7 @@
   - refactored `src/llm/analyzer.ts` to use `OpenAI` client (`chat.completions.create`) instead of manual `fetch`.
   - preserved existing tool-calling loop semantics and usage tracking behavior.
   - improved API error wrapping via structured SDK error handling.
+  - enhanced SDK error formatting to explicitly include API status/code/type when available.
 
 ## Key Decisions
 
