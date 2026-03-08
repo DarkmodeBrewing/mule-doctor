@@ -93,6 +93,7 @@ Operator console (optional):
 - The UI and `/api/*` routes are guarded by `MULE_DOCTOR_UI_AUTH_TOKEN`.
 - JSON endpoints include `/api/health`, `/api/logs/app`, `/api/logs/rust-mule`, `/api/llm/logs`, and `/api/proposals`.
 - Live log streaming is available through SSE at `/api/stream/app` and `/api/stream/rust-mule`.
+- Frontend assets are served statically from the built-in operator-console public bundle rather than inline backend HTML templates.
 - Docker compose maps UI port `${MULE_DOCTOR_UI_PORT:-18080}`, but keeps the UI disabled by default.
 - To access the console from the host, explicitly set `MULE_DOCTOR_UI_ENABLED=true`, provide `MULE_DOCTOR_UI_AUTH_TOKEN`, and keep `MULE_DOCTOR_UI_HOST=0.0.0.0` inside the container.
 - Do not expose the console directly on untrusted networks; place it behind an authenticated or access-restricted reverse proxy if remote access is needed.

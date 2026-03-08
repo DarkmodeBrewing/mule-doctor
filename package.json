@@ -4,7 +4,7 @@
   "description": "Observability agent for rust-mule nodes",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-operator-console-assets.mjs",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",

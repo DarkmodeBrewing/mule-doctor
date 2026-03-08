@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>mule-doctor operator console login</title>
+  <link rel="stylesheet" href="/static/operatorConsole/styles.css" />
+</head>
+<body class="login-body">
+  <form class="panel login-panel" method="POST" action="/auth/login">
+    <h1>mule-doctor operator console</h1>
+    <p id="login-status" class="status-text">Authentication required to access the operator console.</p>
+    <label for="token">Operator token</label>
+    <input id="token" name="token" type="password" autocomplete="current-password" required />
+    <button type="submit">Unlock console</button>
+  </form>
+
+  <script type="module" src="/static/operatorConsole/login.js"></script>
+</body>
+</html>

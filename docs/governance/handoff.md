@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/operator-console-phase2`
+- `feature/operator-console-static-ui`
 - PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; implementing operator-console phase 2 (auth guard + live log streaming).
-- PR #22 is merged to `main`.
+- In progress; splitting the operator-console frontend into static assets served by the existing backend.
+- PR #23 is merged to `main`.
 
 ## Completed Work
 
@@ -106,6 +106,10 @@
   - architecture now distinguishes external observation mode from future mule-doctor-managed local test instances.
   - backlog now includes `InstanceManager` and operator-console control-plane tasks for multi-instance rust-mule supervision.
   - backlog now also includes splitting the operator-console frontend into static assets instead of inline HTML in server code.
+- Operator-console static asset split underway:
+  - moving the frontend into `src/operatorConsole/public/`
+  - serving HTML/CSS/JS statically from the existing Node server
+  - preserving the current auth, API, and SSE behavior while simplifying `server.ts`
 
 ## Key Decisions
 
@@ -123,6 +127,5 @@
 
 ## Next Steps
 
-- Finish PR for operator console phase 2 and process review feedback.
-- After phase 2, first document and implement the `InstanceManager` data model before adding instance lifecycle controls to the UI.
-- Before the control-plane UI grows further, split the operator-console frontend out of inline server templates into static assets.
+- Finish PR for the operator-console static asset split and process review feedback.
+- After that, move on to the `InstanceManager` data model before adding instance lifecycle controls to the UI.
