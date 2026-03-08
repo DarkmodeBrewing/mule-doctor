@@ -11,6 +11,7 @@ const OBSERVER_TARGET_PLACEHOLDER = "Loading active diagnostic target...";
 let selectedInstanceId = null;
 let currentObserver = null;
 let currentScheduledTarget = null;
+let currentScheduler = null;
 
 async function fetchJson(url) {
   const res = await fetch(url, { credentials: "same-origin" });
@@ -193,6 +194,7 @@ function renderHealth(data) {
   const observerLines = [];
   currentObserver = data.observer || null;
   currentScheduledTarget = data.observer?.activeDiagnosticTarget || null;
+  currentScheduler = data.scheduler || null;
   if (data.observer) {
     observerLines.push(describeTarget(data.observer.activeDiagnosticTarget));
     observerLines.push(
@@ -207,6 +209,10 @@ function renderHealth(data) {
     if (data.observer.lastTargetFailureReason) {
       observerLines.push(`Last failure reason: ${data.observer.lastTargetFailureReason}`);
     }
+  }
+  if (data.scheduler) {
+    observerLines.push(`Scheduler running: ${data.scheduler.started ? "yes" : "no"}`);
+    observerLines.push(`Cycle in progress: ${data.scheduler.cycleInFlight ? "yes" : "no"}`);
   }
 
   setText(
@@ -347,6 +353,15 @@ function renderTargetStatusCard(errorText) {
     ),
   );
   lines.push(renderTargetStatusLine("Last run", currentObserver?.lastRun || "unknown"));
+  lines.push(
+    renderTargetStatusLine("Scheduler", currentScheduler?.started ? "running" : "stopped"),
+  );
+  lines.push(
+    renderTargetStatusLine(
+      "Cycle",
+      currentScheduler?.cycleInFlight ? "in progress" : "idle",
+    ),
+  );
   if (currentObserver?.lastTargetFailureReason) {
     lines.push(renderTargetStatusLine("Reason", currentObserver.lastTargetFailureReason));
   }
@@ -358,6 +373,23 @@ function renderTargetStatusCard(errorText) {
     element.className = "target-status-card";
   }
   element.replaceChildren(...lines);
+}
+
+async function runObserverNow() {
+  const button = document.getElementById("run-observer-now");
+  button.disabled = true;
+  try {
+    const result = await postJson("/api/observer/run");
+    currentScheduler = result.scheduler || currentScheduler;
+    setInstanceFeedback("scheduled observer cycle triggered");
+    await refreshHealth();
+    await refreshInstances();
+  } catch (err) {
+    setInstanceFeedback(String(err), true);
+    await refreshHealth();
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderTargetStatusLine(label, value) {
@@ -483,6 +515,9 @@ document.getElementById("refresh-llm-list").onclick = refreshLlmList;
 document.getElementById("refresh-proposals").onclick = refreshProposalList;
 document.getElementById("refresh-instances").onclick = refreshInstances;
 document.getElementById("refresh-target-status").onclick = refreshHealth;
+document.getElementById("run-observer-now").onclick = () => {
+  void runObserverNow();
+};
 document.getElementById("instance-create-form").onsubmit = createInstance;
 document.getElementById("use-external-target").onclick = () => {
   void updateObserverTarget({ kind: "external" });

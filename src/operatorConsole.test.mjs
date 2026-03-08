@@ -165,6 +165,24 @@ class StubDiagnosticTargetControl {
   }
 }
 
+class StubObserverControl {
+  constructor() {
+    this.status = { started: true, cycleInFlight: false, intervalMs: 300000 };
+  }
+
+  getStatus() {
+    return this.status;
+  }
+
+  triggerRunNow() {
+    if (this.status.cycleInFlight) {
+      return { accepted: false, reason: "observer cycle already in progress" };
+    }
+    this.status = { ...this.status, cycleInFlight: true };
+    return { accepted: true };
+  }
+}
+
 test("OperatorConsoleServer reports 501 for instance detail routes when control is unavailable", async () => {
   const tmp = await makeTempDir();
   try {
@@ -258,6 +276,58 @@ test("OperatorConsoleServer gets and sets the active diagnostic target", async (
   }
 });
 
+test("OperatorConsoleServer triggers observer run-now and reports scheduler status", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const observerControl = new StubObserverControl();
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      observerControl,
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const runRes = await fetch(`${server.publicAddress()}/api/observer/run`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Origin: server.publicAddress(),
+      },
+      body: "{}",
+    });
+    assert.equal(runRes.status, 202);
+    const runPayload = await runRes.json();
+    assert.equal(runPayload.ok, true);
+    assert.equal(runPayload.scheduler.cycleInFlight, true);
+
+    const secondRunRes = await fetch(`${server.publicAddress()}/api/observer/run`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Origin: server.publicAddress(),
+      },
+      body: "{}",
+    });
+    assert.equal(secondRunRes.status, 409);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 async function loginAndGetCookie(baseUrl) {
   const loginRes = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
@@ -343,6 +413,10 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
         lastHealthScore: 0,
         lastTargetFailureReason: "Managed instance a is stopped",
       }),
+      observerControl: {
+        getStatus: () => ({ started: true, cycleInFlight: false, intervalMs: 300000 }),
+        triggerRunNow: () => ({ accepted: true }),
+      },
       subscribeToAppLogs: () => () => {},
       rustMuleStreamPollMs: 25,
       managedInstances: new StubManagedInstances(),
@@ -389,6 +463,11 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       lastRun: "2026-03-08T03:00:00.000Z",
       lastHealthScore: 0,
       lastTargetFailureReason: "Managed instance a is stopped",
+    });
+    assert.deepEqual(health.scheduler, {
+      started: true,
+      cycleInFlight: false,
+      intervalMs: 300000,
     });
 
     const staticUiRes = await fetch(`${baseUrl}/static/operatorConsole/app.js`, {

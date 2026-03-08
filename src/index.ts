@@ -232,6 +232,7 @@ async function main(): Promise<void> {
       managedInstanceDiagnostics,
       managedInstanceAnalysis,
       diagnosticTarget,
+      observerControl: observer,
     });
     try {
       await operatorConsole.start();

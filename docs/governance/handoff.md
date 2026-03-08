@@ -178,3 +178,7 @@
   - store `lastTargetFailureReason` in runtime state
   - expose it through `/api/health`
   - render it in the scheduled-target card and health summary
+- Add bounded operator control to trigger the scheduled observer cycle immediately:
+  - expose scheduler status (`started`, `cycleInFlight`, `intervalMs`) in `/api/health`
+  - add `POST /api/observer/run`
+  - show a `Run cycle now` action in the scheduled-target card
