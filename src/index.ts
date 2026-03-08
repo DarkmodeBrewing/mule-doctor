@@ -92,6 +92,7 @@ async function main(): Promise<void> {
   const proposalDir = `${resolvedDataDir}/proposals`;
   const uiHost = optionalEnv("MULE_DOCTOR_UI_HOST") ?? "127.0.0.1";
   const uiPort = parsePositiveIntEnv("MULE_DOCTOR_UI_PORT") ?? 18080;
+  const uiAuthToken = uiEnabled ? requireEnv("MULE_DOCTOR_UI_AUTH_TOKEN") : undefined;
 
   // Build components
   const rustMuleClient = new RustMuleClient(apiUrl, tokenPath, apiPrefix, debugTokenPath);
@@ -145,12 +146,14 @@ async function main(): Promise<void> {
   let operatorConsole: OperatorConsoleServer | undefined;
   if (uiEnabled) {
     operatorConsole = new OperatorConsoleServer({
+      authToken: uiAuthToken,
       host: uiHost,
       port: uiPort,
       rustMuleLogPath: logPath,
       llmLogDir: llmLogDir ?? resolvedDataDir,
       proposalDir,
       getAppLogs: (n) => appLogBuffer?.getRecentLines(n) ?? [],
+      subscribeToAppLogs: appLogBuffer ? (listener) => appLogBuffer.subscribe(listener) : undefined,
     });
     try {
       await operatorConsole.start();

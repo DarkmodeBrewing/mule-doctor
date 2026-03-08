@@ -8,10 +8,15 @@ import { open, readdir, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Stats } from "node:fs";
 
+const AUTH_COOKIE_NAME = "mule_doctor_ui_token";
 const DEFAULT_UI_HOST = "127.0.0.1";
 const DEFAULT_UI_PORT = 18080;
 const DEFAULT_LOG_LINES = 200;
+const DEFAULT_STREAM_LINES = 50;
+const DEFAULT_STREAM_POLL_MS = 1000;
+const DEFAULT_STREAM_HEARTBEAT_MS = 15000;
 const MAX_LOG_LINES = 2000;
+const MAX_STREAM_LINES = 500;
 const MAX_FILE_BYTES = 512 * 1024;
 
 interface ListedFile {
@@ -20,34 +25,59 @@ interface ListedFile {
   updatedAt: string;
 }
 
+interface AuthState {
+  ok: boolean;
+}
+
+interface StreamChunk {
+  nextOffset: number;
+  lines: string[];
+  partial: string;
+}
+
 export interface OperatorConsoleConfig {
+  authToken?: string;
   host?: string;
   port?: number;
   rustMuleLogPath: string;
   llmLogDir: string;
   proposalDir: string;
   getAppLogs: (n?: number) => string[];
+  subscribeToAppLogs?: (listener: (line: string) => void) => () => void;
+  rustMuleStreamPollMs?: number;
 }
 
 export class OperatorConsoleServer {
+  private readonly authToken: string | undefined;
   private readonly host: string;
   private readonly port: number;
   private readonly rustMuleLogPath: string;
   private readonly llmLogDir: string;
   private readonly proposalDir: string;
   private readonly getAppLogs: (n?: number) => string[];
+  private readonly subscribeToAppLogs: ((listener: (line: string) => void) => () => void) | undefined;
+  private readonly rustMuleStreamPollMs: number;
   private readonly startedAt: string;
 
   private server: Server | undefined;
   private boundPort: number | undefined;
+  private readonly streamCleanups = new Set<() => void>();
 
   constructor(config: OperatorConsoleConfig) {
+    this.authToken = config.authToken?.trim() || undefined;
     this.host = sanitizeHost(config.host);
     this.port = clampInt(config.port, DEFAULT_UI_PORT, 0, 65_535);
     this.rustMuleLogPath = config.rustMuleLogPath;
     this.llmLogDir = config.llmLogDir;
     this.proposalDir = config.proposalDir;
     this.getAppLogs = config.getAppLogs;
+    this.subscribeToAppLogs = config.subscribeToAppLogs;
+    this.rustMuleStreamPollMs = clampInt(
+      config.rustMuleStreamPollMs,
+      DEFAULT_STREAM_POLL_MS,
+      100,
+      60_000,
+    );
     this.startedAt = new Date().toISOString();
   }
 
@@ -88,6 +118,11 @@ export class OperatorConsoleServer {
     const server = this.server;
     this.server = undefined;
 
+    for (const cleanup of this.streamCleanups) {
+      cleanup();
+    }
+    this.streamCleanups.clear();
+
     await new Promise<void>((resolveStop, reject) => {
       server.close((err) => {
         if (err) {
@@ -105,16 +140,54 @@ export class OperatorConsoleServer {
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
+    const url = new URL(req.url ?? "/", "http://operator-console.local");
+    const path = url.pathname;
+    const auth = this.authenticate(req, url);
+
+    if (path === "/auth/login") {
+      this.handleLogin(url, res);
       return;
     }
 
-    const url = new URL(req.url ?? "/", "http://operator-console.local");
-    const path = url.pathname;
+    if (path === "/auth/logout") {
+      this.handleLogout(res);
+      return;
+    }
 
     if (path === "/" || path === "/index.html") {
+      if (!auth.ok) {
+        sendHtml(res, renderLoginHtml());
+        return;
+      }
       sendHtml(res, renderIndexHtml());
+      return;
+    }
+
+    if (!auth.ok) {
+      sendJson(res, 401, { ok: false, error: "operator console authentication required" });
+      return;
+    }
+
+    if (path === "/api/stream/app") {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      await this.handleAppLogStream(url, req, res);
+      return;
+    }
+
+    if (path === "/api/stream/rust-mule") {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      await this.handleRustMuleLogStream(url, req, res);
+      return;
+    }
+
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
       return;
     }
 
@@ -199,6 +272,142 @@ export class OperatorConsoleServer {
 
     sendJson(res, 404, { ok: false, error: "not found" });
   }
+
+  private authenticate(req: IncomingMessage, url: URL): AuthState {
+    if (!this.authToken) return { ok: true };
+
+    const cookieToken = getCookie(req.headers.cookie, AUTH_COOKIE_NAME);
+    const bearerToken = getBearerToken(req.headers.authorization);
+    const headerToken = getHeaderValue(req.headers, "x-operator-token");
+    const queryToken = url.searchParams.get("token") ?? undefined;
+    const provided = [cookieToken, bearerToken, headerToken, queryToken].find(
+      (candidate) => candidate !== undefined && candidate.length > 0,
+    );
+    return { ok: provided === this.authToken };
+  }
+
+  private handleLogin(url: URL, res: ServerResponse): void {
+    const token = url.searchParams.get("token")?.trim();
+    if (!this.authToken) {
+      redirect(res, "/");
+      return;
+    }
+    if (!token || token !== this.authToken) {
+      sendHtml(res, renderLoginHtml("Invalid operator token."));
+      return;
+    }
+
+    res.statusCode = 303;
+    applySecurityHeaders(res);
+    res.setHeader(
+      "Set-Cookie",
+      `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/`,
+    );
+    res.setHeader("Location", "/");
+    res.end();
+  }
+
+  private handleLogout(res: ServerResponse): void {
+    res.statusCode = 303;
+    applySecurityHeaders(res);
+    res.setHeader(
+      "Set-Cookie",
+      `${AUTH_COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,
+    );
+    res.setHeader("Location", "/");
+    res.end();
+  }
+
+  private async handleAppLogStream(
+    url: URL,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.subscribeToAppLogs) {
+      throw new RequestError(501, "app log streaming unavailable");
+    }
+
+    const initialLines = clampInt(
+      parseInt(url.searchParams.get("lines") ?? "", 10),
+      DEFAULT_STREAM_LINES,
+      1,
+      MAX_STREAM_LINES,
+    );
+    sendSseHeaders(res);
+    writeSseEvent(res, "snapshot", { lines: this.getAppLogs(initialLines).map(redactLine) });
+
+    const unsubscribe = this.subscribeToAppLogs((line) => {
+      writeSseEvent(res, "line", { line: redactLine(line) });
+    });
+    const heartbeat = setInterval(() => {
+      res.write(": heartbeat\n\n");
+    }, DEFAULT_STREAM_HEARTBEAT_MS);
+
+    this.registerStream(req, res, () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  }
+
+  private async handleRustMuleLogStream(
+    url: URL,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    const initialLines = clampInt(
+      parseInt(url.searchParams.get("lines") ?? "", 10),
+      DEFAULT_STREAM_LINES,
+      1,
+      MAX_STREAM_LINES,
+    );
+    sendSseHeaders(res);
+    writeSseEvent(res, "snapshot", {
+      lines: (await readTailLines(this.rustMuleLogPath, initialLines, MAX_FILE_BYTES)).map(redactLine),
+    });
+
+    let lastOffset = await getFileSize(this.rustMuleLogPath);
+    let partial = "";
+    const poller = setInterval(() => {
+      void (async () => {
+        const next = await readStreamChunk(this.rustMuleLogPath, lastOffset, partial, MAX_FILE_BYTES);
+        lastOffset = next.nextOffset;
+        partial = next.partial;
+        for (const line of next.lines) {
+          writeSseEvent(res, "line", { line: redactLine(line) });
+        }
+      })().catch(() => {
+        // Keep the stream alive across transient file-read errors.
+      });
+    }, this.rustMuleStreamPollMs);
+    const heartbeat = setInterval(() => {
+      res.write(": heartbeat\n\n");
+    }, DEFAULT_STREAM_HEARTBEAT_MS);
+
+    this.registerStream(req, res, () => {
+      clearInterval(poller);
+      clearInterval(heartbeat);
+    });
+  }
+
+  private registerStream(
+    req: IncomingMessage,
+    res: ServerResponse,
+    cleanup: () => void,
+  ): void {
+    let cleanedUp = false;
+    const finalize = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      this.streamCleanups.delete(finalize);
+      cleanup();
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+    this.streamCleanups.add(finalize);
+    req.on("close", finalize);
+    res.on("close", finalize);
+  }
 }
 
 async function listFiles(
@@ -261,6 +470,55 @@ async function readTailLines(
       .map((line) => line.trimEnd())
       .filter((line) => line.length > 0)
       .slice(-lineLimit);
+  } finally {
+    await file.close();
+  }
+}
+
+async function readStreamChunk(
+  filePath: string,
+  offset: number,
+  priorPartial: string,
+  maxBytes: number,
+): Promise<StreamChunk> {
+  let fileStat: Stats;
+  try {
+    fileStat = await stat(filePath);
+  } catch (err) {
+    if (isNotFound(err)) {
+      return { nextOffset: 0, lines: [], partial: "" };
+    }
+    throw err;
+  }
+
+  let start = offset;
+  let partial = priorPartial;
+  if (fileStat.size < offset) {
+    start = 0;
+    partial = "";
+  }
+  if (fileStat.size === start) {
+    return { nextOffset: fileStat.size, lines: [], partial };
+  }
+
+  const desiredBytes = fileStat.size - start;
+  if (desiredBytes > maxBytes) {
+    start = fileStat.size - maxBytes;
+    partial = "";
+  }
+
+  const file = await open(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(fileStat.size - start > maxBytes ? maxBytes : fileStat.size - start);
+    const { bytesRead } = await file.read(buffer, 0, buffer.length, start);
+    const combined = partial + buffer.subarray(0, bytesRead).toString("utf8");
+    const rawLines = combined.split(/\r?\n/);
+    const nextPartial = combined.endsWith("\n") ? "" : rawLines.pop() ?? "";
+    return {
+      nextOffset: start + bytesRead,
+      lines: rawLines.map((line) => line.trimEnd()).filter((line) => line.length > 0),
+      partial: nextPartial,
+    };
   } finally {
     await file.close();
   }
@@ -350,6 +608,16 @@ function isNotFound(err: unknown): boolean {
   );
 }
 
+async function getFileSize(filePath: string): Promise<number> {
+  try {
+    const fileStat = await stat(filePath);
+    return fileStat.size;
+  } catch (err) {
+    if (isNotFound(err)) return 0;
+    throw err;
+  }
+}
+
 function redactLine(line: string): string {
   return redactText(line);
 }
@@ -363,22 +631,167 @@ function redactText(text: string): string {
     .replace(/(token\s*[=:]\s*)\S+/gi, "$1[redacted]");
 }
 
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown): void {
-  res.statusCode = statusCode;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
+function getCookie(rawCookieHeader: string | undefined, cookieName: string): string | undefined {
+  if (!rawCookieHeader) return undefined;
+  const cookies = rawCookieHeader.split(";");
+  for (const cookie of cookies) {
+    const [name, ...valueParts] = cookie.trim().split("=");
+    if (name !== cookieName) continue;
+    return decodeURIComponent(valueParts.join("="));
+  }
+  return undefined;
+}
+
+function getBearerToken(rawHeader: string | undefined): string | undefined {
+  if (!rawHeader) return undefined;
+  const match = /^bearer\s+(.+)$/i.exec(rawHeader.trim());
+  return match?.[1];
+}
+
+function getHeaderValue(
+  headers: IncomingMessage["headers"],
+  name: string,
+): string | undefined {
+  const rawValue = headers[name];
+  if (typeof rawValue === "string") return rawValue;
+  return Array.isArray(rawValue) ? rawValue[0] : undefined;
+}
+
+function applySecurityHeaders(res: ServerResponse): void {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+}
+
+function sendJson(res: ServerResponse, statusCode: number, payload: unknown): void {
+  res.statusCode = statusCode;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  applySecurityHeaders(res);
   res.end(JSON.stringify(payload));
 }
 
 function sendHtml(res: ServerResponse, html: string): void {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("X-Content-Type-Options", "nosniff");
+  applySecurityHeaders(res);
   res.end(html);
+}
+
+function redirect(res: ServerResponse, location: string): void {
+  res.statusCode = 303;
+  applySecurityHeaders(res);
+  res.setHeader("Location", location);
+  res.end();
+}
+
+function sendSseHeaders(res: ServerResponse): void {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Connection", "keep-alive");
+  applySecurityHeaders(res);
+  res.flushHeaders?.();
+}
+
+function writeSseEvent(res: ServerResponse, event: string, payload: unknown): void {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function renderLoginHtml(errorMessage?: string): string {
+  const errorBanner = errorMessage
+    ? `<p class="status error">${escapeHtml(errorMessage)}</p>`
+    : `<p class="status">Authentication required to access the operator console.</p>`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>mule-doctor operator console login</title>
+  <style>
+    :root {
+      --bg: #131112;
+      --panel: rgba(28, 20, 18, 0.88);
+      --line: #614338;
+      --text: #f4ece8;
+      --muted: #d0b4a8;
+      --accent: #ff9b54;
+      --error: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--text);
+      font-family: "Azeret Mono", "IBM Plex Sans", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(255,155,84,.24), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(255,107,107,.2), transparent 32%),
+        linear-gradient(160deg, #0f0b0d, #1f1512 60%, #120f14);
+    }
+    .panel {
+      width: min(100%, 440px);
+      padding: 28px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 18px 60px rgba(0,0,0,.35);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.4rem;
+    }
+    p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .status.error {
+      color: var(--error);
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(12, 10, 11, 0.85);
+      color: var(--text);
+      margin-bottom: 14px;
+      font: inherit;
+    }
+    button {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      background: linear-gradient(90deg, #ff9b54, #ff6b6b);
+      color: #1d0f0d;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <form class="panel" method="GET" action="/auth/login">
+    <h1>mule-doctor operator console</h1>
+    ${errorBanner}
+    <label for="token">Operator token</label>
+    <input id="token" name="token" type="password" autocomplete="current-password" required />
+    <button type="submit">Unlock console</button>
+  </form>
+</body>
+</html>`;
 }
 
 function renderIndexHtml(): string {
@@ -390,140 +803,249 @@ function renderIndexHtml(): string {
   <title>mule-doctor operator console</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --card: #111827;
-      --line: #334155;
-      --text: #e5e7eb;
-      --muted: #94a3b8;
-      --accent: #22d3ee;
-      --warn: #f59e0b;
+      --bg: #11151d;
+      --panel: rgba(17, 22, 31, 0.92);
+      --line: #304358;
+      --text: #edf4fb;
+      --muted: #92a9bf;
+      --accent: #8cf0c6;
+      --accent-strong: #38bdf8;
+      --warn: #fbbf24;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
       color: var(--text);
-      background: radial-gradient(circle at top, #1e293b, #0b1220 65%);
+      background:
+        radial-gradient(circle at top, rgba(56,189,248,.18), transparent 32%),
+        linear-gradient(180deg, #0b1018, #131a24 58%, #0e131a);
       min-height: 100vh;
     }
     .wrap {
-      max-width: 1200px;
+      max-width: 1280px;
       margin: 0 auto;
       padding: 24px;
       display: grid;
       gap: 16px;
     }
-    .card {
+    .hero, .card {
       border: 1px solid var(--line);
-      border-radius: 12px;
-      background: linear-gradient(180deg, rgba(15,23,42,.9), rgba(2,6,23,.85));
-      padding: 12px;
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 18px 40px rgba(0,0,0,.18);
     }
-    .row {
+    .hero {
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -40px -40px auto;
+      width: 180px;
+      height: 180px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(140,240,198,.24), transparent 70%);
+      pointer-events: none;
+    }
+    .hero-top, .row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
+      gap: 12px;
+      flex-wrap: wrap;
     }
-    h1, h2 { margin: 0; font-weight: 600; }
-    h1 { font-size: 1.3rem; }
-    h2 { font-size: 1rem; color: var(--accent); }
-    button {
-      border: 1px solid var(--line);
-      background: #1f2937;
-      color: var(--text);
-      border-radius: 8px;
-      padding: 6px 10px;
-      cursor: pointer;
-    }
-    button:hover { border-color: var(--accent); }
-    pre {
+    .hero h1, .card h2 {
       margin: 0;
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid #1e293b;
-      background: #020617;
-      min-height: 120px;
-      overflow: auto;
-      white-space: pre-wrap;
-      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
-      font-size: 12px;
-      line-height: 1.35;
+    }
+    .hero h1 {
+      font-size: 1.35rem;
+    }
+    .hero p, .muted {
+      color: var(--muted);
+    }
+    .hero p {
+      margin: 10px 0 0;
+      max-width: 64ch;
+      line-height: 1.5;
     }
     .grid {
       display: grid;
       gap: 16px;
       grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
     }
+    .card {
+      padding: 14px;
+    }
+    .card h2 {
+      font-size: 1rem;
+      color: var(--accent);
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button, .ghost {
+      border: 1px solid var(--line);
+      background: rgba(11, 16, 24, 0.8);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 12px;
+      cursor: pointer;
+      text-decoration: none;
+      font: inherit;
+    }
+    button:hover, .ghost:hover {
+      border-color: var(--accent-strong);
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--warn);
+    }
+    .status.live::before {
+      background: var(--accent);
+      box-shadow: 0 0 14px rgba(140,240,198,.6);
+    }
+    pre {
+      margin: 0;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(48,67,88,.8);
+      background: #08111a;
+      min-height: 150px;
+      max-height: 360px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 12px;
+      line-height: 1.38;
+    }
     ul {
       list-style: none;
       margin: 0;
       padding: 0;
       display: grid;
-      gap: 6px;
+      gap: 8px;
     }
     li button {
       width: 100%;
       text-align: left;
+      border-radius: 12px;
     }
-    .muted { color: var(--muted); font-size: 12px; }
-    .warn { color: var(--warn); }
+    .file-meta {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 4px;
+    }
+    @media (max-width: 720px) {
+      .wrap {
+        padding: 14px;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <div class="row">
-        <h1>mule-doctor operator console</h1>
-        <button id="refresh-all">Refresh all</button>
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <h1>mule-doctor operator console</h1>
+          <p>Observe process health, stream logs live, and inspect proposed patches without leaving the browser. This view is read-only and secured by an operator token.</p>
+        </div>
+        <div class="controls">
+          <button id="refresh-all">Refresh all</button>
+          <a class="ghost" href="/auth/logout">Log out</a>
+        </div>
       </div>
       <pre id="health">Loading health...</pre>
-    </div>
+    </section>
 
-    <div class="grid">
-      <div class="card">
+    <section class="grid">
+      <article class="card">
         <div class="row">
           <h2>App Logs</h2>
-          <button id="refresh-app">Refresh</button>
+          <div class="controls">
+            <span id="app-stream-status" class="status">connecting</span>
+            <button id="refresh-app">Refresh</button>
+          </div>
         </div>
         <pre id="app-logs"></pre>
-      </div>
-      <div class="card">
+      </article>
+      <article class="card">
         <div class="row">
           <h2>rust-mule Logs</h2>
-          <button id="refresh-rust">Refresh</button>
+          <div class="controls">
+            <span id="rust-stream-status" class="status">connecting</span>
+            <button id="refresh-rust">Refresh</button>
+          </div>
         </div>
         <pre id="rust-logs"></pre>
-      </div>
-      <div class="card">
+      </article>
+      <article class="card">
         <div class="row">
           <h2>LLM Logs</h2>
           <button id="refresh-llm-list">Refresh</button>
         </div>
         <ul id="llm-files"></ul>
         <pre id="llm-content" class="muted">Select a log file.</pre>
-      </div>
-      <div class="card">
+      </article>
+      <article class="card">
         <div class="row">
           <h2>Patch Proposals</h2>
           <button id="refresh-proposals">Refresh</button>
         </div>
         <ul id="proposal-files"></ul>
         <pre id="proposal-content" class="muted">Select a proposal file.</pre>
-      </div>
-    </div>
+      </article>
+    </section>
   </div>
 
   <script>
+    const LOG_LINE_LIMIT = 250;
+
     async function fetchJson(url) {
-      const res = await fetch(url);
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (res.status === 401) {
+        window.location.href = "/";
+        throw new Error("authentication required");
+      }
       if (!res.ok) throw new Error(url + " failed: " + res.status);
       return res.json();
     }
 
     function setText(id, text) {
       document.getElementById(id).textContent = text;
+    }
+
+    function appendLine(id, line) {
+      const element = document.getElementById(id);
+      const lines = element.textContent ? element.textContent.split("\\n") : [];
+      lines.push(line);
+      element.textContent = lines.slice(-LOG_LINE_LIMIT).join("\\n");
+      element.scrollTop = element.scrollHeight;
+    }
+
+    function setStreamStatus(id, isLive, text) {
+      const element = document.getElementById(id);
+      element.textContent = text;
+      element.className = isLive ? "status live" : "status";
     }
 
     function renderFileList(targetId, files, onClick) {
@@ -539,7 +1061,8 @@ function renderIndexHtml(): string {
       for (const file of files) {
         const li = document.createElement("li");
         const button = document.createElement("button");
-        button.textContent = file.name + " (" + file.sizeBytes + " bytes)";
+        const updated = file.updatedAt ? new Date(file.updatedAt).toLocaleString() : "unknown";
+        button.innerHTML = "<strong>" + file.name + "</strong><span class=\\"file-meta\\">" + file.sizeBytes + " bytes • " + updated + "</span>";
         button.onclick = () => onClick(file.name);
         li.appendChild(button);
         ul.appendChild(li);
@@ -552,12 +1075,12 @@ function renderIndexHtml(): string {
     }
 
     async function refreshAppLogs() {
-      const data = await fetchJson("/api/logs/app?lines=250");
+      const data = await fetchJson("/api/logs/app?lines=" + LOG_LINE_LIMIT);
       setText("app-logs", data.lines.join("\\n") || "No captured lines yet.");
     }
 
     async function refreshRustLogs() {
-      const data = await fetchJson("/api/logs/rust-mule?lines=250");
+      const data = await fetchJson("/api/logs/rust-mule?lines=" + LOG_LINE_LIMIT);
       setText("rust-logs", data.lines.join("\\n") || "No rust-mule lines available.");
     }
 
@@ -579,6 +1102,23 @@ function renderIndexHtml(): string {
       });
     }
 
+    function connectStream(url, targetId, statusId) {
+      const stream = new EventSource(url, { withCredentials: true });
+      stream.addEventListener("open", () => setStreamStatus(statusId, true, "live"));
+      stream.addEventListener("snapshot", (event) => {
+        const payload = JSON.parse(event.data);
+        setText(targetId, payload.lines.join("\\n"));
+      });
+      stream.addEventListener("line", (event) => {
+        const payload = JSON.parse(event.data);
+        appendLine(targetId, payload.line);
+      });
+      stream.addEventListener("error", () => {
+        setStreamStatus(statusId, false, "reconnecting");
+      });
+      return stream;
+    }
+
     async function refreshAll() {
       try {
         await Promise.all([refreshHealth(), refreshAppLogs(), refreshRustLogs(), refreshLlmList(), refreshProposalList()]);
@@ -593,8 +1133,20 @@ function renderIndexHtml(): string {
     document.getElementById("refresh-llm-list").onclick = refreshLlmList;
     document.getElementById("refresh-proposals").onclick = refreshProposalList;
 
-    refreshAll();
+    refreshAll().finally(() => {
+      connectStream("/api/stream/app?lines=" + LOG_LINE_LIMIT, "app-logs", "app-stream-status");
+      connectStream("/api/stream/rust-mule?lines=" + LOG_LINE_LIMIT, "rust-logs", "rust-stream-status");
+    });
   </script>
 </body>
 </html>`;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

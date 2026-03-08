@@ -21,6 +21,8 @@ test("installStdoutLogBuffer captures chunked writes and restores stdout", async
   try {
     const preInstallWrite = process.stdout.write;
     const buffer = installStdoutLogBuffer(100);
+    const observed = [];
+    const unsubscribe = buffer.subscribe((line) => observed.push(line));
 
     process.stdout.write("line-1");
     process.stdout.write("\r\nline-2\n");
@@ -28,8 +30,10 @@ test("installStdoutLogBuffer captures chunked writes and restores stdout", async
     process.stdout.write("\npartial");
 
     assert.deepEqual(buffer.getRecentLines(), ["line-1", "line-2", "line-3"]);
+    assert.deepEqual(observed, ["line-1", "line-2", "line-3"]);
     assert.equal(forwardedChunks.join(""), "line-1\r\nline-2\nline-3\npartial");
 
+    unsubscribe();
     buffer.restore();
     assert.notEqual(process.stdout.write, preInstallWrite);
     forwardedChunks.length = 0;

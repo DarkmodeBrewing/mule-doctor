@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/operator-console-phase1`
+- `feature/operator-console-phase2`
 - PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; implementing first operator-console slice (read-only web UI + endpoints).
-- PR #20 and PR #21 are merged to `main`.
+- In progress; implementing operator-console phase 2 (auth guard + live log streaming).
+- PR #22 is merged to `main`.
 
 ## Completed Work
 
@@ -96,6 +96,11 @@
     - tightened filename validation for console file reads and strengthened resolved-path escape checks.
     - added focused test coverage for stdout log buffer chunk handling and restore behavior.
     - updated compose/docs so unauthenticated UI exposure is opt-in instead of default.
+- Operator console phase 2 underway:
+  - adding token-based auth for the UI shell and all `/api/*` routes.
+  - adding SSE streams for live app-log and rust-mule-log viewing.
+  - extending UI to support authenticated access and live stream consumption.
+  - expanding test coverage for auth and stream behavior.
 
 ## Key Decisions
 
@@ -111,5 +116,5 @@
 
 ## Next Steps
 
-- Process remaining PR feedback for operator console phase 1 and merge once approved.
-- Phase 2 target: add auth guard for UI and live streaming (SSE/WebSocket) for logs.
+- Finish PR for operator console phase 2 and process review feedback.
+- Phase 3 target: richer operator views for proposal metadata, LLM usage, and command/control surfaces if needed.
