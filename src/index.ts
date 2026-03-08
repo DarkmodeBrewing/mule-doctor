@@ -16,6 +16,7 @@ import { RuntimeStore } from "./storage/runtimeStore.js";
 import { installStdoutLogBuffer } from "./operatorConsole/logBuffer.js";
 import { OperatorConsoleServer } from "./operatorConsole/server.js";
 import { InstanceManager } from "./instances/instanceManager.js";
+import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -168,6 +169,9 @@ async function main(): Promise<void> {
       `Managed instance controller unavailable, continuing without instance control: ${String(err)}`,
     );
   }
+  const managedInstanceDiagnostics = managedInstances
+    ? new ManagedInstanceDiagnosticsService(managedInstances, { apiPrefix })
+    : undefined;
   let operatorConsole: OperatorConsoleServer | undefined;
   if (uiEnabled) {
     operatorConsole = new OperatorConsoleServer({
@@ -180,6 +184,7 @@ async function main(): Promise<void> {
       getAppLogs: (n) => appLogBuffer?.getRecentLines(n) ?? [],
       subscribeToAppLogs: appLogBuffer ? (listener) => appLogBuffer.subscribe(listener) : undefined,
       managedInstances,
+      managedInstanceDiagnostics,
     });
     try {
       await operatorConsole.start();

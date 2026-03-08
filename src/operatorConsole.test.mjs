@@ -104,6 +104,32 @@ class StubManagedInstances {
   }
 }
 
+class StubManagedInstanceDiagnostics {
+  async getSnapshot(id) {
+    if (id !== "a") {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
+    return {
+      instanceId: "a",
+      observedAt: "2026-03-08T02:00:00.000Z",
+      available: true,
+      peerCount: 3,
+      routingBucketCount: 2,
+      lookupStats: { matchPerSent: 0.5, timeoutsPerSent: 0.1 },
+      networkHealth: {
+        score: 62,
+        components: {
+          peer_count: 10,
+          bucket_balance: 20,
+          lookup_success: 50,
+          lookup_efficiency: 80,
+          error_rate: 70,
+        },
+      },
+    };
+  }
+}
+
 async function loginAndGetCookie(baseUrl) {
   const loginRes = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
@@ -185,6 +211,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       subscribeToAppLogs: () => () => {},
       rustMuleStreamPollMs: 25,
       managedInstances: new StubManagedInstances(),
+      managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
     });
     await server.start();
 
@@ -280,6 +307,14 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(outOfRangeLinesRes.status, 200);
     const outOfRangeLines = await outOfRangeLinesRes.json();
     assert.equal(Array.isArray(outOfRangeLines.lines), true);
+
+    const diagnosticsRes = await fetch(`${baseUrl}/api/instances/a/diagnostics`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(diagnosticsRes.status, 200);
+    const diagnostics = await diagnosticsRes.json();
+    assert.equal(diagnostics.snapshot.instanceId, "a");
+    assert.equal(diagnostics.snapshot.available, true);
 
     const createRes = await fetch(`${baseUrl}/api/instances`, {
       method: "POST",

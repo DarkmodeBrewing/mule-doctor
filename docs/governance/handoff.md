@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/instance-manager-launcher`
+- `feature/managed-instance-diagnostics-routing`
 - PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; extending `InstanceManager` from planning-only state into backend lifecycle management for mule-doctor-managed local test instances.
-- PR #25 is merged to `main`.
+- In progress; adding selected managed-instance diagnostics routing so the operator console can inspect metrics/health for a chosen managed rust-mule instance.
+- PR #28 is merged to `main`.
 
 ## Completed Work
 
@@ -122,6 +122,11 @@
   - persisting per-instance runtime process state (`pid`, command, cwd, last exit)
   - reconciling stale `running` records on mule-doctor startup and polling reconciled live pids so status does not stick forever after a mule-doctor restart
   - deferring operator-console lifecycle controls until backend launch behavior is in place
+- Managed-instance diagnostics routing underway:
+  - adding a `ManagedInstanceDiagnosticsService` that builds per-instance `RustMuleClient` objects from managed runtime metadata
+  - loading managed-instance bearer/debug tokens from each instance runtime directory before snapshot collection
+  - exposing operator-console diagnostics route for a selected managed instance
+  - extending the console UI to show selected-instance diagnostics alongside detail and per-instance logs
 
 ## Key Decisions
 
@@ -134,6 +139,7 @@
 - Build `InstanceManager` in two steps: first metadata/path/port/config planning, then process lifecycle once rust-mule startup assumptions are verified.
 - Port allocation in this phase guarantees non-overlap inside the managed-instance catalog only; probing host-level port availability is deferred until launch wiring.
 - Managed-instance lifecycle should fail locally per instance and never take down mule-doctor as a whole.
+- Managed-instance diagnostics should be selected-instance scoped first; do not jump directly to observing all managed instances concurrently until the per-instance client/session model is stable.
 
 ## Validation
 
@@ -142,5 +148,5 @@
 
 ## Next Steps
 
-- Add backend managed-instance lifecycle operations and process-state persistence on top of the merged planning foundation.
-- After that, expose those operations through operator-console APIs/UI without allowing direct shell execution from the browser.
+- Finish the selected managed-instance diagnostics routing slice and process review feedback.
+- After that, consider whether the next slice should be observer/tool routing against a chosen managed instance or a broader multi-instance comparison model.
