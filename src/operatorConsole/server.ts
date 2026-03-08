@@ -4,7 +4,7 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { open, readdir, stat } from "node:fs/promises";
+import { open, readFile, readdir, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Stats } from "node:fs";
 
@@ -18,6 +18,7 @@ const DEFAULT_STREAM_HEARTBEAT_MS = 15000;
 const MAX_LOG_LINES = 2000;
 const MAX_STREAM_LINES = 500;
 const MAX_FILE_BYTES = 512 * 1024;
+const STATIC_DIR = resolve(__dirname, "public");
 
 interface ListedFile {
   name: string;
@@ -160,10 +161,16 @@ export class OperatorConsoleServer {
 
     if (path === "/" || path === "/index.html") {
       if (!auth.ok) {
-        sendHtml(res, renderLoginHtml());
+        await sendStaticHtml(res, "login.html");
         return;
       }
-      sendHtml(res, renderIndexHtml());
+      await sendStaticHtml(res, "index.html");
+      return;
+    }
+
+    if (path.startsWith("/static/operatorConsole/")) {
+      const fileName = path.slice("/static/operatorConsole/".length);
+      await sendStaticAsset(res, fileName);
       return;
     }
 
@@ -302,7 +309,7 @@ export class OperatorConsoleServer {
       return;
     }
     if (!token || token !== this.authToken) {
-      sendHtml(res, renderLoginHtml("Invalid operator token."));
+      redirect(res, "/?error=Invalid%20operator%20token.");
       return;
     }
 
@@ -709,11 +716,24 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown): vo
   res.end(JSON.stringify(payload));
 }
 
-function sendHtml(res: ServerResponse, html: string): void {
+async function sendStaticHtml(res: ServerResponse, fileName: string): Promise<void> {
+  const content = await readStaticAsset(fileName);
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   applySecurityHeaders(res);
-  res.end(html);
+  res.end(content);
+}
+
+async function sendStaticAsset(res: ServerResponse, fileNameRaw: string): Promise<void> {
+  const fileName = fileNameRaw.trim();
+  if (!/^[a-zA-Z0-9._-]+$/.test(fileName)) {
+    throw new RequestError(404, "not found");
+  }
+  const content = await readStaticAsset(fileName);
+  res.statusCode = 200;
+  res.setHeader("Content-Type", contentTypeForStaticAsset(fileName));
+  applySecurityHeaders(res);
+  res.end(content);
 }
 
 function redirect(res: ServerResponse, location: string): void {
@@ -736,463 +756,29 @@ function writeSseEvent(res: ServerResponse, event: string, payload: unknown): vo
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-function renderLoginHtml(errorMessage?: string): string {
-  const errorBanner = errorMessage
-    ? `<p class="status error">${escapeHtml(errorMessage)}</p>`
-    : `<p class="status">Authentication required to access the operator console.</p>`;
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>mule-doctor operator console login</title>
-  <style>
-    :root {
-      --bg: #131112;
-      --panel: rgba(28, 20, 18, 0.88);
-      --line: #614338;
-      --text: #f4ece8;
-      --muted: #d0b4a8;
-      --accent: #ff9b54;
-      --error: #ff6b6b;
+async function readStaticAsset(fileName: string): Promise<Buffer> {
+  const filePath = resolve(STATIC_DIR, fileName);
+  const rel = relative(STATIC_DIR, filePath);
+  if (
+    rel.startsWith("..") ||
+    isAbsolute(rel) ||
+    (!filePath.startsWith(STATIC_DIR + sep) && filePath !== STATIC_DIR)
+  ) {
+    throw new RequestError(404, "not found");
+  }
+  try {
+    return await readFile(filePath);
+  } catch (err) {
+    if (isNotFound(err)) {
+      throw new RequestError(404, "not found");
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-      color: var(--text);
-      font-family: "Azeret Mono", "IBM Plex Sans", sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(255,155,84,.24), transparent 34%),
-        radial-gradient(circle at bottom right, rgba(255,107,107,.2), transparent 32%),
-        linear-gradient(160deg, #0f0b0d, #1f1512 60%, #120f14);
-    }
-    .panel {
-      width: min(100%, 440px);
-      padding: 28px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      backdrop-filter: blur(18px);
-      box-shadow: 0 18px 60px rgba(0,0,0,.35);
-    }
-    h1 {
-      margin: 0 0 8px;
-      font-size: 1.4rem;
-    }
-    p {
-      margin: 0 0 18px;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-    .status.error {
-      color: var(--error);
-    }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-    input {
-      width: 100%;
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      background: rgba(12, 10, 11, 0.85);
-      color: var(--text);
-      margin-bottom: 14px;
-      font: inherit;
-    }
-    button {
-      width: 100%;
-      padding: 12px 14px;
-      border: 1px solid var(--accent);
-      border-radius: 999px;
-      background: linear-gradient(90deg, #ff9b54, #ff6b6b);
-      color: #1d0f0d;
-      font: inherit;
-      font-weight: 700;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-  <form class="panel" method="POST" action="/auth/login">
-    <h1>mule-doctor operator console</h1>
-    ${errorBanner}
-    <label for="token">Operator token</label>
-    <input id="token" name="token" type="password" autocomplete="current-password" required />
-    <button type="submit">Unlock console</button>
-  </form>
-</body>
-</html>`;
+    throw err;
+  }
 }
 
-function renderIndexHtml(): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>mule-doctor operator console</title>
-  <style>
-    :root {
-      --bg: #11151d;
-      --panel: rgba(17, 22, 31, 0.92);
-      --line: #304358;
-      --text: #edf4fb;
-      --muted: #92a9bf;
-      --accent: #8cf0c6;
-      --accent-strong: #38bdf8;
-      --warn: #fbbf24;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at top, rgba(56,189,248,.18), transparent 32%),
-        linear-gradient(180deg, #0b1018, #131a24 58%, #0e131a);
-      min-height: 100vh;
-    }
-    .wrap {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 24px;
-      display: grid;
-      gap: 16px;
-    }
-    .hero, .card {
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: var(--panel);
-      box-shadow: 0 18px 40px rgba(0,0,0,.18);
-    }
-    .hero {
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
-    }
-    .hero::after {
-      content: "";
-      position: absolute;
-      inset: auto -40px -40px auto;
-      width: 180px;
-      height: 180px;
-      border-radius: 999px;
-      background: radial-gradient(circle, rgba(140,240,198,.24), transparent 70%);
-      pointer-events: none;
-    }
-    .hero-top, .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .hero h1, .card h2 {
-      margin: 0;
-    }
-    .hero h1 {
-      font-size: 1.35rem;
-    }
-    .hero p, .muted {
-      color: var(--muted);
-    }
-    .hero p {
-      margin: 10px 0 0;
-      max-width: 64ch;
-      line-height: 1.5;
-    }
-    .grid {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    }
-    .card {
-      padding: 14px;
-    }
-    .card h2 {
-      font-size: 1rem;
-      color: var(--accent);
-    }
-    .controls {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    button, .ghost {
-      border: 1px solid var(--line);
-      background: rgba(11, 16, 24, 0.8);
-      color: var(--text);
-      border-radius: 999px;
-      padding: 8px 12px;
-      cursor: pointer;
-      text-decoration: none;
-      font: inherit;
-    }
-    button:hover, .ghost:hover {
-      border-color: var(--accent-strong);
-    }
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.85rem;
-      color: var(--muted);
-    }
-    .status::before {
-      content: "";
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: var(--warn);
-    }
-    .status.live::before {
-      background: var(--accent);
-      box-shadow: 0 0 14px rgba(140,240,198,.6);
-    }
-    pre {
-      margin: 0;
-      padding: 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(48,67,88,.8);
-      background: #08111a;
-      min-height: 150px;
-      max-height: 360px;
-      overflow: auto;
-      white-space: pre-wrap;
-      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
-      font-size: 12px;
-      line-height: 1.38;
-    }
-    ul {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      display: grid;
-      gap: 8px;
-    }
-    li button {
-      width: 100%;
-      text-align: left;
-      border-radius: 12px;
-    }
-    .file-meta {
-      display: block;
-      color: var(--muted);
-      font-size: 0.78rem;
-      margin-top: 4px;
-    }
-    @media (max-width: 720px) {
-      .wrap {
-        padding: 14px;
-      }
-      .grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <section class="hero">
-      <div class="hero-top">
-        <div>
-          <h1>mule-doctor operator console</h1>
-          <p>Observe process health, stream logs live, and inspect proposed patches without leaving the browser. This view is read-only and secured by an operator token.</p>
-        </div>
-        <div class="controls">
-          <button id="refresh-all">Refresh all</button>
-          <form method="POST" action="/auth/logout">
-            <button class="ghost" type="submit">Log out</button>
-          </form>
-        </div>
-      </div>
-      <pre id="health">Loading health...</pre>
-    </section>
-
-    <section class="grid">
-      <article class="card">
-        <div class="row">
-          <h2>App Logs</h2>
-          <div class="controls">
-            <span id="app-stream-status" class="status">connecting</span>
-            <button id="refresh-app">Refresh</button>
-          </div>
-        </div>
-        <pre id="app-logs"></pre>
-      </article>
-      <article class="card">
-        <div class="row">
-          <h2>rust-mule Logs</h2>
-          <div class="controls">
-            <span id="rust-stream-status" class="status">connecting</span>
-            <button id="refresh-rust">Refresh</button>
-          </div>
-        </div>
-        <pre id="rust-logs"></pre>
-      </article>
-      <article class="card">
-        <div class="row">
-          <h2>LLM Logs</h2>
-          <button id="refresh-llm-list">Refresh</button>
-        </div>
-        <ul id="llm-files"></ul>
-        <pre id="llm-content" class="muted">Select a log file.</pre>
-      </article>
-      <article class="card">
-        <div class="row">
-          <h2>Patch Proposals</h2>
-          <button id="refresh-proposals">Refresh</button>
-        </div>
-        <ul id="proposal-files"></ul>
-        <pre id="proposal-content" class="muted">Select a proposal file.</pre>
-      </article>
-    </section>
-  </div>
-
-  <script>
-    const LOG_LINE_LIMIT = 250;
-
-    async function fetchJson(url) {
-      const res = await fetch(url, { credentials: "same-origin" });
-      if (res.status === 401) {
-        window.location.href = "/";
-        throw new Error("authentication required");
-      }
-      if (!res.ok) throw new Error(url + " failed: " + res.status);
-      return res.json();
-    }
-
-    function setText(id, text) {
-      document.getElementById(id).textContent = text;
-    }
-
-    function appendLine(id, line) {
-      const element = document.getElementById(id);
-      const lines = element.textContent ? element.textContent.split("\\n") : [];
-      lines.push(line);
-      element.textContent = lines.slice(-LOG_LINE_LIMIT).join("\\n");
-      element.scrollTop = element.scrollHeight;
-    }
-
-    function setStreamStatus(id, isLive, text) {
-      const element = document.getElementById(id);
-      element.textContent = text;
-      element.className = isLive ? "status live" : "status";
-    }
-
-    function renderFileList(targetId, files, onClick) {
-      const ul = document.getElementById(targetId);
-      ul.innerHTML = "";
-      if (!files.length) {
-        const li = document.createElement("li");
-        li.textContent = "No files found.";
-        li.className = "muted";
-        ul.appendChild(li);
-        return;
-      }
-      for (const file of files) {
-        const li = document.createElement("li");
-        const button = document.createElement("button");
-        const title = document.createElement("strong");
-        const meta = document.createElement("span");
-        const updated = file.updatedAt ? new Date(file.updatedAt).toLocaleString() : "unknown";
-        title.textContent = file.name;
-        meta.className = "file-meta";
-        meta.textContent = file.sizeBytes + " bytes • " + updated;
-        button.appendChild(title);
-        button.appendChild(meta);
-        button.onclick = () => onClick(file.name);
-        li.appendChild(button);
-        ul.appendChild(li);
-      }
-    }
-
-    async function refreshHealth() {
-      const data = await fetchJson("/api/health");
-      setText("health", JSON.stringify(data, null, 2));
-    }
-
-    async function refreshAppLogs() {
-      const data = await fetchJson("/api/logs/app?lines=" + LOG_LINE_LIMIT);
-      setText("app-logs", data.lines.join("\\n") || "No captured lines yet.");
-    }
-
-    async function refreshRustLogs() {
-      const data = await fetchJson("/api/logs/rust-mule?lines=" + LOG_LINE_LIMIT);
-      setText("rust-logs", data.lines.join("\\n") || "No rust-mule lines available.");
-    }
-
-    async function refreshLlmList() {
-      const data = await fetchJson("/api/llm/logs");
-      renderFileList("llm-files", data.files, async (name) => {
-        const detail = await fetchJson("/api/llm/logs/" + encodeURIComponent(name));
-        const suffix = detail.truncated ? "\\n\\n[truncated]" : "";
-        setText("llm-content", detail.content + suffix);
-      });
-    }
-
-    async function refreshProposalList() {
-      const data = await fetchJson("/api/proposals");
-      renderFileList("proposal-files", data.files, async (name) => {
-        const detail = await fetchJson("/api/proposals/" + encodeURIComponent(name));
-        const suffix = detail.truncated ? "\\n\\n[truncated]" : "";
-        setText("proposal-content", detail.content + suffix);
-      });
-    }
-
-    function connectStream(url, targetId, statusId) {
-      const stream = new EventSource(url, { withCredentials: true });
-      stream.addEventListener("open", () => setStreamStatus(statusId, true, "live"));
-      stream.addEventListener("snapshot", (event) => {
-        const payload = JSON.parse(event.data);
-        setText(targetId, payload.lines.join("\\n"));
-      });
-      stream.addEventListener("line", (event) => {
-        const payload = JSON.parse(event.data);
-        appendLine(targetId, payload.line);
-      });
-      stream.addEventListener("error", () => {
-        setStreamStatus(statusId, false, "reconnecting");
-      });
-      return stream;
-    }
-
-    async function refreshAll() {
-      try {
-        await Promise.all([refreshHealth(), refreshAppLogs(), refreshRustLogs(), refreshLlmList(), refreshProposalList()]);
-      } catch (err) {
-        setText("health", "Refresh failed: " + err);
-      }
-    }
-
-    document.getElementById("refresh-all").onclick = refreshAll;
-    document.getElementById("refresh-app").onclick = refreshAppLogs;
-    document.getElementById("refresh-rust").onclick = refreshRustLogs;
-    document.getElementById("refresh-llm-list").onclick = refreshLlmList;
-    document.getElementById("refresh-proposals").onclick = refreshProposalList;
-
-    refreshAll().finally(() => {
-      connectStream("/api/stream/app?lines=" + LOG_LINE_LIMIT, "app-logs", "app-stream-status");
-      connectStream("/api/stream/rust-mule?lines=" + LOG_LINE_LIMIT, "rust-logs", "rust-stream-status");
-    });
-  </script>
-</body>
-</html>`;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function contentTypeForStaticAsset(fileName: string): string {
+  if (fileName.endsWith(".css")) return "text/css; charset=utf-8";
+  if (fileName.endsWith(".js")) return "application/javascript; charset=utf-8";
+  if (fileName.endsWith(".html")) return "text/html; charset=utf-8";
+  return "application/octet-stream";
 }

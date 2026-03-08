@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>mule-doctor operator console</title>
+  <link rel="stylesheet" href="/static/operatorConsole/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <h1>mule-doctor operator console</h1>
+          <p>Observe process health, stream logs live, and inspect proposed patches without leaving the browser. This view is read-only and secured by an operator token.</p>
+        </div>
+        <div class="controls">
+          <button id="refresh-all">Refresh all</button>
+          <form method="POST" action="/auth/logout">
+            <button class="ghost" type="submit">Log out</button>
+          </form>
+        </div>
+      </div>
+      <pre id="health">Loading health...</pre>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <div class="row">
+          <h2>App Logs</h2>
+          <div class="controls">
+            <span id="app-stream-status" class="status">connecting</span>
+            <button id="refresh-app">Refresh</button>
+          </div>
+        </div>
+        <pre id="app-logs"></pre>
+      </article>
+      <article class="card">
+        <div class="row">
+          <h2>rust-mule Logs</h2>
+          <div class="controls">
+            <span id="rust-stream-status" class="status">connecting</span>
+            <button id="refresh-rust">Refresh</button>
+          </div>
+        </div>
+        <pre id="rust-logs"></pre>
+      </article>
+      <article class="card">
+        <div class="row">
+          <h2>LLM Logs</h2>
+          <button id="refresh-llm-list">Refresh</button>
+        </div>
+        <ul id="llm-files"></ul>
+        <pre id="llm-content" class="muted">Select a log file.</pre>
+      </article>
+      <article class="card">
+        <div class="row">
+          <h2>Patch Proposals</h2>
+          <button id="refresh-proposals">Refresh</button>
+        </div>
+        <ul id="proposal-files"></ul>
+        <pre id="proposal-content" class="muted">Select a proposal file.</pre>
+      </article>
+    </section>
+  </div>
+
+  <script type="module" src="/static/operatorConsole/app.js"></script>
+</body>
+</html>

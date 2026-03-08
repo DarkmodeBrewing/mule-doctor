@@ -105,6 +105,10 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(rootRes.status, 200);
     assert.match(await rootRes.text(), /Authentication required/);
 
+    const loginScriptRes = await fetch(`${baseUrl}/static/operatorConsole/login.js`);
+    assert.equal(loginScriptRes.status, 200);
+    assert.equal(loginScriptRes.headers.get("content-type"), "application/javascript; charset=utf-8");
+
     const unauthorizedHealthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(unauthorizedHealthRes.status, 401);
 
@@ -118,6 +122,12 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(healthRes.headers.get("x-content-type-options"), "nosniff");
     const health = await healthRes.json();
     assert.equal(health.ok, true);
+
+    const staticUiRes = await fetch(`${baseUrl}/static/operatorConsole/app.js`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(staticUiRes.status, 200);
+    assert.equal(staticUiRes.headers.get("content-type"), "application/javascript; charset=utf-8");
 
     const appRes = await fetch(`${baseUrl}/api/logs/app?lines=10`, {
       headers: { Cookie: cookie },
