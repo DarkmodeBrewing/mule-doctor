@@ -12,6 +12,7 @@ import type { RuntimeStore } from "./storage/runtimeStore.js";
 import type { HistoryEntry, RuntimeState } from "./types/contracts.js";
 import { getNetworkHealth } from "./health/healthScore.js";
 import type { NetworkHealthResult } from "./health/healthScore.js";
+import { redactText } from "./logs/redaction.js";
 import type {
   ObserverTargetDescriptor,
   ObserverTargetRuntime,
@@ -265,7 +266,7 @@ export class Observer {
     target: ObserverTargetDescriptor,
     err: unknown,
   ): Promise<void> {
-    const reason = String(err);
+    const reason = redactText(err instanceof Error ? err.message : String(err));
     log("warn", "observer", `Active target unavailable (${target.label}): ${reason}`);
 
     if (this.runtimeStore) {

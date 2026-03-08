@@ -284,7 +284,9 @@ export class OperatorConsoleServer {
               lastObservedTarget: runtimeState.lastObservedTarget,
               lastRun: runtimeState.lastRun,
               lastHealthScore: runtimeState.lastHealthScore,
-              lastTargetFailureReason: runtimeState.lastTargetFailureReason,
+              lastTargetFailureReason: runtimeState.lastTargetFailureReason
+                ? redactText(runtimeState.lastTargetFailureReason)
+                : runtimeState.lastTargetFailureReason,
             }
           : undefined,
         paths: {
