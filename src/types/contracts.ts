@@ -26,6 +26,7 @@ export interface ObserverSnapshot {
 
 export interface HistoryEntry {
   timestamp: string;
+  target?: DiagnosticTargetRef;
   peerCount?: number;
   routingBalance?: number;
   lookupSuccess?: number;
@@ -38,7 +39,16 @@ export interface RuntimeState {
   lastHealthScore?: number;
   logOffset?: number;
   lastAlert?: string;
+  activeDiagnosticTarget?: DiagnosticTargetRef;
+  lastObservedTarget?: DiagnosticTargetRef;
   usage?: RuntimeUsageState;
+}
+
+export type DiagnosticTargetKind = "external" | "managed_instance";
+
+export interface DiagnosticTargetRef {
+  kind: DiagnosticTargetKind;
+  instanceId?: string;
 }
 
 export interface UsageBucket {

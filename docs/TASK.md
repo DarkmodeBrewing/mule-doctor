@@ -308,3 +308,27 @@ Acceptance criteria:
 - The operator console frontend is served as static assets rather than inline string templates.
 - UI review and testing are easier because frontend changes are isolated from backend route logic.
 - The current auth/API/SSE behavior remains intact after the split.
+
+## Task H: Active Diagnostic Target Routing
+
+1. Introduce an explicit active diagnostic target model for the scheduled observer pipeline:
+   - external configured rust-mule client
+   - selected mule-doctor-managed instance
+2. Persist the active target in mule-doctor runtime state so restarts remain deterministic.
+3. Expose target selection in the operator console API/UI.
+4. Route scheduled observation, analyzer tool calls, and health persistence through the selected target.
+5. Decide and document Mattermost semantics:
+   - whether reports follow the active target
+   - how the active target is labeled in notifications
+6. Keep failure handling non-fatal:
+   - stopped managed instance
+   - missing token files
+   - version-dependent 404 endpoints
+   - transient timeouts
+
+Acceptance criteria:
+
+- Operator can inspect and change the active diagnostic target explicitly.
+- mule-doctor restarts with the previously selected target intact.
+- Scheduled observation uses the selected target without crashing when that target is unavailable.
+- Reports and runtime state identify which target was observed.

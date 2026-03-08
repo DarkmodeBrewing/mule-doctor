@@ -70,6 +70,10 @@ class StubLogWatcher {
   getOffset() {
     return 321;
   }
+
+  getRecentLines() {
+    return ["external log line"];
+  }
 }
 
 class SlowAnalyzer {
@@ -92,14 +96,63 @@ class SlowAnalyzer {
 class CountingMattermost {
   constructor() {
     this.periodicCalls = 0;
+    this.lastPeriodicReport = null;
   }
 
-  async postPeriodicReport() {
+  async postPeriodicReport(report) {
     this.periodicCalls += 1;
+    this.lastPeriodicReport = report;
   }
 
   async postDailyUsageReport() {
     return;
+  }
+}
+
+class StubTargetResolver {
+  constructor(target) {
+    this.target = target;
+  }
+
+  async describeActiveTarget() {
+    return {
+      target: this.target.target,
+      label: this.target.label,
+    };
+  }
+
+  async resolve() {
+    return this.target;
+  }
+}
+
+class FailingTargetResolver {
+  async describeActiveTarget() {
+    return {
+      target: { kind: "managed_instance", instanceId: "missing" },
+      label: "managed instance missing",
+    };
+  }
+
+  async resolve() {
+    throw new Error("Managed instance missing is stopped");
+  }
+}
+
+class CapturingAnalyzer {
+  constructor() {
+    this.calls = 0;
+    this.prompts = [];
+  }
+
+  async analyze(prompt) {
+    this.calls += 1;
+    this.prompts.push(prompt);
+    return "managed ok";
+  }
+
+  async consumeDailyUsageReport() {
+    return null;
   }
 }
 
@@ -126,11 +179,92 @@ test("Observer persists health score and includes it in cycle context", async ()
     const state = await runtimeStore.loadState();
     assert.equal(typeof state.lastHealthScore, "number");
     assert.equal(state.logOffset, 321);
+    assert.deepEqual(state.lastObservedTarget, { kind: "external" });
 
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
     assert.equal(typeof history[0].healthScore, "number");
     assert.equal(history[0].peerCount, 2);
+    assert.deepEqual(history[0].target, { kind: "external" });
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("Observer routes cycle analysis through the resolved managed target", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const runtimeStore = new RuntimeStore({ dataDir: tmp.dir });
+    await runtimeStore.initialize();
+
+    const managedAnalyzer = new CapturingAnalyzer();
+    const mattermost = new CountingMattermost();
+    const observer = new Observer(new StubAnalyzer(), mattermost, {
+      runtimeStore,
+      targetResolver: new StubTargetResolver({
+        target: { kind: "managed_instance", instanceId: "a" },
+        label: "managed instance a",
+        client: new StubClient(),
+        logSource: { getRecentLines: () => ["managed log line"] },
+      }),
+      analyzerFactory: () => managedAnalyzer,
+      intervalMs: 999999,
+    });
+
+    await observer.runCycle();
+
+    assert.equal(managedAnalyzer.calls, 1);
+    assert.ok(managedAnalyzer.prompts[0].includes("managed instance a"));
+    assert.equal(mattermost.lastPeriodicReport.targetLabel, "managed instance a");
+
+    const state = await runtimeStore.loadState();
+    assert.deepEqual(state.lastObservedTarget, { kind: "managed_instance", instanceId: "a" });
+    assert.equal(state.logOffset, undefined);
+
+    const history = await runtimeStore.loadHistory();
+    assert.equal(history.length, 1);
+    assert.deepEqual(history[0].target, { kind: "managed_instance", instanceId: "a" });
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("Observer reports unavailable active targets without stopping the loop", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const runtimeStore = new RuntimeStore({ dataDir: tmp.dir });
+    await runtimeStore.initialize();
+
+    const mattermost = new CountingMattermost();
+    const observer = new Observer(new StubAnalyzer(), mattermost, {
+      runtimeStore,
+      targetResolver: new FailingTargetResolver(),
+      intervalMs: 999999,
+    });
+
+    await observer.runCycle();
+
+    assert.equal(mattermost.periodicCalls, 1);
+    assert.match(mattermost.lastPeriodicReport.summary, /Active diagnostic target unavailable/);
+    assert.equal(mattermost.lastPeriodicReport.targetLabel, "managed instance missing");
+    assert.equal(mattermost.lastPeriodicReport.healthScore, 0);
+
+    const state = await runtimeStore.loadState();
+    assert.equal(state.lastHealthScore, 0);
+    assert.deepEqual(state.lastObservedTarget, {
+      kind: "managed_instance",
+      instanceId: "missing",
+    });
+
+    const history = await runtimeStore.loadHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].healthScore, 0);
+    assert.deepEqual(history[0].target, {
+      kind: "managed_instance",
+      instanceId: "missing",
+    });
   } finally {
     await tmp.cleanup();
   }

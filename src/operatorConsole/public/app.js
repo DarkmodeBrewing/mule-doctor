@@ -7,6 +7,7 @@ const INSTANCE_DIAGNOSTICS_PLACEHOLDER =
 const INSTANCE_ANALYSIS_PLACEHOLDER =
   "Run on-demand analysis for the selected managed instance.";
 const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
+const OBSERVER_TARGET_PLACEHOLDER = "Loading active diagnostic target...";
 let selectedInstanceId = null;
 
 async function fetchJson(url) {
@@ -87,6 +88,7 @@ function renderInstanceList(instances) {
     const restart = document.createElement("button");
     const inspect = document.createElement("button");
     const analyze = document.createElement("button");
+    const useAsTarget = document.createElement("button");
 
     wrapper.className = "instance-entry";
     controls.className = "controls";
@@ -96,12 +98,15 @@ function renderInstanceList(instances) {
 
     inspect.textContent = "Inspect";
     analyze.textContent = "Analyze";
+    useAsTarget.textContent = "Use as target";
     start.textContent = "Start";
     stop.textContent = "Stop";
     restart.textContent = "Restart";
 
     inspect.onclick = () => inspectInstance(instance.id);
     analyze.onclick = () => analyzeInstance(instance.id);
+    useAsTarget.onclick = () =>
+      updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
     start.onclick = () => mutateInstance(instance.id, "start");
     stop.onclick = () => mutateInstance(instance.id, "stop");
     restart.onclick = () => mutateInstance(instance.id, "restart");
@@ -114,6 +119,7 @@ function renderInstanceList(instances) {
 
     controls.appendChild(inspect);
     controls.appendChild(analyze);
+    controls.appendChild(useAsTarget);
     controls.appendChild(start);
     controls.appendChild(stop);
     controls.appendChild(restart);
@@ -131,9 +137,47 @@ function setInstanceFeedback(text, isError = false) {
   element.className = isError ? "status" : "muted";
 }
 
+function describeTarget(target) {
+  if (!target || target.kind === "external") {
+    return "Active diagnostic target: external configured rust-mule client";
+  }
+  return `Active diagnostic target: managed instance ${target.instanceId}`;
+}
+
+function renderHealth(data) {
+  const observerLines = [];
+  if (data.observer) {
+    observerLines.push(describeTarget(data.observer.activeDiagnosticTarget));
+    observerLines.push(
+      `Last observed target: ${describeTarget(data.observer.lastObservedTarget).replace("Active diagnostic target: ", "")}`,
+    );
+    observerLines.push(`Last run: ${data.observer.lastRun || "unknown"}`);
+    observerLines.push(
+      `Last health score: ${
+        typeof data.observer.lastHealthScore === "number" ? data.observer.lastHealthScore : "unknown"
+      }`,
+    );
+  }
+
+  setText(
+    "health",
+    [
+      `Started at: ${data.startedAt}`,
+      `Now: ${data.now}`,
+      `Uptime (sec): ${data.uptimeSec}`,
+      observerLines.length ? "" : null,
+      ...observerLines,
+      "",
+      JSON.stringify(data.paths, null, 2),
+    ]
+      .filter((line) => line !== null)
+      .join("\n"),
+  );
+}
+
 async function refreshHealth() {
   const data = await fetchJson("/api/health");
-  setText("health", JSON.stringify(data, null, 2));
+  renderHealth(data);
 }
 
 async function refreshAppLogs() {
@@ -186,6 +230,7 @@ async function refreshInstances() {
   try {
     const data = await fetchJson("/api/instances");
     renderInstanceList(data.instances);
+    await refreshObserverTarget();
     if (selectedInstanceId) {
       const exists = data.instances.some((instance) => instance.id === selectedInstanceId);
       if (!exists) {
@@ -199,6 +244,28 @@ async function refreshInstances() {
   } catch (err) {
     renderInstanceList([]);
     setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
+    setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
+  }
+}
+
+async function refreshObserverTarget() {
+  try {
+    const data = await fetchJson("/api/observer/target");
+    setText("observer-target", describeTarget(data.target));
+  } catch (err) {
+    setText("observer-target", `Failed to load active diagnostic target: ${String(err)}`);
+  }
+}
+
+async function updateObserverTarget(target) {
+  try {
+    const data = await postJson("/api/observer/target", target);
+    setText("observer-target", describeTarget(data.target));
+    setInstanceFeedback(
+      `diagnostic target updated to ${describeTarget(data.target).replace("Active diagnostic target: ", "")}`,
+    );
+  } catch (err) {
+    setInstanceFeedback(String(err), true);
   }
 }
 
@@ -269,6 +336,7 @@ setText("instance-detail", INSTANCE_DETAIL_PLACEHOLDER);
 setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
 setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
 setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
+setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });
@@ -309,6 +377,9 @@ document.getElementById("refresh-llm-list").onclick = refreshLlmList;
 document.getElementById("refresh-proposals").onclick = refreshProposalList;
 document.getElementById("refresh-instances").onclick = refreshInstances;
 document.getElementById("instance-create-form").onsubmit = createInstance;
+document.getElementById("use-external-target").onclick = () => {
+  void updateObserverTarget({ kind: "external" });
+};
 
 refreshAll().finally(() => {
   connectStream(`/api/stream/app?lines=${LOG_LINE_LIMIT}`, "app-logs", "app-stream-status");

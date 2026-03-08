@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/managed-instance-on-demand-analysis`
+- `feature/observer-active-target`
 - PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; adding on-demand analysis for a selected managed rust-mule instance without changing the existing scheduled observer pipeline.
-- PR #29 is merged to `main`.
+- In progress; starting active diagnostic target routing for the scheduled observer pipeline.
+- PR #30 is merged to `main`.
 
 ## Completed Work
 
@@ -132,6 +132,15 @@
   - capturing a bounded recent log snapshot from the selected instance for tool-based analysis
   - exposing an operator-console route for on-demand analysis of the selected managed instance
   - preserving the background observer/Mattermost pipeline on the original configured external client for now
+- Active diagnostic target routing underway:
+  - adding a persisted `activeDiagnosticTarget` runtime-state field
+  - adding a `DiagnosticTargetService` to validate and store `external` vs `managed_instance:<id>` selection
+  - exposing operator-console API/UI hooks for inspecting and updating the active diagnostic target
+  - routing the scheduled observer through a resolved active target each cycle
+  - recording `lastObservedTarget` in runtime state and labeling history entries with the observed target
+  - labeling periodic Mattermost reports with the observed target
+  - emitting explicit degraded/unavailable reports with `healthScore=0` when the selected target cannot be resolved at cycle start
+  - surfacing observer target/runtime state in the operator-console health endpoint and UI
 
 ## Key Decisions
 
@@ -146,6 +155,9 @@
 - Managed-instance lifecycle should fail locally per instance and never take down mule-doctor as a whole.
 - Managed-instance diagnostics should be selected-instance scoped first; do not jump directly to observing all managed instances concurrently until the per-instance client/session model is stable.
 - Keep selected-instance analysis on-demand until target-aware observer scheduling and reporting semantics are explicitly designed.
+- Active diagnostic target selection must persist in runtime state before the scheduled observer is rerouted.
+- Scheduled observation should remain single-target even though the console can inspect many managed instances.
+- Keep the existing external analyzer for Mattermost command handling, while the scheduled observer may construct target-specific analyzers/tool registries per cycle.
 
 ## Validation
 
@@ -154,5 +166,7 @@
 
 ## Next Steps
 
-- Finish the selected managed-instance on-demand analysis slice and process review feedback.
-- After that, decide whether to route the periodic observer/tool loop to a chosen target or to add broader multi-instance comparison/reporting.
+- Finish the active-target foundation slice:
+  - review
+  - merge
+- Open the PR for active-target routing and process review feedback.

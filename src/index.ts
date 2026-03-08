@@ -18,6 +18,8 @@ import { OperatorConsoleServer } from "./operatorConsole/server.js";
 import { InstanceManager } from "./instances/instanceManager.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
 import { ManagedInstanceAnalysisService } from "./instances/managedInstanceAnalysis.js";
+import { DiagnosticTargetService } from "./instances/diagnosticTargetService.js";
+import { ObserverTargetResolver } from "./observerTargetResolver.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -143,15 +145,15 @@ async function main(): Promise<void> {
     usageTracker,
   });
   const mattermostClient = new MattermostClient(webhookUrl, analyzer);
-  toolRegistry.setPatchProposalNotifier(async (proposal) => {
+  const patchProposalNotifier = async (proposal: {
+    artifactPath: string;
+    diff: string;
+    bytes: number;
+    lines: number;
+  }) => {
     await mattermostClient.postPatchProposal(proposal);
-  });
-  const observer = new Observer(analyzer, mattermostClient, {
-    intervalMs,
-    client: rustMuleClient,
-    logWatcher,
-    runtimeStore,
-  });
+  };
+  toolRegistry.setPatchProposalNotifier(patchProposalNotifier);
   let managedInstances: InstanceManager | undefined;
   const configuredManagedInstances = new InstanceManager({
     dataDir,
@@ -183,8 +185,37 @@ async function main(): Promise<void> {
           usageTracker,
           sourcePath,
           proposalDir,
+          patchProposalNotifier,
         })
       : undefined;
+  const diagnosticTarget = new DiagnosticTargetService({
+    runtimeStore,
+    instanceManager: managedInstances,
+  });
+  const observerTargetResolver = new ObserverTargetResolver({
+    targetService: diagnosticTarget,
+    externalClient: rustMuleClient,
+    externalLogSource: logWatcher,
+    managedDiagnostics: managedInstanceDiagnostics,
+  });
+  const observer = new Observer(analyzer, mattermostClient, {
+    intervalMs,
+    client: rustMuleClient,
+    logWatcher,
+    runtimeStore,
+    targetResolver: observerTargetResolver,
+    analyzerFactory: (target) => {
+      const targetTools = new ToolRegistry(target.client, target.logSource, runtimeStore, {
+        sourcePath,
+        proposalDir,
+        patchProposalNotifier,
+      });
+      return new Analyzer(openaiKey, targetTools, {
+        model: openaiModel,
+        usageTracker,
+      });
+    },
+  });
   let operatorConsole: OperatorConsoleServer | undefined;
   if (uiEnabled) {
     operatorConsole = new OperatorConsoleServer({
@@ -195,10 +226,12 @@ async function main(): Promise<void> {
       llmLogDir: llmLogDir ?? resolvedDataDir,
       proposalDir,
       getAppLogs: (n) => appLogBuffer?.getRecentLines(n) ?? [],
+      getRuntimeState: runtimeStore ? () => runtimeStore.loadState() : undefined,
       subscribeToAppLogs: appLogBuffer ? (listener) => appLogBuffer.subscribe(listener) : undefined,
       managedInstances,
       managedInstanceDiagnostics,
       managedInstanceAnalysis,
+      diagnosticTarget,
     });
     try {
       await operatorConsole.start();

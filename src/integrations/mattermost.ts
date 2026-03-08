@@ -25,6 +25,7 @@ interface MattermostPayload {
 
 export interface PeriodicReportInput {
   summary: string;
+  targetLabel?: string;
   healthScore?: number;
   peerCount?: number;
   routingBucketCount?: number;
@@ -86,8 +87,11 @@ export class MattermostClient {
       .join("\n");
 
     const summaryText = report.summary.trim().length > 0 ? report.summary : "(no summary)";
+    const targetLine = report.targetLabel ? `Target: ${report.targetLabel}` : undefined;
     const payload: MattermostPayload = {
-      text: `mule-doctor\n\nNode status: ${status}`,
+      text: ["mule-doctor", targetLine, "", `Node status: ${status}`]
+        .filter((line): line is string => line !== undefined)
+        .join("\n"),
       attachments: [
         {
           title: "Node Metrics",

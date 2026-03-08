@@ -22,10 +22,7 @@ export class ManagedInstanceDiagnosticsService {
   }
 
   async getSnapshot(instanceId: string): Promise<ManagedInstanceDiagnosticSnapshot> {
-    const record = await this.instanceManager.getInstance(instanceId);
-    if (!record) {
-      throw new Error(`Managed instance not found: ${instanceId}`);
-    }
+    const record = await this.getInstanceRecord(instanceId);
     if (record.status !== "running") {
       return unavailableSnapshot(record, `instance is ${record.status}`);
     }
@@ -60,6 +57,14 @@ export class ManagedInstanceDiagnosticsService {
     } catch (err) {
       return unavailableSnapshot(record, `diagnostics unavailable: ${String(err)}`);
     }
+  }
+
+  async getInstanceRecord(instanceId: string): Promise<ManagedInstanceRecord> {
+    const record = await this.instanceManager.getInstance(instanceId);
+    if (!record) {
+      throw new Error(`Managed instance not found: ${instanceId}`);
+    }
+    return record;
   }
 
   getClientForInstance(record: ManagedInstanceRecord): RustMuleClient {
