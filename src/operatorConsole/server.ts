@@ -18,6 +18,7 @@ const DEFAULT_STREAM_HEARTBEAT_MS = 15000;
 const MAX_LOG_LINES = 2000;
 const MAX_STREAM_LINES = 500;
 const MAX_FILE_BYTES = 512 * 1024;
+const PUBLIC_UNAUTHENTICATED_ASSETS = new Set(["login.js", "styles.css"]);
 const STATIC_DIR = resolve(__dirname, "public");
 
 interface ListedFile {
@@ -170,6 +171,10 @@ export class OperatorConsoleServer {
 
     if (path.startsWith("/static/operatorConsole/")) {
       const fileName = path.slice("/static/operatorConsole/".length);
+      if (!auth.ok && !PUBLIC_UNAUTHENTICATED_ASSETS.has(fileName)) {
+        sendJson(res, 401, { ok: false, error: "operator console authentication required" });
+        return;
+      }
       await sendStaticAsset(res, fileName);
       return;
     }
@@ -726,7 +731,10 @@ async function sendStaticHtml(res: ServerResponse, fileName: string): Promise<vo
 
 async function sendStaticAsset(res: ServerResponse, fileNameRaw: string): Promise<void> {
   const fileName = fileNameRaw.trim();
-  if (!/^[a-zA-Z0-9._-]+$/.test(fileName)) {
+  if (!/^[a-zA-Z0-9._-]+$/.test(fileName) || fileName.startsWith(".")) {
+    throw new RequestError(404, "not found");
+  }
+  if (fileName.toLowerCase().endsWith(".html")) {
     throw new RequestError(404, "not found");
   }
   const content = await readStaticAsset(fileName);
@@ -767,8 +775,15 @@ async function readStaticAsset(fileName: string): Promise<Buffer> {
     throw new RequestError(404, "not found");
   }
   try {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) {
+      throw new RequestError(404, "not found");
+    }
     return await readFile(filePath);
   } catch (err) {
+    if (err instanceof RequestError) {
+      throw err;
+    }
     if (isNotFound(err)) {
       throw new RequestError(404, "not found");
     }
