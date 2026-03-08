@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/docs-operator-observability-console`
+- `feature/operator-console-phase1`
 - PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- Documentation update branch to capture next-phase operator observability work.
-- PR #20 is merged to `main` (security/reliability hardening complete).
+- In progress; implementing first operator-console slice (read-only web UI + endpoints).
+- PR #20 and PR #21 are merged to `main`.
 
 ## Completed Work
 
@@ -74,6 +74,28 @@
   - browser UI for app logs, LLM logs, and patch proposal artifacts.
   - explicit requirement to expose a dedicated container port and map it in docker-compose.
   - security defaults and read-only constraints documented.
+- Implemented operator console phase 1:
+  - added optional in-process `OperatorConsoleServer` with read-only routes:
+    - `/` (UI)
+    - `/api/health`
+    - `/api/logs/app`
+    - `/api/logs/rust-mule`
+    - `/api/llm/logs` and `/api/llm/logs/:file`
+    - `/api/proposals` and `/api/proposals/:file`
+  - added stdout log buffering (`installStdoutLogBuffer`) so app logs can be inspected from the UI.
+  - wired console startup in `index.ts` behind env toggles, with graceful failure behavior (app continues if UI fails to start).
+  - documented and wired container access:
+    - Dockerfile `EXPOSE 17835 18080`
+    - compose maps UI port but keeps the UI disabled by default; enabling host access requires explicit `MULE_DOCTOR_UI_ENABLED=true`
+    - env vars added: `MULE_DOCTOR_UI_ENABLED`, `MULE_DOCTOR_UI_HOST`, `MULE_DOCTOR_UI_PORT`, `MULE_DOCTOR_UI_LOG_BUFFER_LINES`
+  - added integration-style test coverage for console health/log/proposal endpoints.
+  - addressed PR #22 review feedback:
+    - only install stdout log buffering when the UI or explicit buffer sizing is enabled.
+    - await operator console shutdown with timeout before process exit.
+    - hardened operator console responses with `Cache-Control: no-store`, `Pragma: no-cache`, and `X-Content-Type-Options: nosniff`.
+    - tightened filename validation for console file reads and strengthened resolved-path escape checks.
+    - added focused test coverage for stdout log buffer chunk handling and restore behavior.
+    - updated compose/docs so unauthenticated UI exposure is opt-in instead of default.
 
 ## Key Decisions
 
@@ -89,5 +111,5 @@
 
 ## Next Steps
 
-- Open and merge documentation PR for `Task D` observability console planning.
-- Start implementation in a feature branch once approved.
+- Process remaining PR feedback for operator console phase 1 and merge once approved.
+- Phase 2 target: add auth guard for UI and live streaming (SSE/WebSocket) for logs.
