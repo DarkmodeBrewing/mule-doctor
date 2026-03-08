@@ -2,15 +2,14 @@
 
 ## Branch
 
-- `feature/instance-manager-foundation`
-- PR: #25
+- `feature/instance-manager-launcher`
+- PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; implementing the non-risky `InstanceManager` foundation for mule-doctor-managed local test instances.
-- PR #24 is merged to `main`.
-- PR #25 is open for this branch.
+- In progress; extending `InstanceManager` from planning-only state into backend lifecycle management for mule-doctor-managed local test instances.
+- PR #25 is merged to `main`.
 
 ## Completed Work
 
@@ -118,6 +117,11 @@
   - generating bounded per-instance `config.toml` files from confirmed rust-mule settings (`sam.session_name`, `general.data_dir`, `api.port`) plus optional shared template overrides
   - aligning managed runtime token/log paths with rust-mule `general.data_dir`
   - explicitly deferring process spawn until rust-mule startup behavior is confirmed
+- Managed-instance launcher phase underway:
+  - adding a bounded process-launch abstraction for rust-mule child-process lifecycle
+  - persisting per-instance runtime process state (`pid`, command, cwd, last exit)
+  - reconciling stale `running` records on mule-doctor startup and polling reconciled live pids so status does not stick forever after a mule-doctor restart
+  - deferring operator-console lifecycle controls until backend launch behavior is in place
 
 ## Key Decisions
 
@@ -129,6 +133,7 @@
 - Use a bounded `InstanceManager` as the future control plane rather than allowing the UI to shell out directly.
 - Build `InstanceManager` in two steps: first metadata/path/port/config planning, then process lifecycle once rust-mule startup assumptions are verified.
 - Port allocation in this phase guarantees non-overlap inside the managed-instance catalog only; probing host-level port availability is deferred until launch wiring.
+- Managed-instance lifecycle should fail locally per instance and never take down mule-doctor as a whole.
 
 ## Validation
 
@@ -137,5 +142,5 @@
 
 ## Next Steps
 
-- Finish PR for the `InstanceManager` foundation and process review feedback.
-- After that, inspect rust-mule startup/config behavior before implementing managed process launch and operator-console lifecycle controls.
+- Add backend managed-instance lifecycle operations and process-state persistence on top of the merged planning foundation.
+- After that, expose those operations through operator-console APIs/UI without allowing direct shell execution from the browser.
