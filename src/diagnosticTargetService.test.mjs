@@ -64,6 +64,7 @@ test("DiagnosticTargetService persists managed instance targets", async () => {
     assert.equal(events.length, 1);
     assert.equal(events[0].type, "diagnostic_target_changed");
     assert.deepEqual(events[0].target, target);
+    assert.equal(events[0].message, "Active diagnostic target changed to managed instance a");
   } finally {
     await tmp.cleanup();
   }

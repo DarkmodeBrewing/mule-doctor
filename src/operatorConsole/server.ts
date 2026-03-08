@@ -17,6 +17,7 @@ import type {
   OperatorEventEntry,
   RuntimeState,
 } from "../types/contracts.js";
+import { describeDiagnosticTarget } from "../targets/describeTarget.js";
 
 const AUTH_COOKIE_NAME = "mule_doctor_ui_token";
 const DEFAULT_UI_HOST = "127.0.0.1";
@@ -442,13 +443,24 @@ export class OperatorConsoleServer {
       sendJson(res, 409, { ok: false, error: result.reason ?? "observer run not accepted" });
       return;
     }
-    const target = this.diagnosticTarget ? await this.diagnosticTarget.getActiveTarget() : undefined;
-    await this.operatorEvents?.append({
-      type: "observer_run_requested",
-      message: `Operator triggered a scheduled observer cycle for ${describeTarget(target)}`,
-      target,
-      actor: "operator_console",
-    });
+    let target: DiagnosticTargetRef | undefined;
+    try {
+      target = this.diagnosticTarget ? await this.diagnosticTarget.getActiveTarget() : undefined;
+    } catch (err) {
+      log("warn", "operatorConsole", `Failed to resolve active target for run-now event: ${String(err)}`);
+    }
+    if (this.operatorEvents) {
+      try {
+        await this.operatorEvents.append({
+          type: "observer_run_requested",
+          message: `Operator triggered a scheduled observer cycle for ${describeDiagnosticTarget(target)}`,
+          target,
+          actor: "operator_console",
+        });
+      } catch (err) {
+        log("warn", "operatorConsole", `Failed to append run-now operator event: ${String(err)}`);
+      }
+    }
     sendJson(res, 202, {
       ok: true,
       accepted: true,
@@ -848,11 +860,8 @@ function sanitizeCycleOutcome(value: RuntimeState["lastCycleOutcome"]): Observer
   return value === "success" || value === "unavailable" || value === "error" ? value : undefined;
 }
 
-function describeTarget(target: DiagnosticTargetRef | undefined): string {
-  if (!target || target.kind === "external") {
-    return "external configured rust-mule client";
-  }
-  return `managed instance ${target.instanceId}`;
+function log(level: string, module: string, msg: string): void {
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }
 
 async function listFiles(

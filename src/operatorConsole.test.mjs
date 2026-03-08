@@ -219,6 +219,16 @@ class StubOperatorEvents {
   }
 }
 
+class ThrowingOperatorEvents {
+  async listRecent() {
+    return [];
+  }
+
+  async append() {
+    throw new Error("operator events unavailable");
+  }
+}
+
 test("OperatorConsoleServer reports 501 for instance detail routes when control is unavailable", async () => {
   const tmp = await makeTempDir();
   try {
@@ -399,6 +409,49 @@ test("OperatorConsoleServer triggers observer run-now and reports scheduler stat
       body: "{}",
     });
     assert.equal(secondRunRes.status, 409);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer still returns 202 when run-now event logging fails", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const observerControl = new StubObserverControl();
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      observerControl,
+      operatorEvents: new ThrowingOperatorEvents(),
+      diagnosticTarget: new StubDiagnosticTargetControl(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const runRes = await fetch(`${server.publicAddress()}/api/observer/run`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Origin: server.publicAddress(),
+      },
+      body: "{}",
+    });
+    assert.equal(runRes.status, 202);
+    const runPayload = await runRes.json();
+    assert.equal(runPayload.ok, true);
+    assert.equal(runPayload.scheduler.cycleInFlight, true);
 
     await server.stop();
   } finally {

@@ -2,6 +2,7 @@ import type { RuntimeStore } from "../storage/runtimeStore.js";
 import type { DiagnosticTargetRef } from "../types/contracts.js";
 import type { InstanceManager } from "./instanceManager.js";
 import type { OperatorEventLog } from "../operatorConsole/operatorEventLog.js";
+import { describeDiagnosticTarget } from "../targets/describeTarget.js";
 
 const EXTERNAL_TARGET: DiagnosticTargetRef = { kind: "external" };
 
@@ -40,7 +41,7 @@ export class DiagnosticTargetService {
     if (!sameTarget(current, target)) {
       await this.eventLog?.append({
         type: "diagnostic_target_changed",
-        message: `Active diagnostic target changed to ${describeTarget(target)}`,
+        message: `Active diagnostic target changed to ${describeDiagnosticTarget(target)}`,
         target,
         actor: "operator_console",
       });
@@ -67,10 +68,6 @@ export class DiagnosticTargetService {
       throw new Error(`Managed instance not found: ${instanceId}`);
     }
   }
-}
-
-function describeTarget(target: DiagnosticTargetRef): string {
-  return target.kind === "managed_instance" ? `managed instance ${target.instanceId}` : "external";
 }
 
 function sameTarget(left: DiagnosticTargetRef, right: DiagnosticTargetRef): boolean {
