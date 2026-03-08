@@ -363,11 +363,6 @@ export class OperatorConsoleServer {
     res: ServerResponse,
     path: string,
   ): Promise<void> {
-    if (!this.managedInstances) {
-      sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
-      return;
-    }
-
     const suffix = path.slice("/api/instances/".length);
     const [idRaw, action] = suffix.split("/");
     const id = decodeURIComponent(idRaw ?? "").trim();
@@ -431,6 +426,11 @@ export class OperatorConsoleServer {
         this.managedInstanceDiagnostics!.getSnapshot(id),
       );
       sendJson(res, 200, { ok: true, snapshot });
+      return;
+    }
+
+    if (!this.managedInstances) {
+      sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
       return;
     }
 
