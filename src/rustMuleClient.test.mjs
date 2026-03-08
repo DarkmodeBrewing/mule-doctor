@@ -97,7 +97,7 @@ test("RustMuleClient sends X-Debug-Token on debug endpoints and tolerates 403", 
       "http://127.0.0.1:17835",
       undefined,
       "/api/v1",
-      debugToken.filePath
+      debugToken.filePath,
     );
     await client.loadToken();
 
@@ -178,7 +178,7 @@ test("RustMuleClient triggerBootstrap posts debug restart and polls job endpoint
       "http://127.0.0.1:17835",
       undefined,
       "/api/v1",
-      debugToken.filePath
+      debugToken.filePath,
     );
     await client.loadToken();
 
@@ -226,7 +226,7 @@ test("RustMuleClient traceLookup posts and returns normalized hops", async () =>
       "http://127.0.0.1:17835",
       undefined,
       "/api/v1",
-      debugToken.filePath
+      debugToken.filePath,
     );
     await client.loadToken();
 

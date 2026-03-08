@@ -89,11 +89,7 @@ test("ToolRegistry returns structured errors for unknown tools", async () => {
 });
 
 test("ToolRegistry getHistory reads from runtime store", async () => {
-  const registry = new ToolRegistry(
-    new StubClient(),
-    new StubLogWatcher(),
-    new StubRuntimeStore()
-  );
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore());
 
   const result = await registry.invoke("getHistory", { n: 10 });
 
@@ -180,7 +176,7 @@ test("ToolRegistry source tools search, read, and show function return structure
     await writeFile(
       join(tmp.dir, "src", "lib.rs"),
       "pub fn handshake() {}\nfn internal_task() {}\n",
-      "utf8"
+      "utf8",
     );
 
     const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
@@ -237,8 +233,7 @@ test("ToolRegistry propose_patch triggers patch proposal notifier with diff cont
         notices.push(notice);
       },
     });
-    const diff =
-      "diff --git a/src/lib.rs b/src/lib.rs\n@@\n-pub fn old() {}\n+pub fn new() {}\n";
+    const diff = "diff --git a/src/lib.rs b/src/lib.rs\n@@\n-pub fn old() {}\n+pub fn new() {}\n";
 
     const result = await registry.invoke("propose_patch", { diff });
 

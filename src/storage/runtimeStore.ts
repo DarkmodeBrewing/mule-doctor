@@ -120,14 +120,12 @@ export class RuntimeStore {
     const run = this.mutationQueue.then(op, op);
     this.mutationQueue = run.then(
       () => undefined,
-      () => undefined
+      () => undefined,
     );
     return run;
   }
 }
 
 function log(level: string, module: string, msg: string): void {
-  process.stdout.write(
-    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
-  );
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

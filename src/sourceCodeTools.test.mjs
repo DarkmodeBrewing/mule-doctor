@@ -28,7 +28,7 @@ test("SourceCodeTools proposePatch stores artifact without mutating source file"
 
     const tools = new SourceCodeTools({ sourcePath: tmp.dir, proposalDir });
     const proposal = await tools.proposePatch(
-      "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@\n-pub fn stable() {}\n+pub fn updated() {}\n"
+      "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@\n-pub fn stable() {}\n+pub fn updated() {}\n",
     );
 
     const after = await readFile(filePath, "utf8");
@@ -51,13 +51,10 @@ test("SourceCodeTools resolves relative proposalDir against source root", async 
 
     const tools = new SourceCodeTools({ sourcePath: tmp.dir, proposalDir: "relative-proposals" });
     const proposal = await tools.proposePatch(
-      "diff --git a/src/lib.rs b/src/lib.rs\n@@\n-pub fn stable() {}\n+pub fn updated() {}\n"
+      "diff --git a/src/lib.rs b/src/lib.rs\n@@\n-pub fn stable() {}\n+pub fn updated() {}\n",
     );
 
-    assert.equal(
-      proposal.artifactPath.startsWith(`${join(tmp.dir, "relative-proposals")}/`),
-      true
-    );
+    assert.equal(proposal.artifactPath.startsWith(`${join(tmp.dir, "relative-proposals")}/`), true);
     assert.equal(existsSync(proposal.artifactPath), true);
   } finally {
     await tmp.cleanup();
@@ -69,7 +66,7 @@ test("SourceCodeTools rejects empty proposalDir when provided", async () => {
   try {
     assert.throws(
       () => new SourceCodeTools({ sourcePath: tmp.dir, proposalDir: "   " }),
-      /proposalDir must be non-empty when provided/
+      /proposalDir must be non-empty when provided/,
     );
   } finally {
     await tmp.cleanup();
@@ -131,7 +128,7 @@ test("SourceCodeTools showFunction matches Rust functions and ignores JS pattern
     await writeFile(
       join(tmp.dir, "src", "lib.rs"),
       "pub(crate) async fn handshake() {}\nconst fn local_only() -> usize { 1 }\n",
-      "utf8"
+      "utf8",
     );
     await writeFile(join(tmp.dir, "src", "helper.js"), "function handshake() {}\n", "utf8");
 
@@ -150,8 +147,8 @@ test("SourceCodeTools searchCode scans Rust-project text files", async () => {
   const tmp = await makeTempSourceDir();
   try {
     await mkdir(join(tmp.dir, "src"), { recursive: true });
-    await writeFile(join(tmp.dir, "src", "lib.rs"), "let id = \"needle\";\n", "utf8");
-    await writeFile(join(tmp.dir, "blob.json"), "{\"needle\": true}\n", "utf8");
+    await writeFile(join(tmp.dir, "src", "lib.rs"), 'let id = "needle";\n', "utf8");
+    await writeFile(join(tmp.dir, "blob.json"), '{"needle": true}\n', "utf8");
 
     const tools = new SourceCodeTools({ sourcePath: tmp.dir });
     const result = await tools.searchCode("needle");

@@ -38,6 +38,7 @@ Each item is intended to become one or more focused feature branches and PRs.
 4. Add strict input validation for env vars and interval parsing.
 
 Acceptance criteria:
+
 - All tool handlers return structured JSON envelope.
 - Analyzer and observer compile and run with new contract.
 - Existing tests updated and passing.
@@ -54,6 +55,7 @@ Acceptance criteria:
 4. Integrate persistence into observer lifecycle.
 
 Acceptance criteria:
+
 - State/history files auto-created if absent.
 - Observer survives restart and continues from persisted state.
 - Retention limit enforced.
@@ -70,6 +72,7 @@ Acceptance criteria:
 3. Add unit tests covering healthy, degraded, and missing-data scenarios.
 
 Acceptance criteria:
+
 - `getNetworkHealth()` returns deterministic score + component breakdown.
 - Observer includes health score in each diagnostic cycle context.
 
@@ -82,6 +85,7 @@ Acceptance criteria:
 5. Keep existing tools (`getNodeInfo`, `getPeers`, `getRoutingBuckets`) compatible.
 
 Acceptance criteria:
+
 - Tool registry matches architecture list.
 - All tool outputs follow standard response envelope.
 - Tests cover success and failure responses.
@@ -98,6 +102,7 @@ Acceptance criteria:
 3. Add path sandboxing to prevent filesystem escape outside source root.
 
 Acceptance criteria:
+
 - Source tools disabled cleanly when source path is unset.
 - Proposal operations produce reviewable artifacts only.
 - Security tests for path traversal and command injection.
@@ -113,6 +118,7 @@ Acceptance criteria:
 3. Add daily usage/spend report message.
 
 Acceptance criteria:
+
 - Periodic report uses attachment schema.
 - Daily usage report emits once per UTC day.
 
@@ -123,6 +129,7 @@ Acceptance criteria:
 3. Aggregate daily and monthly usage summaries.
 
 Acceptance criteria:
+
 - Every analyze cycle records LLM telemetry.
 - Usage aggregation survives process restarts.
 
@@ -136,6 +143,7 @@ Acceptance criteria:
 3. Document runtime dependencies and production configuration.
 
 Acceptance criteria:
+
 - Container boots reliably in architecture-defined layout.
 - Health/reporting loop runs with persisted `/data` volume.
 
@@ -153,6 +161,7 @@ Acceptance criteria:
 3. Add smoke script for local end-to-end validation.
 
 Acceptance criteria:
+
 - CI validates all core behavior.
 - PR workflow fails fast on test/type/lint regressions before merge.
 - Regressions are caught before merge.
@@ -188,6 +197,7 @@ These items are intentionally documented for follow-up and are not in progress.
 2. Ensure clear pass/fail output and non-zero exit on failure.
 
 Acceptance criteria:
+
 - One command executes the smoke run end-to-end.
 - Script verifies state/history/proposal artifact creation.
 - Suitable for pre-release validation.
@@ -201,6 +211,7 @@ Acceptance criteria:
 2. Validate bearer-token rejection behavior (`403`) across relevant endpoints.
 
 Acceptance criteria:
+
 - Edge-case handling is covered by automated integration tests.
 - Regressions in debug/auth/polling behavior are caught before merge.
 
@@ -214,5 +225,6 @@ Acceptance criteria:
 2. Fail fast with explicit operator-facing diagnostics when prerequisites are missing.
 
 Acceptance criteria:
+
 - Startup failures surface concrete missing prerequisites.
 - Operational setup issues are identified before observer loop begins.

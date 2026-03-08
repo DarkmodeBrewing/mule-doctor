@@ -42,8 +42,12 @@ Optional:
 - `npm run start` – run compiled agent
 - `npm run dev` – watch compile during development
 - `npm run typecheck` – strict typecheck (`tsc --noEmit`)
+- `npm run lint` – run ESLint across the codebase
+- `npm run lint:fix` – auto-fix lint issues where supported
+- `npm run format` – run Prettier and write formatting changes
+- `npm run format:check` – verify formatting without writing changes
 - `npm test` – build + run basic smoke tests
-- `npm run check` – CI-friendly verification (`typecheck` + `test`)
+- `npm run check` – CI-friendly verification (`typecheck` + `lint` + `test`)
 
 ## Container Runtime
 

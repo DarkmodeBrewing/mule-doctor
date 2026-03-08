@@ -39,7 +39,10 @@ class StubClient {
   }
 
   async getPeers() {
-    return [{ id: "p1", address: "a" }, { id: "p2", address: "b" }];
+    return [
+      { id: "p1", address: "a" },
+      { id: "p2", address: "b" },
+    ];
   }
 
   async getRoutingBuckets() {

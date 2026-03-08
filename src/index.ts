@@ -74,12 +74,7 @@ async function main(): Promise<void> {
   const proposalDir = `${resolvedDataDir}/proposals`;
 
   // Build components
-  const rustMuleClient = new RustMuleClient(
-    apiUrl,
-    tokenPath,
-    apiPrefix,
-    debugTokenPath
-  );
+  const rustMuleClient = new RustMuleClient(apiUrl, tokenPath, apiPrefix, debugTokenPath);
   await rustMuleClient.loadToken();
 
   const logWatcher = new LogWatcher(logPath);
@@ -99,7 +94,7 @@ async function main(): Promise<void> {
     log(
       "warn",
       "index",
-      `Runtime store unavailable, continuing without persistence: ${String(err)}`
+      `Runtime store unavailable, continuing without persistence: ${String(err)}`,
     );
   }
 
@@ -148,7 +143,5 @@ main().catch((err) => {
 });
 
 function log(level: string, module: string, msg: string): void {
-  process.stdout.write(
-    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
-  );
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

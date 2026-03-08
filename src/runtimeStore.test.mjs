@@ -68,7 +68,7 @@ test("RuntimeStore enforces history retention limit", async () => {
     assert.equal(history.length, 3);
     assert.deepEqual(
       history.map((entry) => entry.timestamp),
-      ["t-3", "t-4", "t-5"]
+      ["t-3", "t-4", "t-5"],
     );
   } finally {
     await tmp.cleanup();
@@ -104,15 +104,15 @@ test("RuntimeStore serializes concurrent history appends", async () => {
 
     await Promise.all(
       Array.from({ length: 20 }, (_, i) =>
-        store.appendHistory({ timestamp: `t-${i + 1}`, peerCount: i + 1 })
-      )
+        store.appendHistory({ timestamp: `t-${i + 1}`, peerCount: i + 1 }),
+      ),
     );
 
     const history = await store.loadHistory();
     assert.equal(history.length, 20);
     assert.deepEqual(
       history.map((entry) => entry.timestamp),
-      Array.from({ length: 20 }, (_, i) => `t-${i + 1}`)
+      Array.from({ length: 20 }, (_, i) => `t-${i + 1}`),
     );
   } finally {
     await tmp.cleanup();

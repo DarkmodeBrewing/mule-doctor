@@ -43,11 +43,7 @@ export class Observer {
   private cycleInFlight: Promise<void> | undefined;
   private generation = 0;
 
-  constructor(
-    analyzer: Analyzer,
-    mattermost: MattermostClient,
-    config: ObserverConfig = {}
-  ) {
+  constructor(analyzer: Analyzer, mattermost: MattermostClient, config: ObserverConfig = {}) {
     this.analyzer = analyzer;
     this.mattermost = mattermost;
     this.intervalMs = config.intervalMs ?? DEFAULT_INTERVAL_MS;
@@ -144,14 +140,13 @@ export class Observer {
     }
 
     try {
-      const [nodeInfo, peers, routingBuckets, lookupStats, recentHistory] =
-        await Promise.all([
-          this.client.getNodeInfo(),
-          this.client.getPeers(),
-          this.client.getRoutingBuckets(),
-          this.client.getLookupStats(),
-          this.runtimeStore.getRecentHistory(10),
-        ]);
+      const [nodeInfo, peers, routingBuckets, lookupStats, recentHistory] = await Promise.all([
+        this.client.getNodeInfo(),
+        this.client.getPeers(),
+        this.client.getRoutingBuckets(),
+        this.client.getLookupStats(),
+        this.runtimeStore.getRecentHistory(10),
+      ]);
 
       const timestamp = new Date().toISOString();
       const avgHops = readAverageHops(lookupStats);
@@ -222,7 +217,5 @@ function readAverageHops(lookupStats: Record<string, unknown>): number | undefin
 }
 
 function log(level: string, module: string, msg: string): void {
-  process.stdout.write(
-    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
-  );
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

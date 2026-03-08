@@ -13,14 +13,7 @@ const DEFAULT_MAX_SCAN_FILE_BYTES = 256 * 1024;
 const DEFAULT_PROPOSAL_DIR = "/data/mule-doctor/proposals";
 
 const EXCLUDED_DIRS = new Set([".git", "node_modules", "target", "dist", "build"]);
-const RUST_PROJECT_EXTENSIONS = new Set([
-  ".rs",
-  ".toml",
-  ".md",
-  ".txt",
-  ".sh",
-  ".env",
-]);
+const RUST_PROJECT_EXTENSIONS = new Set([".rs", ".toml", ".md", ".txt", ".sh", ".env"]);
 const RUST_PROJECT_FILENAMES = new Set(["Cargo.toml", "Cargo.lock", "Makefile", "Dockerfile"]);
 
 interface SourceCodeToolsConfig {
@@ -163,7 +156,7 @@ export class SourceCodeTools {
     const files = await this.listRustSourceFiles();
     const escaped = escapeRegex(name);
     const rustFunctionPattern = new RegExp(
-      `^\\s*(?:(?:pub(?:\\([^)]*\\))?|const|async|unsafe|extern(?:\\s+\"[^\"]+\")?)\\s+)*fn\\s+${escaped}\\b`
+      `^\\s*(?:(?:pub(?:\\([^)]*\\))?|const|async|unsafe|extern(?:\\s+"[^"]+")?)\\s+)*fn\\s+${escaped}\\b`,
     );
 
     const matches: Array<{ path: string; line: number; signature: string }> = [];
@@ -224,18 +217,15 @@ export class SourceCodeTools {
     const relPath = toPosixPath(relative(this.rootPath, safePath));
     const args = ["blame", "-L", `${line},${line}`, "--porcelain", "--", relPath];
 
-    let stdout = "";
     try {
       const result = await execFileAsync("git", args, {
         cwd: this.rootPath,
         maxBuffer: 1024 * 1024,
       });
-      stdout = result.stdout;
+      return parsePorcelainBlame(result.stdout, relPath, line);
     } catch (err) {
-      throw new Error(`git_blame failed for ${relPath}:${line}: ${String(err)}`);
+      throw new Error(`git_blame failed for ${relPath}:${line}: ${String(err)}`, { cause: err });
     }
-
-    return parsePorcelainBlame(stdout, relPath, line);
   }
 
   private async listSourceFiles(): Promise<SourceFile[]> {
@@ -347,7 +337,7 @@ async function walkDir(
   currentPath: string,
   maxFiles: number,
   output: SourceFile[],
-  includeFile: (name: string) => boolean
+  includeFile: (name: string) => boolean,
 ): Promise<void> {
   if (output.length >= maxFiles) return;
 

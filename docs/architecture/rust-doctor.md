@@ -26,19 +26,20 @@ tool interface implemented by mule-doctor.
 
 System architecture:
 
+```text
 rust-mule
 │
 ├─ API (/api/v1)
 ├─ logs
 │
 └── mule-doctor
-     │
-     ├─ observer loop
-     ├─ tool registry
-     ├─ LLM diagnostics
-     ├─ history storage
-     └─ Mattermost reporting
-
+    │
+    ├─ observer loop
+    ├─ tool registry
+    ├─ LLM diagnostics
+    ├─ history storage
+    └─ Mattermost reporting
+```
 
 The design intentionally separates:
 
@@ -56,16 +57,16 @@ mule-doctor **never modifies the running rust-mule instance automatically**.
 
 The LLM may:
 
-* analyze logs
-* inspect source code
-* propose patches
-* build sandbox test binaries
+- analyze logs
+- inspect source code
+- propose patches
+- build sandbox test binaries
 
 The LLM must **never**:
 
-* overwrite the running rust-mule binary
-* modify configuration files
-* restart rust-mule without explicit approval
+- overwrite the running rust-mule binary
+- modify configuration files
+- restart rust-mule without explicit approval
 
 All suggested patches are reported to developers for manual review.
 
@@ -150,10 +151,10 @@ Default interval: **5 minutes**
 
 Color codes:
 
-green  `#2ecc71`  healthy
-yellow `#f1c40f`  warning
-red    `#e74c3c`  degraded
-blue   `#3498db`  informational
+green `#2ecc71` healthy
+yellow `#f1c40f` warning
+red `#e74c3c` degraded
+blue `#3498db` informational
 
 Example payload:
 
@@ -214,10 +215,10 @@ The state file contains operational metadata required for the observer loop.
 
 State includes:
 
-* last run timestamp
-* last health score
-* log read offset
-* last alert issued
+- last run timestamp
+- last health score
+- log read offset
+- last alert issued
 
 Example state object:
 
@@ -617,11 +618,11 @@ Stored in:
 
 Each LLM interaction records:
 
-* timestamp
-* model
-* tokens_in
-* tokens_out
-* estimated_cost
+- timestamp
+- model
+- tokens_in
+- tokens_out
+- estimated_cost
 
 ---
 
