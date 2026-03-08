@@ -270,7 +270,7 @@ function summarizeComparisonSide(side) {
     id: instance.id,
     status: instance.status,
     api: `${instance.apiHost}:${instance.apiPort}`,
-    pid: instance.currentProcess?.pid || null,
+    pid: instance.currentProcess?.pid ?? null,
     available: snapshot.available,
     reason: snapshot.reason || null,
     observedAt: snapshot.observedAt,

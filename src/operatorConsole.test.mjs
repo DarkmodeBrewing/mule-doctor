@@ -429,6 +429,49 @@ test("OperatorConsoleServer compares two managed instances", async () => {
     );
     assert.equal(invalidRes.status, 400);
 
+    const missingParamRes = await fetch(
+      `${server.publicAddress()}/api/instances/compare?left=a`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(missingParamRes.status, 400);
+
+    const missingInstanceRes = await fetch(
+      `${server.publicAddress()}/api/instances/compare?left=a&right=missing`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(missingInstanceRes.status, 404);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer reports 501 for managed instance comparison when unavailable", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(
+      `${server.publicAddress()}/api/instances/compare?left=a&right=b`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(res.status, 501);
+
     await server.stop();
   } finally {
     await tmp.cleanup();
