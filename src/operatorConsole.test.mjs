@@ -54,6 +54,17 @@ class StubManagedInstances {
     const instance = {
       ...this.instances[0],
       id: input.id,
+      runtime: {
+        ...this.instances[0].runtime,
+        rootDir: `/data/instances/${input.id}`,
+        configPath: `/data/instances/${input.id}/config.toml`,
+        tokenPath: `/data/instances/${input.id}/state/api.token`,
+        debugTokenPath: `/data/instances/${input.id}/state/debug.token`,
+        logDir: `/data/instances/${input.id}/state/logs`,
+        logPath: `/data/instances/${input.id}/state/logs/rust-mule.log`,
+        stateDir: `/data/instances/${input.id}/state`,
+        metadataPath: `/data/instances/${input.id}/instance.json`,
+      },
       apiPort: input.apiPort ?? 19001,
       status: "planned",
       updatedAt: "2026-03-08T01:00:00.000Z",
@@ -240,6 +251,20 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     const instances = await instancesRes.json();
     assert.equal(instances.instances.length, 1);
     assert.equal(instances.instances[0].id, "a");
+
+    const instanceDetailRes = await fetch(`${baseUrl}/api/instances/a`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(instanceDetailRes.status, 200);
+    const instanceDetail = await instanceDetailRes.json();
+    assert.equal(instanceDetail.instance.id, "a");
+
+    const instanceLogsRes = await fetch(`${baseUrl}/api/instances/a/logs?lines=10`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(instanceLogsRes.status, 200);
+    const instanceLogs = await instanceLogsRes.json();
+    assert.equal(Array.isArray(instanceLogs.lines), true);
 
     const createRes = await fetch(`${baseUrl}/api/instances`, {
       method: "POST",
