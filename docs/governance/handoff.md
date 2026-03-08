@@ -56,6 +56,7 @@
   - enforced required bearer token path at startup (`RUST_MULE_TOKEN_PATH`).
   - made rust-mule auth/debug token file load failures explicit and fatal when configured.
   - added bounded HTTP timeouts for rust-mule API calls and Mattermost webhook posts.
+  - made read-only rust-mule endpoint calls resilient to transient/unavailable endpoints (including 404 and timeout), with warning logs and safe fallback values.
   - guarded analyzer against empty OpenAI choices responses.
   - removed tool-result payload snippets from analyzer logs to reduce sensitive-data leakage.
   - fixed log watcher offset progression so read failures do not skip unread log bytes.
