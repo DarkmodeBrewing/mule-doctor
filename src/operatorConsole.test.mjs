@@ -341,6 +341,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
         lastObservedTarget: { kind: "managed_instance", instanceId: "a" },
         lastRun: "2026-03-08T03:00:00.000Z",
         lastHealthScore: 0,
+        lastTargetFailureReason: "Managed instance a is stopped",
       }),
       subscribeToAppLogs: () => () => {},
       rustMuleStreamPollMs: 25,
@@ -387,6 +388,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       lastObservedTarget: { kind: "managed_instance", instanceId: "a" },
       lastRun: "2026-03-08T03:00:00.000Z",
       lastHealthScore: 0,
+      lastTargetFailureReason: "Managed instance a is stopped",
     });
 
     const staticUiRes = await fetch(`${baseUrl}/static/operatorConsole/app.js`, {

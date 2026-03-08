@@ -163,6 +163,8 @@ was actually observed.
 If target resolution fails before a full observation can run, mule-doctor
 should still emit an explicit degraded/unavailable report and persist a zero
 health score for that target rather than silently skipping the cycle.
+The concrete failure reason should also be persisted so operators can see why
+the scheduled target is unavailable without reading raw logs first.
 
 Example workflow:
 
@@ -284,6 +286,7 @@ State includes:
 - last alert issued
 - active diagnostic target
 - last observed target
+- last target failure reason
 
 Example state object:
 
@@ -298,7 +301,8 @@ Example state object:
   },
   "lastObservedTarget": {
     "kind": "external"
-  }
+  },
+  "lastTargetFailureReason": "Managed instance a is stopped"
 }
 ```
 
