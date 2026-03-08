@@ -69,6 +69,9 @@ function appendMaybeString(lines: string[], key: string, value: string | undefin
 
 function appendMaybeNumber(lines: string[], key: string, value: number | undefined): void {
   if (value === undefined) return;
+  if (!Number.isFinite(value)) {
+    throw new Error(`Invalid numeric value for ${key}: ${value}`);
+  }
   lines.push(`${key} = ${value}`);
 }
 

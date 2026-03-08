@@ -108,6 +108,27 @@ test("InstanceManager renders configured rust-mule template values", async () =>
   }
 });
 
+test("InstanceManager rejects invalid numeric template values", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleConfigTemplate: {
+        samPort: Number.NaN,
+      },
+    });
+    await manager.initialize();
+
+    await assert.rejects(
+      manager.createPlannedInstance({ id: "bad-template" }),
+      /Invalid numeric value for port: NaN/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("InstanceManager allocates non-overlapping API ports", async () => {
   const tmp = await makeTempDir();
   try {

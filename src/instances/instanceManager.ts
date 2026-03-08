@@ -100,9 +100,18 @@ export class InstanceManager {
         await materializeRuntimePaths(record, this.rustMuleConfigTemplate);
         await writeMetadata(runtime.metadataPath, record);
       } catch (err) {
-        await this.catalog.remove(id);
-        await cleanupRuntimePaths(runtime);
-        throw err;
+        let removalError: unknown;
+        try {
+          await this.catalog.remove(id);
+        } catch (rollbackErr) {
+          removalError = rollbackErr;
+        }
+        try {
+          await cleanupRuntimePaths(runtime);
+        } catch {
+          // best-effort cleanup; surface the original failure below
+        }
+        throw removalError ?? err;
       }
       return record;
     });

@@ -3,13 +3,14 @@
 ## Branch
 
 - `feature/instance-manager-foundation`
-- PR: (pending)
+- PR: #25
 - Last updated: 2026-03-08
 
 ## Status
 
 - In progress; implementing the non-risky `InstanceManager` foundation for mule-doctor-managed local test instances.
 - PR #24 is merged to `main`.
+- PR #25 is open for this branch.
 
 ## Completed Work
 
@@ -127,6 +128,7 @@
 - Keep external rust-mule nodes observer-only, while allowing future controlled lifecycle actions only for mule-doctor-owned local test instances.
 - Use a bounded `InstanceManager` as the future control plane rather than allowing the UI to shell out directly.
 - Build `InstanceManager` in two steps: first metadata/path/port/config planning, then process lifecycle once rust-mule startup assumptions are verified.
+- Port allocation in this phase guarantees non-overlap inside the managed-instance catalog only; probing host-level port availability is deferred until launch wiring.
 
 ## Validation
 
