@@ -41,6 +41,7 @@ export interface RuntimeState {
   lastAlert?: string;
   activeDiagnosticTarget?: DiagnosticTargetRef;
   lastObservedTarget?: DiagnosticTargetRef;
+  lastTargetFailureReason?: string;
   usage?: RuntimeUsageState;
 }
 

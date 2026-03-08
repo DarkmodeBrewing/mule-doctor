@@ -204,6 +204,7 @@ export class Observer {
         lastHealthScore: health.score,
         logOffset: resolvedTarget.logOffset,
         lastObservedTarget: resolvedTarget.target,
+        lastTargetFailureReason: undefined,
       };
       await this.runtimeStore.updateState(statePatch);
 
@@ -278,6 +279,7 @@ export class Observer {
         lastRun: timestamp,
         lastHealthScore: 0,
         lastObservedTarget: target.target,
+        lastTargetFailureReason: reason,
         logOffset: undefined,
       });
     }

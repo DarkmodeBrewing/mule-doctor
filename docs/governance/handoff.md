@@ -174,3 +174,7 @@
   - add a dedicated scheduled-target status card
   - mark managed-instance entries that are currently the scheduled target
   - show when the scheduled managed target is currently unavailable/degraded
+- Persist and surface the last observer target failure reason:
+  - store `lastTargetFailureReason` in runtime state
+  - expose it through `/api/health`
+  - render it in the scheduled-target card and health summary

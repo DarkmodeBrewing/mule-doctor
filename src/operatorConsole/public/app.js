@@ -204,6 +204,9 @@ function renderHealth(data) {
         typeof data.observer.lastHealthScore === "number" ? data.observer.lastHealthScore : "unknown"
       }`,
     );
+    if (data.observer.lastTargetFailureReason) {
+      observerLines.push(`Last failure reason: ${data.observer.lastTargetFailureReason}`);
+    }
   }
 
   setText(
@@ -344,6 +347,9 @@ function renderTargetStatusCard(errorText) {
     ),
   );
   lines.push(renderTargetStatusLine("Last run", currentObserver?.lastRun || "unknown"));
+  if (currentObserver?.lastTargetFailureReason) {
+    lines.push(renderTargetStatusLine("Reason", currentObserver.lastTargetFailureReason));
+  }
   if (isUnavailableObservedTarget(currentScheduledTarget)) {
     lines.push(renderTargetStatusLine("State", "unavailable"));
     element.className = "target-status-card";

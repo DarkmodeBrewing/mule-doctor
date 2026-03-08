@@ -180,6 +180,7 @@ test("Observer persists health score and includes it in cycle context", async ()
     assert.equal(typeof state.lastHealthScore, "number");
     assert.equal(state.logOffset, 321);
     assert.deepEqual(state.lastObservedTarget, { kind: "external" });
+    assert.equal(state.lastTargetFailureReason, undefined);
 
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
@@ -221,6 +222,7 @@ test("Observer routes cycle analysis through the resolved managed target", async
     const state = await runtimeStore.loadState();
     assert.deepEqual(state.lastObservedTarget, { kind: "managed_instance", instanceId: "a" });
     assert.equal(state.logOffset, undefined);
+    assert.equal(state.lastTargetFailureReason, undefined);
 
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
@@ -257,6 +259,7 @@ test("Observer reports unavailable active targets without stopping the loop", as
       kind: "managed_instance",
       instanceId: "missing",
     });
+    assert.match(state.lastTargetFailureReason, /Managed instance missing is stopped/);
 
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
