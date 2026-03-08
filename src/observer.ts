@@ -278,6 +278,7 @@ export class Observer {
         lastRun: timestamp,
         lastHealthScore: 0,
         lastObservedTarget: target.target,
+        logOffset: undefined,
       });
     }
 

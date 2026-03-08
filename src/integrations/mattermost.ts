@@ -90,7 +90,7 @@ export class MattermostClient {
     const targetLine = report.targetLabel ? `Target: ${report.targetLabel}` : undefined;
     const payload: MattermostPayload = {
       text: ["mule-doctor", targetLine, "", `Node status: ${status}`]
-        .filter((line): line is string => Boolean(line))
+        .filter((line): line is string => line !== undefined)
         .join("\n"),
       attachments: [
         {

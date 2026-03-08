@@ -364,7 +364,6 @@ async function refreshAll() {
       refreshLlmList(),
       refreshProposalList(),
       refreshInstances(),
-      refreshObserverTarget(),
     ]);
   } catch (err) {
     setText("health", `Refresh failed: ${String(err)}`);
