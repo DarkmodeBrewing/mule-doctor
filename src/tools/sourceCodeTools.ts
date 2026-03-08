@@ -18,7 +18,7 @@ const RUST_PROJECT_EXTENSIONS = new Set([".rs", ".toml", ".md", ".txt", ".sh"]);
 const RUST_PROJECT_FILENAMES = new Set(["Cargo.toml", "Cargo.lock", "Makefile", "Dockerfile"]);
 const SENSITIVE_PATH_PATTERNS = [
   /(^|\/)\.git(\/|$)/i,
-  /(^|\/)\.env(\..*)?$/i,
+  /(^|\/)\.env(\..*)?(\/|$)/i,
   /\.(pem|key|p12|pfx)$/i,
 ];
 
@@ -200,7 +200,8 @@ export class SourceCodeTools {
     if (!diff) {
       throw new Error("propose_patch requires non-empty diff");
     }
-    const bytes = Buffer.byteLength(diff, "utf8");
+    const artifactContent = `${diff}\n`;
+    const bytes = Buffer.byteLength(artifactContent, "utf8");
     if (bytes > MAX_PROPOSAL_BYTES) {
       throw new Error(
         `propose_patch diff exceeds ${MAX_PROPOSAL_BYTES} bytes; split into smaller proposals`,
@@ -212,7 +213,7 @@ export class SourceCodeTools {
     const timestamp = new Date().toISOString().replace(/[.:]/g, "-");
     const artifactName = `proposal-${timestamp}.patch`;
     const artifactAbsPath = resolve(this.proposalDir, artifactName);
-    await writeFile(artifactAbsPath, diff + "\n", "utf8");
+    await writeFile(artifactAbsPath, artifactContent, "utf8");
 
     return {
       mode: "proposal_only",

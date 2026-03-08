@@ -147,8 +147,14 @@ test("SourceCodeTools searchCode scans Rust-project text files", async () => {
   const tmp = await makeTempSourceDir();
   try {
     await mkdir(join(tmp.dir, "src"), { recursive: true });
+    await mkdir(join(tmp.dir, "config", ".env"), { recursive: true });
     await writeFile(join(tmp.dir, "src", "lib.rs"), 'let id = "needle";\n', "utf8");
     await writeFile(join(tmp.dir, ".env"), 'SECRET_NEEDLE="needle"\n', "utf8");
+    await writeFile(
+      join(tmp.dir, "config", ".env", "secrets.rs"),
+      'pub const SHOULD_NOT_APPEAR: &str = "needle";\n',
+      "utf8",
+    );
     await writeFile(join(tmp.dir, "blob.json"), '{"needle": true}\n', "utf8");
 
     const tools = new SourceCodeTools({ sourcePath: tmp.dir });
@@ -164,7 +170,9 @@ test("SourceCodeTools searchCode scans Rust-project text files", async () => {
 test("SourceCodeTools blocks sensitive files for read_file and git_blame", async () => {
   const tmp = await makeTempSourceDir();
   try {
+    await mkdir(join(tmp.dir, "config", ".env"), { recursive: true });
     await writeFile(join(tmp.dir, ".env"), "API_KEY=secret\n", "utf8");
+    await writeFile(join(tmp.dir, "config", ".env", "secrets.toml"), 'token = "secret"\n', "utf8");
     execFileSync("git", ["init"], { cwd: tmp.dir });
     execFileSync("git", ["config", "user.name", "Mule Doctor"], { cwd: tmp.dir });
     execFileSync("git", ["config", "user.email", "mule@example.com"], { cwd: tmp.dir });
@@ -173,7 +181,15 @@ test("SourceCodeTools blocks sensitive files for read_file and git_blame", async
 
     const tools = new SourceCodeTools({ sourcePath: tmp.dir });
     await assert.rejects(() => tools.readFile(".env"), /read_file blocked for sensitive path/);
+    await assert.rejects(
+      () => tools.readFile("config/.env/secrets.toml"),
+      /read_file blocked for sensitive path/,
+    );
     await assert.rejects(() => tools.gitBlame(".env", 1), /git_blame blocked for sensitive path/);
+    await assert.rejects(
+      () => tools.gitBlame("config/.env/secrets.toml", 1),
+      /git_blame blocked for sensitive path/,
+    );
   } finally {
     await tmp.cleanup();
   }

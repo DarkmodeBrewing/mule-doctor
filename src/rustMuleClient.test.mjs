@@ -305,3 +305,12 @@ test("RustMuleClient returns graceful fallback when events endpoint is missing (
   assert.equal(stats.matchPerSent, 0);
   assert.equal(stats.timeoutsPerSent, 0);
 });
+
+test("RustMuleClient surfaces 403 for core read endpoints", async () => {
+  global.fetch = async () => makeJsonResponse({ code: 403 }, 403);
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  await assert.rejects(() => client.getNodeInfo(), /failed with status 403/);
+  await assert.rejects(() => client.getPeers(), /failed with status 403/);
+  await assert.rejects(() => client.getLookupStats(), /failed with status 403/);
+});

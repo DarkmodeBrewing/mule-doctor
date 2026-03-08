@@ -511,7 +511,6 @@ function isRecoverableReadError(err: unknown): boolean {
     return false;
   }
   return (
-    err.status === 403 ||
     err.status === 404 ||
     err.status === 429 ||
     err.status === 500 ||

@@ -83,9 +83,12 @@ export class LogWatcher {
         }
       }
       // Only advance offset after a successful stream read to avoid skipping bytes.
-      this.lastSize = fileSize;
+      this.lastSize = start + stream.bytesRead;
     } catch (err) {
       log("warn", "logWatcher", `Failed to read ${this.filePath}: ${String(err)}`);
+    } finally {
+      rl.close();
+      stream.destroy();
     }
   }
 }

@@ -3,7 +3,7 @@
 ## Branch
 
 - `feature/hardening-bugs-security-error-handling`
-- PR: (pending)
+- PR: #20
 - Last updated: 2026-03-08
 
 ## Status
@@ -63,6 +63,13 @@
   - blocked sensitive paths in source tools (`read_file`/`git_blame`) and excluded sensitive files from search scanning.
   - added `propose_patch` maximum diff size enforcement to prevent oversized proposal artifacts.
   - expanded tests for timeout handling and source-tool sensitive path protections.
+- Addressed PR #20 review feedback:
+  - exported `RUST_MULE_TOKEN_PATH` in `entrypoint.sh` so the Node process receives the validated value.
+  - widened sensitive `.env` path detection to block `.env` directory segments as well as files.
+  - aligned `propose_patch` byte-limit enforcement with exact bytes written to disk.
+  - updated `LogWatcher` to advance offsets by consumed bytes and always close/destroy stream resources in `finally`.
+  - made core read endpoints treat HTTP 403 as non-recoverable (while keeping debug endpoint fallback behavior).
+  - added test coverage for `.env` directory blocking, log-watcher offset handling, and core-read 403 behavior.
 
 ## Key Decisions
 
@@ -78,5 +85,5 @@
 
 ## Next Steps
 
-- Open PR for security/error-handling hardening and process review feedback.
+- Resolve remaining PR #20 review threads and merge.
 - After merge, continue deferred runtime validation tasks documented in `docs/TASK.md`.

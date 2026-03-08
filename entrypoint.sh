@@ -65,6 +65,8 @@ else
   exit 1
 fi
 
+export RUST_MULE_TOKEN_PATH
+
 echo "Starting mule-doctor..."
 node /app/dist/index.js &
 DOCTOR_PID=$!
