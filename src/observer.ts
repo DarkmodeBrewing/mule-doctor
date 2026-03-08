@@ -347,6 +347,7 @@ export class Observer {
           startedAt,
           completedAt: timestamp,
           outcome: "unavailable",
+          lastRun: timestamp,
         }),
       });
     }
@@ -383,6 +384,7 @@ export class Observer {
         startedAt,
         completedAt,
         outcome: "error",
+        lastRun: completedAt,
       }),
     });
   }

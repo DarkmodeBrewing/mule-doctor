@@ -269,6 +269,7 @@ test("Observer reports unavailable active targets without stopping the loop", as
       kind: "managed_instance",
       instanceId: "missing",
     });
+    assert.equal(typeof state.lastRun, "string");
     assert.match(state.lastTargetFailureReason, /Managed instance missing is stopped/);
     assert.equal(state.currentCycleStartedAt, undefined);
     assert.equal(state.currentCycleTarget, undefined);
@@ -316,6 +317,7 @@ test("Observer records scheduler error outcomes for failed cycles", async () => 
 
     const state = await runtimeStore.loadState();
     assert.equal(state.lastCycleOutcome, "error");
+    assert.equal(typeof state.lastRun, "string");
     assert.equal(state.currentCycleStartedAt, undefined);
     assert.equal(state.currentCycleTarget, undefined);
     assert.match(state.lastTargetFailureReason, /\[redacted\]/);
