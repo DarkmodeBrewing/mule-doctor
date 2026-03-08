@@ -228,3 +228,29 @@ Acceptance criteria:
 
 - Startup failures surface concrete missing prerequisites.
 - Operational setup issues are identified before observer loop begins.
+
+## Task D: Operator Observability Web Console
+
+1. Add a small, read-only web server + UI for operators to inspect:
+   - mule-doctor app logs
+   - LLM telemetry logs
+   - saved patch proposal artifacts
+2. Provide minimal API/UI surface for:
+   - health/runtime status
+   - tail/browse logs
+   - list/view/download proposal files
+3. Container/runtime access requirements:
+   - expose a dedicated UI port from the mule-doctor container
+   - map that port in `docker-compose.yml` for host/browser access
+   - make bind address and port configurable by env vars
+4. Security and safety constraints:
+   - disabled by default
+   - default bind to loopback unless explicitly configured
+   - redact token/secrets from rendered log content
+   - path-safe reads scoped to allowed data directories only
+
+Acceptance criteria:
+
+- Operator can access the UI in a browser through the container-exposed port.
+- UI supports log and proposal inspection without shell access.
+- App remains running if UI server fails to start; failure is logged.

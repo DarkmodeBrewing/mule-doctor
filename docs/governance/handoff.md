@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/hardening-bugs-security-error-handling`
-- PR: #20
+- `feature/docs-operator-observability-console`
+- PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; branch applies security and reliability hardening across API, source tools, observer paths, and integrations.
-- Prior OpenAI SDK migration from PR #19 remains merged in `main`.
+- Documentation update branch to capture next-phase operator observability work.
+- PR #20 is merged to `main` (security/reliability hardening complete).
 
 ## Completed Work
 
@@ -70,6 +70,10 @@
   - updated `LogWatcher` to advance offsets by consumed bytes and always close/destroy stream resources in `finally`.
   - made core read endpoints treat HTTP 403 as non-recoverable (while keeping debug endpoint fallback behavior).
   - added test coverage for `.env` directory blocking, log-watcher offset handling, and core-read 403 behavior.
+- Added deferred backlog item in `docs/TASK.md` for an operator observability web console:
+  - browser UI for app logs, LLM logs, and patch proposal artifacts.
+  - explicit requirement to expose a dedicated container port and map it in docker-compose.
+  - security defaults and read-only constraints documented.
 
 ## Key Decisions
 
@@ -85,5 +89,5 @@
 
 ## Next Steps
 
-- Resolve remaining PR #20 review threads and merge.
-- After merge, continue deferred runtime validation tasks documented in `docs/TASK.md`.
+- Open and merge documentation PR for `Task D` observability console planning.
+- Start implementation in a feature branch once approved.
