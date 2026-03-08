@@ -2,6 +2,7 @@ import { open, stat } from "node:fs/promises";
 import { Analyzer } from "../llm/analyzer.js";
 import type { UsageTracker } from "../llm/usageTracker.js";
 import { ToolRegistry, type PatchProposalNotifier } from "../tools/toolRegistry.js";
+import { redactLine, redactText } from "../logs/redaction.js";
 import type {
   ManagedInstanceAnalysisResult,
   ManagedInstanceDiagnosticSnapshot,
@@ -64,8 +65,7 @@ export class ManagedInstanceAnalysisService {
 
     const logSource = new StaticLogSource(await readTailLines(record.runtime.logPath, DEFAULT_LOG_LINES));
     const client = this.diagnostics.getClientForInstance(record);
-    await client.loadToken();
-    const tools = new ToolRegistry(client, logSource as never, undefined, {
+    const tools = new ToolRegistry(client, logSource, undefined, {
       sourcePath: this.sourcePath,
       proposalDir: this.proposalDir,
       patchProposalNotifier: this.patchProposalNotifier,
@@ -80,7 +80,7 @@ export class ManagedInstanceAnalysisService {
       instanceId,
       analyzedAt: new Date().toISOString(),
       available: true,
-      summary,
+      summary: redactText(summary),
       snapshot,
     };
   }
@@ -124,7 +124,7 @@ async function readTailLines(filePath: string, lineLimit: number): Promise<strin
     }
     return text
       .split(/\r?\n/)
-      .map((line) => line.trimEnd())
+      .map((line) => redactLine(line.trimEnd()))
       .filter((line) => line.length > 0)
       .slice(-lineLimit);
   } finally {
