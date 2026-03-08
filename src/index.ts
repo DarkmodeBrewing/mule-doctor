@@ -63,7 +63,12 @@ function parseBooleanEnv(name: string): boolean | undefined {
 }
 
 async function main(): Promise<void> {
-  const appLogBuffer = installStdoutLogBuffer(parsePositiveIntEnv("MULE_DOCTOR_UI_LOG_BUFFER_LINES"));
+  const uiEnabled = parseBooleanEnv("MULE_DOCTOR_UI_ENABLED") ?? false;
+  const uiLogBufferLines = parsePositiveIntEnv("MULE_DOCTOR_UI_LOG_BUFFER_LINES");
+  const appLogBuffer =
+    uiEnabled || uiLogBufferLines !== undefined
+      ? installStdoutLogBuffer(uiLogBufferLines)
+      : undefined;
   log("info", "index", "mule-doctor starting");
 
   const apiUrl = requireEnv("RUST_MULE_API_URL");
@@ -85,7 +90,6 @@ async function main(): Promise<void> {
   const sourcePath = optionalEnv("RUST_MULE_SOURCE_PATH");
   const resolvedDataDir = dataDir ?? "/data/mule-doctor";
   const proposalDir = `${resolvedDataDir}/proposals`;
-  const uiEnabled = parseBooleanEnv("MULE_DOCTOR_UI_ENABLED") ?? false;
   const uiHost = optionalEnv("MULE_DOCTOR_UI_HOST") ?? "127.0.0.1";
   const uiPort = parsePositiveIntEnv("MULE_DOCTOR_UI_PORT") ?? 18080;
 
@@ -146,7 +150,7 @@ async function main(): Promise<void> {
       rustMuleLogPath: logPath,
       llmLogDir: llmLogDir ?? resolvedDataDir,
       proposalDir,
-      getAppLogs: (n) => appLogBuffer.getRecentLines(n),
+      getAppLogs: (n) => appLogBuffer?.getRecentLines(n) ?? [],
     });
     try {
       await operatorConsole.start();
@@ -158,16 +162,33 @@ async function main(): Promise<void> {
   }
 
   // Graceful shutdown
+  let shuttingDown = false;
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
-      log("info", "index", `Received ${signal}, shutting down`);
-      observer.stop();
-      logWatcher.stop();
-      operatorConsole
-        ?.stop()
-        .catch((err) => log("warn", "index", `Operator console shutdown failed: ${String(err)}`));
-      appLogBuffer.restore();
-      process.exit(0);
+      if (shuttingDown) return;
+      shuttingDown = true;
+      void (async () => {
+        log("info", "index", `Received ${signal}, shutting down`);
+        observer.stop();
+        logWatcher.stop();
+        if (operatorConsole) {
+          try {
+            const shutdownTimeoutMs = 5000;
+            await Promise.race([
+              operatorConsole.stop(),
+              new Promise<void>((resolve) => setTimeout(resolve, shutdownTimeoutMs)),
+            ]);
+          } catch (err) {
+            log("warn", "index", `Operator console shutdown failed: ${String(err)}`);
+          }
+        }
+        appLogBuffer?.restore();
+        process.exit(0);
+      })().catch((err) => {
+        log("error", "index", `Error during shutdown: ${String(err)}`);
+        appLogBuffer?.restore();
+        process.exit(1);
+      });
     });
   }
 

@@ -45,6 +45,8 @@ test("OperatorConsoleServer serves health, logs, and proposal metadata", async (
     const baseUrl = server.publicAddress();
     const healthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(healthRes.status, 200);
+    assert.equal(healthRes.headers.get("cache-control"), "no-store");
+    assert.equal(healthRes.headers.get("x-content-type-options"), "nosniff");
     const health = await healthRes.json();
     assert.equal(health.ok, true);
 
@@ -67,6 +69,9 @@ test("OperatorConsoleServer serves health, logs, and proposal metadata", async (
 
     const invalidPathRes = await fetch(`${baseUrl}/api/proposals/%2e%2e%2fsecret.txt`);
     assert.equal(invalidPathRes.status, 400);
+
+    const invalidDriveLikePathRes = await fetch(`${baseUrl}/api/proposals/D%3Asecret.patch`);
+    assert.equal(invalidDriveLikePathRes.status, 400);
 
     await server.stop();
   } finally {

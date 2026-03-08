@@ -5,7 +5,7 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { open, readdir, stat } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Stats } from "node:fs";
 
 const DEFAULT_UI_HOST = "127.0.0.1";
@@ -289,14 +289,14 @@ async function readFromAllowedDir(
   maxBytes: number,
 ): Promise<SafeReadResult> {
   const fileName = fileNameRaw.trim();
-  if (!fileName || !/^[a-zA-Z0-9._:-]+$/.test(fileName)) {
+  if (!fileName || !/^[a-zA-Z0-9._-]+$/.test(fileName)) {
     throw new RequestError(400, `invalid file name: ${fileNameRaw}`);
   }
 
   const base = resolve(baseDir);
   const target = resolve(baseDir, fileName);
   const rel = relative(base, target);
-  if (!rel || rel.startsWith("..")) {
+  if (rel.startsWith("..") || isAbsolute(rel) || (!target.startsWith(base + sep) && target !== base)) {
     throw new RequestError(400, "path escapes allowed directory");
   }
 
@@ -366,12 +366,18 @@ function redactText(text: string): string {
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Content-Type-Options", "nosniff");
   res.end(JSON.stringify(payload));
 }
 
 function sendHtml(res: ServerResponse, html: string): void {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Content-Type-Options", "nosniff");
   res.end(html);
 }
 

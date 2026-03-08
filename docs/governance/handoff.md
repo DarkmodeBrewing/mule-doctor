@@ -86,9 +86,16 @@
   - wired console startup in `index.ts` behind env toggles, with graceful failure behavior (app continues if UI fails to start).
   - documented and wired container access:
     - Dockerfile `EXPOSE 17835 18080`
-    - compose maps UI port and defaults UI bind host to `0.0.0.0` for browser access
+    - compose maps UI port but keeps the UI disabled by default; enabling host access requires explicit `MULE_DOCTOR_UI_ENABLED=true`
     - env vars added: `MULE_DOCTOR_UI_ENABLED`, `MULE_DOCTOR_UI_HOST`, `MULE_DOCTOR_UI_PORT`, `MULE_DOCTOR_UI_LOG_BUFFER_LINES`
   - added integration-style test coverage for console health/log/proposal endpoints.
+  - addressed PR #22 review feedback:
+    - only install stdout log buffering when the UI or explicit buffer sizing is enabled.
+    - await operator console shutdown with timeout before process exit.
+    - hardened operator console responses with `Cache-Control: no-store`, `Pragma: no-cache`, and `X-Content-Type-Options: nosniff`.
+    - tightened filename validation for console file reads and strengthened resolved-path escape checks.
+    - added focused test coverage for stdout log buffer chunk handling and restore behavior.
+    - updated compose/docs so unauthenticated UI exposure is opt-in instead of default.
 
 ## Key Decisions
 
@@ -104,5 +111,5 @@
 
 ## Next Steps
 
-- Open PR for operator console phase 1 implementation and process review feedback.
+- Process remaining PR feedback for operator console phase 1 and merge once approved.
 - Phase 2 target: add auth guard for UI and live streaming (SSE/WebSocket) for logs.
