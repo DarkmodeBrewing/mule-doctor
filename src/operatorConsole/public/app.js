@@ -69,6 +69,46 @@ function renderFileList(targetId, files, onClick) {
   }
 }
 
+function renderOperatorEvents(events, errorText) {
+  const list = document.getElementById("operator-events");
+  list.replaceChildren();
+
+  if (errorText) {
+    const item = document.createElement("li");
+    item.className = "muted";
+    item.textContent = errorText;
+    list.appendChild(item);
+    return;
+  }
+
+  if (!events.length) {
+    const item = document.createElement("li");
+    item.className = "muted";
+    item.textContent = "No operator events recorded yet.";
+    list.appendChild(item);
+    return;
+  }
+
+  for (const event of events.slice().reverse()) {
+    const item = document.createElement("li");
+    const header = document.createElement("div");
+    const title = document.createElement("strong");
+    const meta = document.createElement("span");
+    const body = document.createElement("div");
+    header.className = "event-line";
+    body.className = "file-meta";
+    title.textContent = event.type;
+    meta.className = "event-meta";
+    meta.textContent = new Date(event.timestamp).toLocaleString();
+    body.textContent = event.message;
+    header.appendChild(title);
+    header.appendChild(meta);
+    item.appendChild(header);
+    item.appendChild(body);
+    list.appendChild(item);
+  }
+}
+
 function targetLabel(target) {
   if (!target || target.kind === "external") {
     return "external configured rust-mule client";
@@ -269,6 +309,15 @@ async function refreshProposalList() {
   });
 }
 
+async function refreshOperatorEvents() {
+  try {
+    const data = await fetchJson("/api/operator/events?limit=30");
+    renderOperatorEvents(data.events || []);
+  } catch (err) {
+    renderOperatorEvents([], `Failed to load operator events: ${String(err)}`);
+  }
+}
+
 async function postJson(url, payload = {}) {
   const res = await fetch(url, {
     method: "POST",
@@ -319,6 +368,7 @@ async function updateObserverTarget(target) {
       `diagnostic target updated to ${describeTarget(data.target).replace("Active diagnostic target: ", "")}`,
     );
     await refreshInstances();
+    await refreshOperatorEvents();
   } catch (err) {
     setInstanceFeedback(String(err), true);
   }
@@ -469,6 +519,7 @@ async function runObserverNow() {
     setInstanceFeedback("scheduled observer cycle triggered");
     await refreshHealth();
     await refreshInstances();
+    await refreshOperatorEvents();
   } catch (err) {
     setInstanceFeedback(String(err), true);
     await refreshHealth();
@@ -571,6 +622,7 @@ setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
 renderTargetStatusCard();
 renderSchedulerStatusCard();
+renderOperatorEvents([]);
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });
@@ -598,6 +650,7 @@ async function refreshAll() {
       refreshLlmList(),
       refreshProposalList(),
       refreshInstances(),
+      refreshOperatorEvents(),
     ]);
   } catch (err) {
     setText("health", `Refresh failed: ${String(err)}`);
@@ -612,6 +665,7 @@ document.getElementById("refresh-proposals").onclick = refreshProposalList;
 document.getElementById("refresh-instances").onclick = refreshInstances;
 document.getElementById("refresh-target-status").onclick = refreshHealth;
 document.getElementById("refresh-scheduler-status").onclick = refreshHealth;
+document.getElementById("refresh-operator-events").onclick = refreshOperatorEvents;
 document.getElementById("run-observer-now").onclick = () => {
   void runObserverNow();
 };

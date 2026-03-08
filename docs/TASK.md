@@ -331,6 +331,11 @@ Acceptance criteria:
    - current cycle target
    - last cycle duration
    - last cycle outcome
+9. Add a bounded operator event timeline:
+   - target changes
+   - run-now requests
+   - cycle start
+   - cycle completion outcome
 
 Acceptance criteria:
 
@@ -340,3 +345,4 @@ Acceptance criteria:
 - Reports and runtime state identify which target was observed.
 - Operator can trigger a one-off scheduled-cycle run without changing the background scheduler model.
 - Operator console shows scheduler execution state without requiring raw log inspection.
+- Operator console shows a bounded event timeline for recent control and scheduler actions.

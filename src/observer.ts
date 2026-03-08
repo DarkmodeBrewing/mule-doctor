@@ -18,6 +18,7 @@ import type {
 import { getNetworkHealth } from "./health/healthScore.js";
 import type { NetworkHealthResult } from "./health/healthScore.js";
 import { redactText } from "./logs/redaction.js";
+import type { OperatorEventLog } from "./operatorConsole/operatorEventLog.js";
 import type {
   ObserverTargetDescriptor,
   ObserverTargetRuntime,
@@ -33,6 +34,7 @@ export interface ObserverConfig {
   runtimeStore?: RuntimeStore;
   targetResolver?: ObserverTargetResolver;
   analyzerFactory?: AnalyzerFactory;
+  eventLog?: OperatorEventLog;
 }
 
 export interface ObserverStatus {
@@ -69,6 +71,7 @@ export class Observer {
   private readonly runtimeStore: RuntimeStore | undefined;
   private readonly targetResolver: ObserverTargetResolver | undefined;
   private readonly analyzerFactory: AnalyzerFactory | undefined;
+  private readonly eventLog: OperatorEventLog | undefined;
   private timer: NodeJS.Timeout | undefined;
   private started = false;
   private cycleInFlight: Promise<void> | undefined;
@@ -85,6 +88,7 @@ export class Observer {
     this.runtimeStore = config.runtimeStore;
     this.targetResolver = config.targetResolver;
     this.analyzerFactory = config.analyzerFactory;
+    this.eventLog = config.eventLog;
   }
 
   /** Start the periodic observation loop. */
@@ -174,6 +178,11 @@ export class Observer {
       const targetDescriptor = await this.describeTarget();
       const cycleStartedAt = new Date().toISOString();
       await this.markCycleStarted(cycleStartedAt, targetDescriptor.target);
+      await this.eventLog?.append({
+        type: "observer_cycle_started",
+        message: `Observer cycle started for ${targetDescriptor.label}`,
+        target: targetDescriptor.target,
+      });
 
       let target: ObserverTargetRuntime | undefined;
       try {
@@ -211,6 +220,12 @@ export class Observer {
       await this.finishCycle({
         target: targetDescriptor.target,
         startedAt: cycleStartedAt,
+        outcome: "success",
+      });
+      await this.eventLog?.append({
+        type: "observer_cycle_completed",
+        message: `Observer cycle completed successfully for ${targetDescriptor.label}`,
+        target: targetDescriptor.target,
         outcome: "success",
       });
     } catch (err) {
@@ -360,6 +375,12 @@ export class Observer {
       targetLabel: target.label,
       healthScore: 0,
     });
+    await this.eventLog?.append({
+      type: "observer_cycle_completed",
+      message: `Observer cycle unavailable for ${target.label}: ${reason}`,
+      target: target.target,
+      outcome: "unavailable",
+    });
   }
 
   private async handleCycleError(err: unknown): Promise<void> {
@@ -386,6 +407,12 @@ export class Observer {
         outcome: "error",
         lastRun: completedAt,
       }),
+    });
+    await this.eventLog?.append({
+      type: "observer_cycle_completed",
+      message: `Observer cycle failed: ${reason}`,
+      target,
+      outcome: "error",
     });
   }
 

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Observer } from "../dist/observer.js";
+import { OperatorEventLog } from "../dist/operatorConsole/operatorEventLog.js";
 import { RuntimeStore } from "../dist/storage/runtimeStore.js";
 
 async function makeTempDir() {
@@ -209,6 +210,7 @@ test("Observer routes cycle analysis through the resolved managed target", async
     const mattermost = new CountingMattermost();
     const observer = new Observer(new StubAnalyzer(), mattermost, {
       runtimeStore,
+      eventLog: new OperatorEventLog(runtimeStore),
       targetResolver: new StubTargetResolver({
         target: { kind: "managed_instance", instanceId: "a" },
         label: "managed instance a",
@@ -237,6 +239,11 @@ test("Observer routes cycle analysis through the resolved managed target", async
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
     assert.deepEqual(history[0].target, { kind: "managed_instance", instanceId: "a" });
+    const events = await runtimeStore.loadEvents();
+    assert.equal(events.length, 2);
+    assert.equal(events[0].type, "observer_cycle_started");
+    assert.equal(events[1].type, "observer_cycle_completed");
+    assert.equal(events[1].outcome, "success");
   } finally {
     await tmp.cleanup();
   }
@@ -252,6 +259,7 @@ test("Observer reports unavailable active targets without stopping the loop", as
     const mattermost = new CountingMattermost();
     const observer = new Observer(new StubAnalyzer(), mattermost, {
       runtimeStore,
+      eventLog: new OperatorEventLog(runtimeStore),
       targetResolver: new FailingTargetResolver(),
       intervalMs: 999999,
     });
@@ -283,6 +291,9 @@ test("Observer reports unavailable active targets without stopping the loop", as
       kind: "managed_instance",
       instanceId: "missing",
     });
+    const events = await runtimeStore.loadEvents();
+    assert.equal(events.length, 2);
+    assert.equal(events[1].outcome, "unavailable");
   } finally {
     await tmp.cleanup();
   }
@@ -309,6 +320,7 @@ test("Observer records scheduler error outcomes for failed cycles", async () => 
         client: new StubClient(),
         logWatcher: new StubLogWatcher(),
         runtimeStore,
+        eventLog: new OperatorEventLog(runtimeStore),
         intervalMs: 999999,
       },
     );
@@ -321,6 +333,9 @@ test("Observer records scheduler error outcomes for failed cycles", async () => 
     assert.equal(state.currentCycleStartedAt, undefined);
     assert.equal(state.currentCycleTarget, undefined);
     assert.match(state.lastTargetFailureReason, /\[redacted\]/);
+    const events = await runtimeStore.loadEvents();
+    assert.equal(events.length, 2);
+    assert.equal(events[1].outcome, "error");
   } finally {
     await tmp.cleanup();
   }

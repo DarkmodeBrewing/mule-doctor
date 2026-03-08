@@ -14,6 +14,7 @@ import type {
   ManagedInstanceDiagnosticSnapshot,
   ManagedInstanceRecord,
   ObserverCycleOutcome,
+  OperatorEventEntry,
   RuntimeState,
 } from "../types/contracts.js";
 
@@ -94,6 +95,16 @@ export interface OperatorConsoleConfig {
   managedInstanceAnalysis?: ManagedInstanceAnalysis;
   diagnosticTarget?: DiagnosticTargetControl;
   observerControl?: ObserverControl;
+  operatorEvents?: {
+    listRecent(limit?: number): Promise<OperatorEventEntry[]>;
+    append(input: {
+      type: OperatorEventEntry["type"];
+      message: string;
+      target?: DiagnosticTargetRef;
+      outcome?: ObserverCycleOutcome;
+      actor?: string;
+    }): Promise<void>;
+  };
 }
 
 export class OperatorConsoleServer {
@@ -112,6 +123,9 @@ export class OperatorConsoleServer {
   private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
   private readonly diagnosticTarget: DiagnosticTargetControl | undefined;
   private readonly observerControl: ObserverControl | undefined;
+  private readonly operatorEvents:
+    | OperatorConsoleConfig["operatorEvents"]
+    | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -139,6 +153,7 @@ export class OperatorConsoleServer {
     this.managedInstanceAnalysis = config.managedInstanceAnalysis;
     this.diagnosticTarget = config.diagnosticTarget;
     this.observerControl = config.observerControl;
+    this.operatorEvents = config.operatorEvents;
     this.startedAt = new Date().toISOString();
   }
 
@@ -278,6 +293,11 @@ export class OperatorConsoleServer {
 
     if (path === "/api/observer/run") {
       await this.handleObserverRun(req, res);
+      return;
+    }
+
+    if (path === "/api/operator/events") {
+      await this.handleOperatorEvents(req, url, res);
       return;
     }
 
@@ -422,10 +442,46 @@ export class OperatorConsoleServer {
       sendJson(res, 409, { ok: false, error: result.reason ?? "observer run not accepted" });
       return;
     }
+    const target = this.diagnosticTarget ? await this.diagnosticTarget.getActiveTarget() : undefined;
+    await this.operatorEvents?.append({
+      type: "observer_run_requested",
+      message: `Operator triggered a scheduled observer cycle for ${describeTarget(target)}`,
+      target,
+      actor: "operator_console",
+    });
     sendJson(res, 202, {
       ok: true,
       accepted: true,
       scheduler: this.observerControl.getStatus(),
+    });
+  }
+
+  private async handleOperatorEvents(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.operatorEvents) {
+      sendJson(res, 501, { ok: false, error: "operator event history unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(
+      parseInt(url.searchParams.get("limit") ?? "", 10),
+      30,
+      1,
+      200,
+    );
+    const events = await this.operatorEvents.listRecent(limit);
+    sendJson(res, 200, {
+      ok: true,
+      events: events.map((event) => ({
+        ...event,
+        message: redactText(event.message),
+      })),
     });
   }
 
@@ -790,6 +846,13 @@ export class OperatorConsoleServer {
 
 function sanitizeCycleOutcome(value: RuntimeState["lastCycleOutcome"]): ObserverCycleOutcome | undefined {
   return value === "success" || value === "unavailable" || value === "error" ? value : undefined;
+}
+
+function describeTarget(target: DiagnosticTargetRef | undefined): string {
+  if (!target || target.kind === "external") {
+    return "external configured rust-mule client";
+  }
+  return `managed instance ${target.instanceId}`;
 }
 
 async function listFiles(
