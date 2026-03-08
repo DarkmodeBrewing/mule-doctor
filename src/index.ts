@@ -15,6 +15,7 @@ import { Observer } from "./observer.js";
 import { RuntimeStore } from "./storage/runtimeStore.js";
 import { installStdoutLogBuffer } from "./operatorConsole/logBuffer.js";
 import { OperatorConsoleServer } from "./operatorConsole/server.js";
+import { InstanceManager } from "./instances/instanceManager.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -93,6 +94,12 @@ async function main(): Promise<void> {
   const uiHost = optionalEnv("MULE_DOCTOR_UI_HOST") ?? "127.0.0.1";
   const uiPort = parsePositiveIntEnv("MULE_DOCTOR_UI_PORT") ?? 18080;
   const uiAuthToken = uiEnabled ? requireEnv("MULE_DOCTOR_UI_AUTH_TOKEN") : undefined;
+  const managedRustMuleBinaryPath =
+    optionalEnv("MULE_DOCTOR_MANAGED_RUST_MULE_BINARY_PATH") ??
+    optionalEnv("MANAGED_RUST_MULE_BINARY_PATH");
+  const managedInstanceRootDir = optionalEnv("MULE_DOCTOR_MANAGED_INSTANCE_ROOT");
+  const managedApiPortStart = parsePositiveIntEnv("MULE_DOCTOR_MANAGED_API_PORT_START");
+  const managedApiPortEnd = parsePositiveIntEnv("MULE_DOCTOR_MANAGED_API_PORT_END");
 
   // Build components
   const rustMuleClient = new RustMuleClient(apiUrl, tokenPath, apiPrefix, debugTokenPath);
@@ -143,6 +150,24 @@ async function main(): Promise<void> {
     logWatcher,
     runtimeStore,
   });
+  let managedInstances: InstanceManager | undefined;
+  const configuredManagedInstances = new InstanceManager({
+    dataDir,
+    instanceRootDir: managedInstanceRootDir,
+    apiPortStart: managedApiPortStart,
+    apiPortEnd: managedApiPortEnd,
+    rustMuleBinaryPath: managedRustMuleBinaryPath,
+  });
+  try {
+    await configuredManagedInstances.initialize();
+    managedInstances = configuredManagedInstances;
+  } catch (err) {
+    log(
+      "warn",
+      "index",
+      `Managed instance controller unavailable, continuing without instance control: ${String(err)}`,
+    );
+  }
   let operatorConsole: OperatorConsoleServer | undefined;
   if (uiEnabled) {
     operatorConsole = new OperatorConsoleServer({
@@ -154,6 +179,7 @@ async function main(): Promise<void> {
       proposalDir,
       getAppLogs: (n) => appLogBuffer?.getRecentLines(n) ?? [],
       subscribeToAppLogs: appLogBuffer ? (listener) => appLogBuffer.subscribe(listener) : undefined,
+      managedInstances,
     });
     try {
       await operatorConsole.start();

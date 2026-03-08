@@ -7,6 +7,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { open, readFile, readdir, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Stats } from "node:fs";
+import type { ManagedInstanceRecord } from "../types/contracts.js";
 
 const AUTH_COOKIE_NAME = "mule_doctor_ui_token";
 const DEFAULT_UI_HOST = "127.0.0.1";
@@ -37,6 +38,14 @@ interface StreamChunk {
   partial: string;
 }
 
+export interface ManagedInstanceControl {
+  listInstances(): Promise<ManagedInstanceRecord[]>;
+  createPlannedInstance(input: { id: string; apiPort?: number }): Promise<ManagedInstanceRecord>;
+  startInstance(id: string): Promise<ManagedInstanceRecord>;
+  stopInstance(id: string, reason?: string): Promise<ManagedInstanceRecord>;
+  restartInstance(id: string): Promise<ManagedInstanceRecord>;
+}
+
 export interface OperatorConsoleConfig {
   authToken?: string;
   host?: string;
@@ -47,6 +56,7 @@ export interface OperatorConsoleConfig {
   getAppLogs: (n?: number) => string[];
   subscribeToAppLogs?: (listener: (line: string) => void) => () => void;
   rustMuleStreamPollMs?: number;
+  managedInstances?: ManagedInstanceControl;
 }
 
 export class OperatorConsoleServer {
@@ -59,6 +69,7 @@ export class OperatorConsoleServer {
   private readonly getAppLogs: (n?: number) => string[];
   private readonly subscribeToAppLogs: ((listener: (line: string) => void) => () => void) | undefined;
   private readonly rustMuleStreamPollMs: number;
+  private readonly managedInstances: ManagedInstanceControl | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -80,6 +91,7 @@ export class OperatorConsoleServer {
       100,
       60_000,
     );
+    this.managedInstances = config.managedInstances;
     this.startedAt = new Date().toISOString();
   }
 
@@ -160,6 +172,11 @@ export class OperatorConsoleServer {
       return;
     }
 
+    if (req.method === "POST" && !this.isSameOrigin(req)) {
+      sendJson(res, 403, { ok: false, error: "cross-origin control requests are not allowed" });
+      return;
+    }
+
     if (path === "/" || path === "/index.html") {
       if (!auth.ok) {
         await sendStaticHtml(res, "login.html");
@@ -199,6 +216,16 @@ export class OperatorConsoleServer {
         return;
       }
       await this.handleRustMuleLogStream(url, req, res);
+      return;
+    }
+
+    if (path === "/api/instances") {
+      await this.handleInstancesCollection(req, res);
+      return;
+    }
+
+    if (path.startsWith("/api/instances/")) {
+      await this.handleInstanceAction(req, res, path);
       return;
     }
 
@@ -287,6 +314,107 @@ export class OperatorConsoleServer {
     }
 
     sendJson(res, 404, { ok: false, error: "not found" });
+  }
+
+  private async handleInstancesCollection(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.managedInstances) {
+      sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
+      return;
+    }
+
+    if (req.method === "GET") {
+      const instances = await this.managedInstances.listInstances();
+      sendJson(res, 200, { ok: true, instances });
+      return;
+    }
+
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+
+    const payload = await readJsonBody(req);
+    const id = typeof payload.id === "string" ? payload.id : "";
+    const apiPort =
+      typeof payload.apiPort === "number" && Number.isInteger(payload.apiPort)
+        ? payload.apiPort
+        : undefined;
+    const created = await handleManagedInstanceErrors(() =>
+      this.managedInstances!.createPlannedInstance({ id, apiPort }),
+    );
+    sendJson(res, 201, { ok: true, instance: created });
+  }
+
+  private async handleInstanceAction(
+    req: IncomingMessage,
+    res: ServerResponse,
+    path: string,
+  ): Promise<void> {
+    if (!this.managedInstances) {
+      sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
+      return;
+    }
+
+    const suffix = path.slice("/api/instances/".length);
+    const [idRaw, action] = suffix.split("/");
+    const id = decodeURIComponent(idRaw ?? "").trim();
+    if (!id) {
+      sendJson(res, 400, { ok: false, error: "missing instance id" });
+      return;
+    }
+
+    if (!action) {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      const instance = (await this.managedInstances.listInstances()).find((candidate) => candidate.id === id);
+      if (!instance) {
+        sendJson(res, 404, { ok: false, error: `managed instance not found: ${id}` });
+        return;
+      }
+      sendJson(res, 200, { ok: true, instance });
+      return;
+    }
+
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+
+    let instance: ManagedInstanceRecord;
+    if (action === "start") {
+      instance = await handleManagedInstanceErrors(() => this.managedInstances!.startInstance(id));
+    } else if (action === "stop") {
+      instance = await handleManagedInstanceErrors(() =>
+        this.managedInstances!.stopInstance(id, "stopped from operator console"),
+      );
+    } else if (action === "restart") {
+      instance = await handleManagedInstanceErrors(() => this.managedInstances!.restartInstance(id));
+    } else {
+      sendJson(res, 404, { ok: false, error: "not found" });
+      return;
+    }
+
+    sendJson(res, 200, { ok: true, instance });
+  }
+
+  private isSameOrigin(req: IncomingMessage): boolean {
+    const origin = getHeaderValue(req.headers, "origin");
+    if (!origin) {
+      return true;
+    }
+    try {
+      const parsedOrigin = new URL(origin);
+      const reqHost = getHeaderValue(req.headers, "host");
+      if (!reqHost) return false;
+      return parsedOrigin.host === reqHost;
+    } catch {
+      return false;
+    }
   }
 
   private authenticate(req: IncomingMessage): AuthState {
@@ -705,6 +833,48 @@ async function readFormBody(req: IncomingMessage): Promise<URLSearchParams> {
     chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
   }
   return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
+  }
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("JSON body must be an object");
+    }
+    return parsed as Record<string, unknown>;
+  } catch (err) {
+    throw new RequestError(400, `invalid JSON body: ${String(err)}`);
+  }
+}
+
+async function handleManagedInstanceErrors<T>(op: () => Promise<T>): Promise<T> {
+  try {
+    return await op();
+  } catch (err) {
+    if (!(err instanceof Error)) {
+      throw err;
+    }
+    if (err.message.startsWith("Managed instance not found")) {
+      throw new RequestError(404, err.message);
+    }
+    if (
+      err.message.startsWith("Invalid managed instance") ||
+      err.message.includes("already exists") ||
+      err.message.includes("already reserved") ||
+      err.message.includes("already in use") ||
+      err.message.includes("Invalid port") ||
+      err.message.includes("outside the allowed range")
+    ) {
+      throw new RequestError(400, err.message);
+    }
+    throw err;
+  }
 }
 
 function applySecurityHeaders(res: ServerResponse): void {

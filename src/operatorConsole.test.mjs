@@ -16,6 +16,83 @@ async function makeTempDir() {
   };
 }
 
+class StubManagedInstances {
+  constructor() {
+    this.instances = [
+      {
+        id: "a",
+        status: "planned",
+        createdAt: "2026-03-08T00:00:00.000Z",
+        updatedAt: "2026-03-08T00:00:00.000Z",
+        apiHost: "127.0.0.1",
+        apiPort: 19000,
+        runtime: {
+          rootDir: "/data/instances/a",
+          configPath: "/data/instances/a/config.toml",
+          tokenPath: "/data/instances/a/state/api.token",
+          debugTokenPath: "/data/instances/a/state/debug.token",
+          logDir: "/data/instances/a/state/logs",
+          logPath: "/data/instances/a/state/logs/rust-mule.log",
+          stateDir: "/data/instances/a/state",
+          metadataPath: "/data/instances/a/instance.json",
+        },
+      },
+    ];
+  }
+
+  async listInstances() {
+    return this.instances;
+  }
+
+  async createPlannedInstance(input) {
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(input.id)) {
+      throw new Error(`Invalid managed instance id: ${input.id}`);
+    }
+    if (this.instances.some((instance) => instance.id === input.id)) {
+      throw new Error(`Managed instance already exists: ${input.id}`);
+    }
+    const instance = {
+      ...this.instances[0],
+      id: input.id,
+      apiPort: input.apiPort ?? 19001,
+      status: "planned",
+      updatedAt: "2026-03-08T01:00:00.000Z",
+    };
+    this.instances.push(instance);
+    return instance;
+  }
+
+  async startInstance(id) {
+    const instance = this.instances.find((candidate) => candidate.id === id);
+    if (!instance) {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
+    instance.status = "running";
+    instance.updatedAt = "2026-03-08T01:10:00.000Z";
+    return instance;
+  }
+
+  async stopInstance(id) {
+    const instance = this.instances.find((candidate) => candidate.id === id);
+    if (!instance) {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
+    instance.status = "stopped";
+    instance.updatedAt = "2026-03-08T01:20:00.000Z";
+    return instance;
+  }
+
+  async restartInstance(id) {
+    const instance = this.instances.find((candidate) => candidate.id === id);
+    if (!instance) {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
+    instance.status = "running";
+    instance.updatedAt = "2026-03-08T01:30:00.000Z";
+    return instance;
+  }
+}
+
 async function loginAndGetCookie(baseUrl) {
   const loginRes = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
@@ -96,6 +173,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       getAppLogs: () => ['{"msg":"api_key=topsecret"}'],
       subscribeToAppLogs: () => () => {},
       rustMuleStreamPollMs: 25,
+      managedInstances: new StubManagedInstances(),
     });
     await server.start();
 
@@ -117,6 +195,9 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
 
     const unauthorizedHealthRes = await fetch(`${baseUrl}/api/health`);
     assert.equal(unauthorizedHealthRes.status, 401);
+
+    const unauthorizedInstancesRes = await fetch(`${baseUrl}/api/instances`);
+    assert.equal(unauthorizedInstancesRes.status, 401);
 
     const cookie = await loginAndGetCookie(baseUrl);
 
@@ -151,6 +232,62 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(appRes.status, 200);
     const appLogs = await appRes.json();
     assert.equal(appLogs.lines[0].includes("[redacted]"), true);
+
+    const instancesRes = await fetch(`${baseUrl}/api/instances`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(instancesRes.status, 200);
+    const instances = await instancesRes.json();
+    assert.equal(instances.instances.length, 1);
+    assert.equal(instances.instances[0].id, "a");
+
+    const createRes = await fetch(`${baseUrl}/api/instances`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: baseUrl,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: "b", apiPort: 19002 }),
+    });
+    assert.equal(createRes.status, 201);
+
+    const startRes = await fetch(`${baseUrl}/api/instances/a/start`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: baseUrl },
+    });
+    assert.equal(startRes.status, 200);
+    const started = await startRes.json();
+    assert.equal(started.instance.status, "running");
+
+    const stopRes = await fetch(`${baseUrl}/api/instances/a/stop`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: baseUrl },
+    });
+    assert.equal(stopRes.status, 200);
+
+    const crossOriginRes = await fetch(`${baseUrl}/api/instances/a/start`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: "http://evil.example" },
+    });
+    assert.equal(crossOriginRes.status, 403);
+
+    const invalidCreateRes = await fetch(`${baseUrl}/api/instances`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: baseUrl,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: "../bad" }),
+    });
+    assert.equal(invalidCreateRes.status, 400);
+
+    const missingInstanceRes = await fetch(`${baseUrl}/api/instances/missing/start`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: baseUrl },
+    });
+    assert.equal(missingInstanceRes.status, 404);
 
     const llmListRes = await fetch(`${baseUrl}/api/llm/logs`, {
       headers: { Cookie: cookie },
