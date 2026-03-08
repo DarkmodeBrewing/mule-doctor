@@ -1,8 +1,8 @@
 # mule-doctor
 
-mule-doctor is an AI-assisted diagnostic agent for rust-mule nodes.
+mule-doctor is an AI-assisted diagnostic and operator agent for rust-mule nodes.
 
-It continuously observes node behavior through the rust-mule control plane (API), log files, and optional source code access. The system analyzes network health, detects anomalies, and reports observations to developers.
+It continuously observes node behavior through the rust-mule control plane (API), log files, optional source code access, and an operator-facing console. The system analyzes network health, detects anomalies, and reports observations to developers.
 
 The tool is designed for debugging and research of Kademlia-based distributed hash table (DHT) behavior during development and soak testing.
 
@@ -10,8 +10,12 @@ The tool is designed for debugging and research of Kademlia-based distributed ha
 
 ## Architecture Overview
 
-mule-doctor runs alongside a rust-mule node and observes its behavior through
-three primary information sources:
+mule-doctor can run in two modes:
+
+1. **external observation mode** for an already-running rust-mule node
+2. **managed-instance mode** where mule-doctor supervises one or more local rust-mule test instances
+
+In both modes, mule-doctor observes node behavior through three primary information sources:
 
 1. rust-mule control plane API
 2. rust-mule log files
@@ -27,18 +31,19 @@ tool interface implemented by mule-doctor.
 System architecture:
 
 ```text
-rust-mule
+mule-doctor
 │
-├─ API (/api/v1)
-├─ logs
-│
-└── mule-doctor
-    │
-    ├─ observer loop
-    ├─ tool registry
-    ├─ LLM diagnostics
-    ├─ history storage
-    └─ Mattermost reporting
+├─ operator console (web UI + API)
+├─ observer loop
+├─ tool registry
+├─ LLM diagnostics
+├─ history storage
+├─ Mattermost reporting
+└─ instance manager (future, optional)
+   │
+   ├─ rust-mule instance A
+   ├─ rust-mule instance B
+   └─ rust-mule instance C
 ```
 
 The design intentionally separates:
@@ -49,11 +54,15 @@ The design intentionally separates:
 
 This keeps the system deterministic and easier to extend.
 
+The operator console is part of the architecture. It exposes a browser-accessible,
+read-only runtime view today and is expected to evolve into the main control
+surface for managed local test instances.
+
 ---
 
 # Safety Policy
 
-mule-doctor **never modifies the running rust-mule instance automatically**.
+mule-doctor **never modifies an externally managed rust-mule instance automatically**.
 
 The LLM may:
 
@@ -117,10 +126,15 @@ If the LLM becomes unavailable:
 
 The core design rule is:
 
-> mule-doctor must never be able to disrupt a running rust-mule node.
+> mule-doctor must never be able to disrupt an external rust-mule node.
 
-The system operates strictly as an **observer and advisor**, never as an
-automatic control mechanism.
+For externally managed nodes, the system operates strictly as an **observer and
+advisor**, never as an automatic control mechanism.
+
+For future managed local test instances started by mule-doctor itself, the
+system may perform explicit lifecycle actions such as start, stop, and restart,
+but only against those mule-doctor-owned instances and only through a bounded
+instance-management layer.
 
 # LLM Model Used
 
@@ -144,6 +158,33 @@ Example workflow:
 8. Append diagnostic data to history for trend comparison
 
 Default interval: **5 minutes**
+
+---
+
+# Operator Console
+
+The operator console is a built-in web surface served by mule-doctor.
+
+Current phase:
+
+- read-only browser UI
+- token-protected access
+- JSON API for health, logs, and proposal artifacts
+- SSE streams for live app-log and rust-mule-log viewing
+
+Primary purpose:
+
+- inspect mule-doctor runtime health
+- inspect rust-mule logs and LLM logs
+- review saved patch proposals
+- provide a future home for controlled local test-instance management
+
+Required runtime controls:
+
+- disabled by default
+- explicit auth token required when enabled
+- no direct exposure on untrusted networks without additional access control
+- secrets must be redacted from rendered content
 
 ---
 
@@ -315,6 +356,60 @@ If a tool fails:
 ```
 
 Structured responses ensure the LLM reasons over machine-readable data instead of parsing free text.
+
+---
+
+# Managed Instance Architecture
+
+Future versions of mule-doctor should support starting multiple local rust-mule
+instances from the operator console for integration and soak testing.
+
+This capability is intended for **mule-doctor-managed local test instances**
+only, not for external production nodes.
+
+Design rules:
+
+- mule-doctor may supervise zero or more local rust-mule instances
+- each managed instance must have a stable instance id such as `a`, `b`, or `c`
+- each managed instance must have an isolated runtime directory
+- all lifecycle actions must flow through an explicit `InstanceManager`
+- the operator console should be the primary control surface
+
+Per-instance runtime isolation:
+
+```text
+/data/instances/<id>/
+├─ config.toml
+├─ token
+├─ debug.token
+├─ logs/
+├─ state/
+└─ runtime metadata
+```
+
+Per-instance requirements:
+
+- dedicated API port
+- dedicated log path
+- dedicated token/debug-token files
+- dedicated persisted mule-doctor observation namespace
+
+The rust-mule binary should normally be shared from the container build output
+rather than copied per instance. Configuration and runtime state, not the
+binary itself, define each managed instance.
+
+The `InstanceManager` is responsible for:
+
+- allowed instance definitions
+- runtime directory creation
+- process start/stop/restart
+- port allocation and conflict checks
+- health and lifecycle state
+- log locations
+- cleanup of mule-doctor-owned test instances
+
+The observer, runtime store, and reporting layers must be extended to support
+per-instance namespacing once this phase begins.
 
 ---
 
@@ -515,6 +610,7 @@ Accuracy is more important than verbosity.
 /data              runtime state
 /data/token
 /data/logs
+/data/instances    future managed rust-mule test instances
 ```
 
 ---

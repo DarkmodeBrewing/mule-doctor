@@ -8,9 +8,10 @@ Each item is intended to become one or more focused feature branches and PRs.
 ## Goals
 
 1. Align runtime behavior with the architecture document.
-2. Keep mule-doctor strictly observer/advisor (no unsafe control actions).
+2. Keep externally managed rust-mule nodes strictly observer/advisor scope.
 3. Add deterministic, structured data flow for metrics, tools, and reporting.
 4. Build a clear path for incremental delivery and review.
+5. Evolve the operator console into the control surface for mule-doctor-managed local test instances.
 
 ## Current Gaps (vs architecture)
 
@@ -254,3 +255,40 @@ Acceptance criteria:
 - Operator can access the UI in a browser through the container-exposed port.
 - UI supports log and proposal inspection without shell access.
 - App remains running if UI server fails to start; failure is logged.
+
+## Task E: Managed Local rust-mule Instances
+
+1. Add an explicit `InstanceManager` for mule-doctor-owned local test instances.
+2. Support zero-or-more managed instances rather than assuming a single external client.
+3. Give each instance a stable id and isolated runtime directory under `/data/instances/<id>`.
+4. Allocate per-instance:
+   - config file
+   - token/debug-token files
+   - API port
+   - log path
+   - observation/runtime state namespace
+5. Use the shared rust-mule binary built into the container image instead of copying binaries per instance unless version pinning requires otherwise.
+
+Acceptance criteria:
+
+- mule-doctor can start without any running rust-mule client.
+- Managed instances can be created and started by mule-doctor against isolated runtime directories.
+- Process lifecycle is owned by a bounded `InstanceManager`, not ad hoc shelling out from the UI.
+
+## Task F: Operator Console Control Plane
+
+1. Extend the operator console from read-only observability to controlled local-instance lifecycle management.
+2. Add UI/API flows for:
+   - listing managed instances
+   - start
+   - stop
+   - restart
+   - view per-instance health/log/runtime metadata
+3. Keep control scope bounded to mule-doctor-managed local test instances only.
+4. Preserve explicit safety boundaries so external nodes remain observer-only.
+
+Acceptance criteria:
+
+- Operator can boot multiple local rust-mule instances from the browser.
+- Each managed instance is clearly labeled and observable independently.
+- Control actions do not apply to external production-like nodes.

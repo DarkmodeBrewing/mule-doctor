@@ -101,6 +101,10 @@
   - adding SSE streams for live app-log and rust-mule-log viewing.
   - extending UI to support authenticated access and live stream consumption.
   - expanding test coverage for auth and stream behavior.
+- Documentation updated for the next architectural direction:
+  - architecture now explicitly documents the operator console as part of the system.
+  - architecture now distinguishes external observation mode from future mule-doctor-managed local test instances.
+  - backlog now includes `InstanceManager` and operator-console control-plane tasks for multi-instance rust-mule supervision.
 
 ## Key Decisions
 
@@ -108,6 +112,8 @@
 - Keep proposal artifacts on disk under `/data` by default for operational visibility and reviewer access.
 - Preserve test portability by injecting per-test temp `proposalDir` instead of writing to `/data` in test runs.
 - For bundled source safety, preserve local git history for `git_blame` while stripping `origin` remote.
+- Keep external rust-mule nodes observer-only, while allowing future controlled lifecycle actions only for mule-doctor-owned local test instances.
+- Use a bounded `InstanceManager` as the future control plane rather than allowing the UI to shell out directly.
 
 ## Validation
 
@@ -117,4 +123,4 @@
 ## Next Steps
 
 - Finish PR for operator console phase 2 and process review feedback.
-- Phase 3 target: richer operator views for proposal metadata, LLM usage, and command/control surfaces if needed.
+- After phase 2, first document and implement the `InstanceManager` data model before adding instance lifecycle controls to the UI.
