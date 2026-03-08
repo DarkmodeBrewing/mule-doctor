@@ -39,6 +39,7 @@ test("MattermostClient posts structured periodic report attachments", async () =
   const client = new MattermostClient("https://example.test/hook", new StubAnalyzer());
   await client.postPeriodicReport({
     summary: "All clear",
+    targetLabel: "managed instance a",
     healthScore: 82,
     peerCount: 120,
     routingBucketCount: 16,
@@ -48,6 +49,7 @@ test("MattermostClient posts structured periodic report attachments", async () =
 
   assert.equal(calls.length, 1);
   const payload = JSON.parse(calls[0].body);
+  assert.match(payload.text, /Target: managed instance a/);
   assert.equal(payload.attachments.length, 2);
   assert.equal(payload.attachments[0].title, "Node Metrics");
   assert.equal(payload.attachments[0].color, "#2ecc71");

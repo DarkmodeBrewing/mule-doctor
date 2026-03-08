@@ -26,6 +26,7 @@ export interface ObserverSnapshot {
 
 export interface HistoryEntry {
   timestamp: string;
+  target?: DiagnosticTargetRef;
   peerCount?: number;
   routingBalance?: number;
   lookupSuccess?: number;
@@ -39,6 +40,7 @@ export interface RuntimeState {
   logOffset?: number;
   lastAlert?: string;
   activeDiagnosticTarget?: DiagnosticTargetRef;
+  lastObservedTarget?: DiagnosticTargetRef;
   usage?: RuntimeUsageState;
 }
 

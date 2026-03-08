@@ -136,7 +136,9 @@
   - adding a persisted `activeDiagnosticTarget` runtime-state field
   - adding a `DiagnosticTargetService` to validate and store `external` vs `managed_instance:<id>` selection
   - exposing operator-console API/UI hooks for inspecting and updating the active diagnostic target
-  - deferring actual observer client/tool rerouting to the next implementation step in this branch
+  - routing the scheduled observer through a resolved active target each cycle
+  - recording `lastObservedTarget` in runtime state and labeling history entries with the observed target
+  - labeling periodic Mattermost reports with the observed target
 
 ## Key Decisions
 
@@ -153,6 +155,7 @@
 - Keep selected-instance analysis on-demand until target-aware observer scheduling and reporting semantics are explicitly designed.
 - Active diagnostic target selection must persist in runtime state before the scheduled observer is rerouted.
 - Scheduled observation should remain single-target even though the console can inspect many managed instances.
+- Keep the existing external analyzer for Mattermost command handling, while the scheduled observer may construct target-specific analyzers/tool registries per cycle.
 
 ## Validation
 
@@ -162,7 +165,6 @@
 ## Next Steps
 
 - Finish the active-target foundation slice:
-  - docs
-  - runtime-state persistence
-  - operator-console API/UI target selection
-- After that, reroute the scheduled observer/analyzer/tool path through the selected target and label reports/state accordingly.
+  - review
+  - merge
+- After that, harden unavailable-target behavior so scheduled cycles produce explicit degraded/unavailable reporting instead of only logging cycle errors.

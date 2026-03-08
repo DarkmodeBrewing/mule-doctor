@@ -157,6 +157,9 @@ behavior is deterministic. If the selected managed instance is unavailable,
 diagnostics should degrade gracefully and report that target as unavailable
 without stopping mule-doctor itself.
 
+Periodic reports and persisted observer state should identify the target that
+was actually observed.
+
 Example workflow:
 
 1. Collect node metrics from the rust-mule API
@@ -276,6 +279,7 @@ State includes:
 - log read offset
 - last alert issued
 - active diagnostic target
+- last observed target
 
 Example state object:
 
@@ -286,6 +290,9 @@ Example state object:
   "logOffset": 2483291,
   "lastAlert": "routing_imbalance",
   "activeDiagnosticTarget": {
+    "kind": "external"
+  },
+  "lastObservedTarget": {
     "kind": "external"
   }
 }
@@ -435,6 +442,9 @@ single explicit active diagnostic target for the scheduled observer loop. The
 operator console may inspect many instances, but the periodic analyzer/reporting
 path should only observe one target at a time until broader multi-instance
 comparison semantics are designed.
+
+Mattermost reports should include the observed target label so operators can
+distinguish external-node reports from managed-instance reports.
 
 ---
 
