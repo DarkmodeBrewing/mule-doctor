@@ -250,7 +250,18 @@ test("RustMuleClient loadToken fails when configured auth token file is missing"
   await assert.rejects(() => client.loadToken(), /Failed to load auth token/);
 });
 
-test("RustMuleClient times out HTTP requests with a bounded timeout", async () => {
+test("RustMuleClient loadToken fails when configured debug token file is missing", async () => {
+  const client = new RustMuleClient(
+    "http://127.0.0.1:17835",
+    undefined,
+    "/api/v1",
+    "/does/not/exist/debug.token",
+  );
+
+  await assert.rejects(() => client.loadToken(), /Failed to load debug token/);
+});
+
+test("RustMuleClient times out HTTP read requests and returns fallback values", async () => {
   global.fetch = async (_url, init = {}) =>
     new Promise((_resolve, reject) => {
       init.signal?.addEventListener("abort", () => {
@@ -259,6 +270,38 @@ test("RustMuleClient times out HTTP requests with a bounded timeout", async () =
     });
 
   const client = new RustMuleClient("http://127.0.0.1:17835", undefined, "/api/v1", undefined, 200);
+  const node = await client.getNodeInfo();
+  const peers = await client.getPeers();
+  const stats = await client.getLookupStats();
 
-  await assert.rejects(() => client.getNodeInfo(), /timed out after 200ms/);
+  assert.equal(node.nodeId, "unknown");
+  assert.equal(node.version, "unknown");
+  assert.equal(node.uptime, 0);
+  assert.deepEqual(peers, []);
+  assert.equal(stats.total, 0);
+  assert.equal(stats.successful, 0);
+});
+
+test("RustMuleClient returns graceful fallback when status endpoint is missing (404)", async () => {
+  global.fetch = async () => makeJsonResponse({ code: 404 }, 404);
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const node = await client.getNodeInfo();
+
+  assert.equal(node.nodeId, "unknown");
+  assert.equal(node.version, "unknown");
+  assert.equal(node.uptime, 0);
+});
+
+test("RustMuleClient returns graceful fallback when events endpoint is missing (404)", async () => {
+  global.fetch = async () => makeJsonResponse({ code: 404 }, 404);
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const stats = await client.getLookupStats();
+
+  assert.equal(stats.total, 0);
+  assert.equal(stats.successful, 0);
+  assert.equal(stats.failed, 0);
+  assert.equal(stats.matchPerSent, 0);
+  assert.equal(stats.timeoutsPerSent, 0);
 });

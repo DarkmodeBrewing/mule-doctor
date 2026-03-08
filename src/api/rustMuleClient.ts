@@ -213,33 +213,53 @@ export class RustMuleClient {
   }
 
   async getNodeInfo(): Promise<NodeInfo> {
-    const status = await this.get<Record<string, unknown>>("/status");
-    return {
-      ...status,
-      nodeId: typeof status["node_id_hex"] === "string" ? status["node_id_hex"] : "unknown",
-      version: typeof status["version"] === "string" ? status["version"] : "unknown",
-      uptime: typeof status["uptime_secs"] === "number" ? status["uptime_secs"] : 0,
-    };
+    try {
+      const status = await this.get<Record<string, unknown>>("/status");
+      return {
+        ...status,
+        nodeId: typeof status["node_id_hex"] === "string" ? status["node_id_hex"] : "unknown",
+        version: typeof status["version"] === "string" ? status["version"] : "unknown",
+        uptime: typeof status["uptime_secs"] === "number" ? status["uptime_secs"] : 0,
+      };
+    } catch (err) {
+      if (!isRecoverableReadError(err)) {
+        throw err;
+      }
+      log("warn", "rustMuleClient", `Node info unavailable, using fallback: ${String(err)}`);
+      return {
+        nodeId: "unknown",
+        version: "unknown",
+        uptime: 0,
+      };
+    }
   }
 
   async getPeers(): Promise<Peer[]> {
-    const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>("/kad/peers");
-    const peers = Array.isArray(payload.peers) ? payload.peers : [];
-    return peers.map((p) => ({
-      ...p,
-      id:
-        typeof p["kad_id_hex"] === "string"
-          ? p["kad_id_hex"]
-          : typeof p["source_id_hex"] === "string"
-            ? p["source_id_hex"]
-            : "unknown",
-      address:
-        typeof p["udp_dest_short"] === "string"
-          ? p["udp_dest_short"]
-          : typeof p["udp_dest_b64"] === "string"
-            ? p["udp_dest_b64"]
-            : "unknown",
-    }));
+    try {
+      const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>("/kad/peers");
+      const peers = Array.isArray(payload.peers) ? payload.peers : [];
+      return peers.map((p) => ({
+        ...p,
+        id:
+          typeof p["kad_id_hex"] === "string"
+            ? p["kad_id_hex"]
+            : typeof p["source_id_hex"] === "string"
+              ? p["source_id_hex"]
+              : "unknown",
+        address:
+          typeof p["udp_dest_short"] === "string"
+            ? p["udp_dest_short"]
+            : typeof p["udp_dest_b64"] === "string"
+              ? p["udp_dest_b64"]
+              : "unknown",
+      }));
+    } catch (err) {
+      if (!isRecoverableReadError(err)) {
+        throw err;
+      }
+      log("warn", "rustMuleClient", `Peer list unavailable, using fallback: ${String(err)}`);
+      return [];
+    }
   }
 
   async getRoutingBuckets(): Promise<RoutingBucket[]> {
@@ -261,20 +281,38 @@ export class RustMuleClient {
       const unavailableDebugEndpoint =
         err instanceof HttpError &&
         (err.status === 403 || err.status === 404 || err.status === 501);
-      if (!unavailableDebugEndpoint) {
+      const recoverableTransient = isRecoverableReadError(err);
+      if (err instanceof RequestTimeoutError) {
+        log(
+          "warn",
+          "rustMuleClient",
+          `Routing buckets unavailable (debug endpoint timeout): ${String(err)}`,
+        );
+        return [];
+      }
+      if (!unavailableDebugEndpoint && !recoverableTransient) {
         throw err;
       }
       log(
         "warn",
         "rustMuleClient",
-        `Routing buckets unavailable (debug endpoint disabled or token rejected): ${String(err)}`,
+        `Routing buckets unavailable (debug endpoint disabled/rejected/transient): ${String(err)}`,
       );
       return [];
     }
   }
 
   async getLookupStats(): Promise<LookupStats> {
-    const events = await this.get<Record<string, unknown>>("/events");
+    let events: Record<string, unknown>;
+    try {
+      events = await this.get<Record<string, unknown>>("/events");
+    } catch (err) {
+      if (!isRecoverableReadError(err)) {
+        throw err;
+      }
+      log("warn", "rustMuleClient", `Lookup stats unavailable, using fallback: ${String(err)}`);
+      events = {};
+    }
 
     const total = typeof events["sent_reqs_total"] === "number" ? events["sent_reqs_total"] : 0;
     const matched =
@@ -462,6 +500,24 @@ function isAbortError(err: unknown): boolean {
     "name" in err &&
     typeof err["name"] === "string" &&
     err["name"] === "AbortError"
+  );
+}
+
+function isRecoverableReadError(err: unknown): boolean {
+  if (err instanceof RequestTimeoutError) {
+    return true;
+  }
+  if (!(err instanceof HttpError)) {
+    return false;
+  }
+  return (
+    err.status === 403 ||
+    err.status === 404 ||
+    err.status === 429 ||
+    err.status === 500 ||
+    err.status === 502 ||
+    err.status === 503 ||
+    err.status === 504
   );
 }
 
