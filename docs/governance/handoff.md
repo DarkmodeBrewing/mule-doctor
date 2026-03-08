@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/eslint-prettier-setup`
-- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/18
+- `feature/openai-sdk-client`
+- PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; branch adds lint/format toolchain and applies repo formatting cleanup.
-- Prior architecture/runtime hardening from PR #15 remains merged in `main`.
+- In progress; branch migrates OpenAI integration from raw HTTP `fetch` to the official OpenAI SDK client.
+- Prior lint/format/tooling hardening from PR #18 remains merged in `main`.
 
 ## Completed Work
 
@@ -46,6 +46,12 @@
   - pinned CI Node setup to `20.19.0` and renamed CI job to explicitly reflect lint stage.
   - restored intended indentation in architecture tree under `mule-doctor` using a fenced `text` block.
 - Ran `npm run format` across the repository and fixed new lint findings surfaced by ESLint.
+- Migrated LLM client integration to official OpenAI SDK:
+  - added runtime dependency: `openai`.
+  - refactored `src/llm/analyzer.ts` to use `OpenAI` client (`chat.completions.create`) instead of manual `fetch`.
+  - preserved existing tool-calling loop semantics and usage tracking behavior.
+  - improved API error wrapping via structured SDK error handling.
+  - enhanced SDK error formatting to explicitly include API status/code/type when available.
 
 ## Key Decisions
 
@@ -61,5 +67,5 @@
 
 ## Next Steps
 
-- Open PR for lint/format setup and process review feedback.
+- Open PR for OpenAI SDK migration and process review feedback.
 - After merge, continue deferred runtime validation tasks documented in `docs/TASK.md`.
