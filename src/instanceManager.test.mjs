@@ -124,3 +124,67 @@ test("InstanceManager rejects invalid ids", async () => {
     await tmp.cleanup();
   }
 });
+
+test("InstanceManager rejects invalid apiPort values", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+    });
+    await manager.initialize();
+
+    await assert.rejects(
+      manager.createPlannedInstance({ id: "noninteger", apiPort: 19000.5 }),
+      /Invalid port/,
+    );
+    await assert.rejects(
+      manager.createPlannedInstance({ id: "toolow", apiPort: 0 }),
+      /Invalid port/,
+    );
+    await assert.rejects(
+      manager.createPlannedInstance({ id: "toohigh", apiPort: 70000 }),
+      /Invalid port/,
+    );
+    await assert.rejects(
+      manager.createPlannedInstance({ id: "beforerange", apiPort: 18999 }),
+      /outside the allowed range/,
+    );
+    await assert.rejects(
+      manager.createPlannedInstance({ id: "afterrange", apiPort: 19011 }),
+      /outside the allowed range/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager serializes concurrent planned instance creation", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+    });
+    await manager.initialize();
+
+    await Promise.all([
+      manager.createPlannedInstance({ id: "a" }),
+      manager.createPlannedInstance({ id: "b" }),
+      manager.createPlannedInstance({ id: "c" }),
+    ]);
+
+    const instances = await manager.listInstances();
+    assert.equal(instances.length, 3);
+    assert.deepEqual(
+      instances.map((instance) => instance.apiPort).sort((a, b) => a - b),
+      [19000, 19001, 19002],
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});

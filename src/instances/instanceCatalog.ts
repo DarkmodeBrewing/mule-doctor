@@ -28,14 +28,18 @@ export class InstanceCatalog {
     await mkdir(dirname(this.catalogPath), { recursive: true });
     try {
       await readFile(this.catalogPath, "utf8");
-    } catch {
-      await writeFile(this.catalogPath, "[]\n", "utf8");
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code === "ENOENT") {
+        await writeFile(this.catalogPath, "[]\n", "utf8");
+        return;
+      }
+      throw err;
     }
   }
 
   async list(): Promise<ManagedInstanceRecord[]> {
-    const records = await this.readCatalog();
-    return Array.isArray(records) ? records : [];
+    return this.readCatalogOrThrow();
   }
 
   async get(id: string): Promise<ManagedInstanceRecord | undefined> {
@@ -45,22 +49,40 @@ export class InstanceCatalog {
 
   async add(record: ManagedInstanceRecord): Promise<void> {
     await this.enqueueMutation(async () => {
-      const records = await this.list();
+      const records = await this.readCatalogOrThrow();
       if (records.some((existing) => existing.id === record.id)) {
         throw new Error(`Managed instance already exists: ${record.id}`);
+      }
+      if (records.some((existing) => existing.apiPort === record.apiPort)) {
+        throw new Error(`Managed instance API port already in use: ${record.apiPort}`);
       }
       records.push(record);
       await this.writeCatalog(records);
     });
   }
 
-  private async readCatalog(): Promise<ManagedInstanceRecord[] | null> {
+  async remove(id: string): Promise<void> {
+    await this.enqueueMutation(async () => {
+      const records = await this.readCatalogOrThrow();
+      const next = records.filter((record) => record.id !== id);
+      if (next.length === records.length) {
+        return;
+      }
+      await this.writeCatalog(next);
+    });
+  }
+
+  private async readCatalogOrThrow(): Promise<ManagedInstanceRecord[]> {
     try {
       const raw = await readFile(this.catalogPath, "utf8");
-      return JSON.parse(raw) as ManagedInstanceRecord[];
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        throw new Error(`Invalid managed instance catalog payload in ${this.catalogPath}`);
+      }
+      return parsed as ManagedInstanceRecord[];
     } catch (err) {
       log("warn", "instanceCatalog", `Failed to read/parse ${this.catalogPath}: ${String(err)}`);
-      return null;
+      throw err;
     }
   }
 

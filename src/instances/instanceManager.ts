@@ -3,7 +3,7 @@
  * Plans and persists mule-doctor-managed local rust-mule instances without launching them.
  */
 
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, rm, writeFile } from "fs/promises";
 import { resolve } from "path";
 import { InstanceCatalog, type InstanceCatalogConfig } from "./instanceCatalog.js";
 import type { ManagedInstanceRecord, ManagedInstanceRuntimePaths } from "../types/contracts.js";
@@ -31,6 +31,7 @@ export class InstanceManager {
   private readonly apiPortStart: number;
   private readonly apiPortEnd: number;
   private readonly instanceRootDir: string;
+  private creationQueue: Promise<void> = Promise.resolve();
 
   constructor(config: InstanceManagerConfig = {}) {
     this.catalog = new InstanceCatalog(config);
@@ -60,34 +61,53 @@ export class InstanceManager {
   }
 
   async createPlannedInstance(input: CreateManagedInstanceInput): Promise<ManagedInstanceRecord> {
-    const id = normalizeInstanceId(input.id);
-    const existing = await this.catalog.get(id);
-    if (existing) {
-      throw new Error(`Managed instance already exists: ${id}`);
-    }
+    return this.enqueueCreation(async () => {
+      const id = normalizeInstanceId(input.id);
+      const existing = await this.catalog.get(id);
+      if (existing) {
+        throw new Error(`Managed instance already exists: ${id}`);
+      }
 
-    const current = await this.catalog.list();
-    const apiPort = input.apiPort ?? pickAvailablePort(current, this.apiPortStart, this.apiPortEnd);
-    if (current.some((record) => record.apiPort === apiPort)) {
-      throw new Error(`Managed instance API port already reserved: ${apiPort}`);
-    }
+      const current = await this.catalog.list();
+      const apiPort =
+        input.apiPort === undefined
+          ? pickAvailablePort(current, this.apiPortStart, this.apiPortEnd)
+          : normalizeRequestedPort(input.apiPort, this.apiPortStart, this.apiPortEnd);
+      if (current.some((record) => record.apiPort === apiPort)) {
+        throw new Error(`Managed instance API port already reserved: ${apiPort}`);
+      }
 
-    const runtime = buildRuntimePaths(this.instanceRootDir, id);
-    await materializeRuntimePaths(runtime, id);
+      const runtime = buildRuntimePaths(this.instanceRootDir, id);
+      const now = new Date().toISOString();
+      const record: ManagedInstanceRecord = {
+        id,
+        status: "planned",
+        createdAt: now,
+        updatedAt: now,
+        apiHost: this.apiHost,
+        apiPort,
+        runtime,
+      };
+      await this.catalog.add(record);
+      try {
+        await materializeRuntimePaths(runtime, id);
+        await writeMetadata(runtime.metadataPath, record);
+      } catch (err) {
+        await this.catalog.remove(id);
+        await cleanupRuntimePaths(runtime);
+        throw err;
+      }
+      return record;
+    });
+  }
 
-    const now = new Date().toISOString();
-    const record: ManagedInstanceRecord = {
-      id,
-      status: "planned",
-      createdAt: now,
-      updatedAt: now,
-      apiHost: this.apiHost,
-      apiPort,
-      runtime,
-    };
-    await this.catalog.add(record);
-    await writeMetadata(runtime.metadataPath, record);
-    return record;
+  private async enqueueCreation<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.creationQueue.then(op, op);
+    this.creationQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 }
 
@@ -135,6 +155,16 @@ function clampPort(value: number): number {
   return value;
 }
 
+function normalizeRequestedPort(value: number, start: number, end: number): number {
+  const port = clampPort(value);
+  if (port < start || port > end) {
+    throw new Error(
+      `Managed instance API port ${value} is outside the allowed range ${start}-${end}`,
+    );
+  }
+  return port;
+}
+
 async function materializeRuntimePaths(
   runtime: ManagedInstanceRuntimePaths,
   id: string,
@@ -147,6 +177,10 @@ async function materializeRuntimePaths(
 
 async function writeMetadata(path: string, record: ManagedInstanceRecord): Promise<void> {
   await writeFile(path, JSON.stringify(record, null, 2) + "\n", "utf8");
+}
+
+async function cleanupRuntimePaths(runtime: ManagedInstanceRuntimePaths): Promise<void> {
+  await rm(runtime.rootDir, { recursive: true, force: true });
 }
 
 function buildConfigPlaceholder(id: string): string {
