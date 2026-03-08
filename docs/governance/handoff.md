@@ -170,3 +170,7 @@
   - review
   - merge
 - Open the PR for active-target routing and process review feedback.
+- Improve operator-console visibility of the scheduled observer target:
+  - add a dedicated scheduled-target status card
+  - mark managed-instance entries that are currently the scheduled target
+  - show when the scheduled managed target is currently unavailable/degraded

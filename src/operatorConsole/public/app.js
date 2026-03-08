@@ -9,6 +9,8 @@ const INSTANCE_ANALYSIS_PLACEHOLDER =
 const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
 const OBSERVER_TARGET_PLACEHOLDER = "Loading active diagnostic target...";
 let selectedInstanceId = null;
+let currentObserver = null;
+let currentScheduledTarget = null;
 
 async function fetchJson(url) {
   const res = await fetch(url, { credentials: "same-origin" });
@@ -66,6 +68,32 @@ function renderFileList(targetId, files, onClick) {
   }
 }
 
+function targetLabel(target) {
+  if (!target || target.kind === "external") {
+    return "external configured rust-mule client";
+  }
+  return `managed instance ${target.instanceId}`;
+}
+
+function describeTarget(target) {
+  return `Active diagnostic target: ${targetLabel(target)}`;
+}
+
+function sameTarget(left, right) {
+  if (!left || !right) return false;
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "external") return true;
+  return left.instanceId === right.instanceId;
+}
+
+function isUnavailableObservedTarget(target) {
+  return (
+    sameTarget(target, currentObserver?.lastObservedTarget) &&
+    typeof currentObserver?.lastHealthScore === "number" &&
+    currentObserver.lastHealthScore <= 0
+  );
+}
+
 function renderInstanceList(instances) {
   const ul = document.getElementById("instance-list");
   ul.replaceChildren();
@@ -80,6 +108,7 @@ function renderInstanceList(instances) {
   for (const instance of instances) {
     const li = document.createElement("li");
     const wrapper = document.createElement("div");
+    const header = document.createElement("div");
     const title = document.createElement("strong");
     const meta = document.createElement("span");
     const controls = document.createElement("div");
@@ -91,6 +120,7 @@ function renderInstanceList(instances) {
     const useAsTarget = document.createElement("button");
 
     wrapper.className = "instance-entry";
+    header.className = "instance-header";
     controls.className = "controls";
     title.textContent = `${instance.id} (${instance.status})`;
     meta.className = "file-meta";
@@ -111,19 +141,41 @@ function renderInstanceList(instances) {
     stop.onclick = () => mutateInstance(instance.id, "stop");
     restart.onclick = () => mutateInstance(instance.id, "restart");
 
+    const scheduledTarget =
+      currentScheduledTarget?.kind === "managed_instance" ? currentScheduledTarget : undefined;
+    const instanceTarget = { kind: "managed_instance", instanceId: instance.id };
+    const isScheduledTarget = sameTarget(scheduledTarget, instanceTarget);
+    const isUnavailableTarget = isScheduledTarget && isUnavailableObservedTarget(instanceTarget);
+
     if (instance.status === "running") {
       start.disabled = true;
     } else {
       stop.disabled = true;
     }
+    if (isScheduledTarget) {
+      useAsTarget.disabled = true;
+    }
 
+    header.appendChild(title);
+    if (isScheduledTarget) {
+      const targetPill = document.createElement("span");
+      targetPill.className = "pill target";
+      targetPill.textContent = "scheduled target";
+      header.appendChild(targetPill);
+    }
+    if (isUnavailableTarget) {
+      const degradedPill = document.createElement("span");
+      degradedPill.className = "pill degraded";
+      degradedPill.textContent = "unavailable";
+      header.appendChild(degradedPill);
+    }
     controls.appendChild(inspect);
     controls.appendChild(analyze);
     controls.appendChild(useAsTarget);
     controls.appendChild(start);
     controls.appendChild(stop);
     controls.appendChild(restart);
-    wrapper.appendChild(title);
+    wrapper.appendChild(header);
     wrapper.appendChild(meta);
     wrapper.appendChild(controls);
     li.appendChild(wrapper);
@@ -137,15 +189,10 @@ function setInstanceFeedback(text, isError = false) {
   element.className = isError ? "status" : "muted";
 }
 
-function describeTarget(target) {
-  if (!target || target.kind === "external") {
-    return "Active diagnostic target: external configured rust-mule client";
-  }
-  return `Active diagnostic target: managed instance ${target.instanceId}`;
-}
-
 function renderHealth(data) {
   const observerLines = [];
+  currentObserver = data.observer || null;
+  currentScheduledTarget = data.observer?.activeDiagnosticTarget || null;
   if (data.observer) {
     observerLines.push(describeTarget(data.observer.activeDiagnosticTarget));
     observerLines.push(
@@ -173,6 +220,7 @@ function renderHealth(data) {
       .filter((line) => line !== null)
       .join("\n"),
   );
+  renderTargetStatusCard();
 }
 
 async function refreshHealth() {
@@ -230,7 +278,7 @@ async function refreshInstances() {
   try {
     const data = await fetchJson("/api/instances");
     renderInstanceList(data.instances);
-    await refreshObserverTarget();
+    renderTargetStatusCard();
     if (selectedInstanceId) {
       const exists = data.instances.some((instance) => instance.id === selectedInstanceId);
       if (!exists) {
@@ -244,29 +292,80 @@ async function refreshInstances() {
   } catch (err) {
     renderInstanceList([]);
     setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
-    setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
-  }
-}
-
-async function refreshObserverTarget() {
-  try {
-    const data = await fetchJson("/api/observer/target");
-    setText("observer-target", describeTarget(data.target));
-  } catch (err) {
-    setText("observer-target", `Failed to load active diagnostic target: ${String(err)}`);
+    renderTargetStatusCard();
   }
 }
 
 async function updateObserverTarget(target) {
   try {
     const data = await postJson("/api/observer/target", target);
+    currentScheduledTarget = data.target;
     setText("observer-target", describeTarget(data.target));
+    renderTargetStatusCard();
     setInstanceFeedback(
       `diagnostic target updated to ${describeTarget(data.target).replace("Active diagnostic target: ", "")}`,
     );
+    await refreshInstances();
   } catch (err) {
     setInstanceFeedback(String(err), true);
   }
+}
+
+function renderTargetStatusCard(errorText) {
+  const element = document.getElementById("target-status-card");
+  if (errorText) {
+    element.textContent = errorText;
+    element.className = "target-status-card muted";
+    return;
+  }
+
+  if (!currentScheduledTarget && !currentObserver) {
+    element.textContent = "No observer target state loaded yet.";
+    element.className = "target-status-card muted";
+    return;
+  }
+
+  const lines = [];
+  lines.push(renderTargetStatusLine("Scheduled", targetLabel(currentScheduledTarget)));
+  lines.push(
+    renderTargetStatusLine(
+      "Last observed",
+      currentObserver?.lastObservedTarget
+        ? targetLabel(currentObserver.lastObservedTarget)
+        : "unknown",
+    ),
+  );
+  lines.push(
+    renderTargetStatusLine(
+      "Last health",
+      typeof currentObserver?.lastHealthScore === "number"
+        ? String(currentObserver.lastHealthScore)
+        : "unknown",
+    ),
+  );
+  lines.push(renderTargetStatusLine("Last run", currentObserver?.lastRun || "unknown"));
+  if (isUnavailableObservedTarget(currentScheduledTarget)) {
+    lines.push(renderTargetStatusLine("State", "unavailable"));
+    element.className = "target-status-card";
+  } else {
+    lines.push(renderTargetStatusLine("State", "active"));
+    element.className = "target-status-card";
+  }
+  element.replaceChildren(...lines);
+}
+
+function renderTargetStatusLine(label, value) {
+  const row = document.createElement("div");
+  const left = document.createElement("span");
+  const right = document.createElement("span");
+  row.className = "target-status-line";
+  left.className = "target-status-label";
+  right.className = "target-status-value";
+  left.textContent = label;
+  right.textContent = value;
+  row.appendChild(left);
+  row.appendChild(right);
+  return row;
 }
 
 async function mutateInstance(id, action) {
@@ -337,6 +436,7 @@ setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
 setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
 setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
+renderTargetStatusCard();
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });
@@ -376,6 +476,7 @@ document.getElementById("refresh-rust").onclick = refreshRustLogs;
 document.getElementById("refresh-llm-list").onclick = refreshLlmList;
 document.getElementById("refresh-proposals").onclick = refreshProposalList;
 document.getElementById("refresh-instances").onclick = refreshInstances;
+document.getElementById("refresh-target-status").onclick = refreshHealth;
 document.getElementById("instance-create-form").onsubmit = createInstance;
 document.getElementById("use-external-target").onclick = () => {
   void updateObserverTarget({ kind: "external" });

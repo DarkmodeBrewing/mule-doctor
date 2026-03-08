@@ -113,6 +113,13 @@ label {
   gap: 6px;
 }
 
+.instance-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .card h2 {
   font-size: 1rem;
   color: var(--accent);
@@ -160,6 +167,57 @@ button:hover,
 .status.live::before {
   background: var(--accent);
   box-shadow: 0 0 14px rgba(140, 240, 198, 0.6);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  background: rgba(12, 17, 24, 0.9);
+}
+
+.pill.target {
+  border-color: rgba(56, 189, 248, 0.5);
+  color: var(--accent-strong);
+}
+
+.pill.degraded {
+  border-color: rgba(255, 107, 107, 0.45);
+  color: var(--error);
+}
+
+.target-status-card {
+  border: 1px solid rgba(48, 67, 88, 0.8);
+  border-radius: 14px;
+  padding: 14px;
+  background: #08111a;
+  display: grid;
+  gap: 10px;
+  min-height: 120px;
+}
+
+.target-status-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.target-status-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.target-status-value {
+  color: var(--text);
+  font-weight: 600;
 }
 
 pre {
