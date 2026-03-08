@@ -33,6 +33,10 @@ Optional:
 - `MULE_DOCTOR_HISTORY_PATH` (defaults to `/data/mule-doctor/history.json`)
 - `MULE_DOCTOR_HISTORY_LIMIT` (defaults to `500`)
 - `MULE_DOCTOR_LLM_LOG_DIR` (defaults to `MULE_DOCTOR_DATA_DIR`, stores `LLM_<timestamp>.log`)
+- `MULE_DOCTOR_UI_ENABLED` (defaults to `false`; enables built-in operator console when `true`)
+- `MULE_DOCTOR_UI_HOST` (defaults to `127.0.0.1`; use `0.0.0.0` in container for host access)
+- `MULE_DOCTOR_UI_PORT` (defaults to `18080`)
+- `MULE_DOCTOR_UI_LOG_BUFFER_LINES` (defaults to `2000`, in-memory app-log line buffer for UI)
 - `OPENAI_INPUT_COST_PER_1K` (optional USD per 1K input tokens, default `0`)
 - `OPENAI_OUTPUT_COST_PER_1K` (optional USD per 1K output tokens, default `0`)
 
@@ -65,6 +69,9 @@ Container defaults:
 - `RUST_MULE_LOG_PATH=/data/logs/rust-mule.log`
 - `RUST_MULE_SOURCE_PATH=/opt/rust-mule`
 - `MULE_DOCTOR_DATA_DIR=/data/mule-doctor`
+- `MULE_DOCTOR_UI_ENABLED=false`
+- `MULE_DOCTOR_UI_HOST=127.0.0.1`
+- `MULE_DOCTOR_UI_PORT=18080`
 
 Entrypoint behavior:
 
@@ -77,6 +84,12 @@ Required production runtime inputs:
 - `/data/config.toml` for rust-mule startup
 - `OPENAI_API_KEY`
 - `MATTERMOST_WEBHOOK_URL`
+
+Operator console (optional):
+
+- `GET /` serves a read-only UI for operator inspection.
+- JSON endpoints include `/api/health`, `/api/logs/app`, `/api/logs/rust-mule`, `/api/llm/logs`, and `/api/proposals`.
+- Docker compose maps UI port `${MULE_DOCTOR_UI_PORT:-18080}` and defaults UI host to `0.0.0.0` for browser access.
 
 ## Notes
 

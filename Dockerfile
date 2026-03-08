@@ -57,8 +57,12 @@ ENV MULE_DOCTOR_DATA_DIR=/data/mule-doctor
 ENV MULE_DOCTOR_STATE_PATH=/data/mule-doctor/state.json
 ENV MULE_DOCTOR_HISTORY_PATH=/data/mule-doctor/history.json
 ENV MULE_DOCTOR_LLM_LOG_DIR=/data/mule-doctor
+ENV MULE_DOCTOR_UI_ENABLED=false
+ENV MULE_DOCTOR_UI_HOST=127.0.0.1
+ENV MULE_DOCTOR_UI_PORT=18080
 
 VOLUME ["/data"]
+EXPOSE 17835 18080
 USER mule
 
 CMD ["/entrypoint.sh"]

@@ -13,6 +13,8 @@ import { UsageTracker } from "./llm/usageTracker.js";
 import { MattermostClient } from "./integrations/mattermost.js";
 import { Observer } from "./observer.js";
 import { RuntimeStore } from "./storage/runtimeStore.js";
+import { installStdoutLogBuffer } from "./operatorConsole/logBuffer.js";
+import { OperatorConsoleServer } from "./operatorConsole/server.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -50,7 +52,18 @@ function parseNonNegativeFloatEnv(name: string): number | undefined {
   return parsed;
 }
 
+function parseBooleanEnv(name: string): boolean | undefined {
+  const raw = optionalEnv(name);
+  if (raw === undefined) return undefined;
+  const normalized = raw.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  log("error", "index", `Invalid ${name}: expected boolean, got "${raw}"`);
+  process.exit(1);
+}
+
 async function main(): Promise<void> {
+  const appLogBuffer = installStdoutLogBuffer(parsePositiveIntEnv("MULE_DOCTOR_UI_LOG_BUFFER_LINES"));
   log("info", "index", "mule-doctor starting");
 
   const apiUrl = requireEnv("RUST_MULE_API_URL");
@@ -72,6 +85,9 @@ async function main(): Promise<void> {
   const sourcePath = optionalEnv("RUST_MULE_SOURCE_PATH");
   const resolvedDataDir = dataDir ?? "/data/mule-doctor";
   const proposalDir = `${resolvedDataDir}/proposals`;
+  const uiEnabled = parseBooleanEnv("MULE_DOCTOR_UI_ENABLED") ?? false;
+  const uiHost = optionalEnv("MULE_DOCTOR_UI_HOST") ?? "127.0.0.1";
+  const uiPort = parsePositiveIntEnv("MULE_DOCTOR_UI_PORT") ?? 18080;
 
   // Build components
   const rustMuleClient = new RustMuleClient(apiUrl, tokenPath, apiPrefix, debugTokenPath);
@@ -122,6 +138,24 @@ async function main(): Promise<void> {
     logWatcher,
     runtimeStore,
   });
+  let operatorConsole: OperatorConsoleServer | undefined;
+  if (uiEnabled) {
+    operatorConsole = new OperatorConsoleServer({
+      host: uiHost,
+      port: uiPort,
+      rustMuleLogPath: logPath,
+      llmLogDir: llmLogDir ?? resolvedDataDir,
+      proposalDir,
+      getAppLogs: (n) => appLogBuffer.getRecentLines(n),
+    });
+    try {
+      await operatorConsole.start();
+      log("info", "index", `Operator console listening at ${operatorConsole.publicAddress()}`);
+    } catch (err) {
+      log("warn", "index", `Operator console failed to start, continuing without UI: ${String(err)}`);
+      operatorConsole = undefined;
+    }
+  }
 
   // Graceful shutdown
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -129,6 +163,10 @@ async function main(): Promise<void> {
       log("info", "index", `Received ${signal}, shutting down`);
       observer.stop();
       logWatcher.stop();
+      operatorConsole
+        ?.stop()
+        .catch((err) => log("warn", "index", `Operator console shutdown failed: ${String(err)}`));
+      appLogBuffer.restore();
       process.exit(0);
     });
   }
