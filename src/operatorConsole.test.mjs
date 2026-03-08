@@ -130,6 +130,20 @@ class StubManagedInstanceDiagnostics {
   }
 }
 
+class StubManagedInstanceAnalysis {
+  async analyze(id) {
+    if (id !== "a") {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
+    return {
+      instanceId: "a",
+      analyzedAt: "2026-03-08T02:05:00.000Z",
+      available: true,
+      summary: "Managed instance is healthy with mild timeout pressure.",
+    };
+  }
+}
+
 async function loginAndGetCookie(baseUrl) {
   const loginRes = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
@@ -212,6 +226,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       rustMuleStreamPollMs: 25,
       managedInstances: new StubManagedInstances(),
       managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
+      managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
     });
     await server.start();
 
@@ -315,6 +330,15 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     const diagnostics = await diagnosticsRes.json();
     assert.equal(diagnostics.snapshot.instanceId, "a");
     assert.equal(diagnostics.snapshot.available, true);
+
+    const analysisRes = await fetch(`${baseUrl}/api/instances/a/analyze`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: baseUrl },
+    });
+    assert.equal(analysisRes.status, 200);
+    const analysis = await analysisRes.json();
+    assert.equal(analysis.analysis.instanceId, "a");
+    assert.match(analysis.analysis.summary, /healthy/);
 
     const createRes = await fetch(`${baseUrl}/api/instances`, {
       method: "POST",

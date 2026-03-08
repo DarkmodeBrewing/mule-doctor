@@ -17,6 +17,7 @@ import { installStdoutLogBuffer } from "./operatorConsole/logBuffer.js";
 import { OperatorConsoleServer } from "./operatorConsole/server.js";
 import { InstanceManager } from "./instances/instanceManager.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
+import { ManagedInstanceAnalysisService } from "./instances/managedInstanceAnalysis.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -172,6 +173,18 @@ async function main(): Promise<void> {
   const managedInstanceDiagnostics = managedInstances
     ? new ManagedInstanceDiagnosticsService(managedInstances, { apiPrefix })
     : undefined;
+  const managedInstanceAnalysis =
+    managedInstances && managedInstanceDiagnostics
+      ? new ManagedInstanceAnalysisService({
+          apiKey: openaiKey,
+          instanceManager: managedInstances,
+          diagnostics: managedInstanceDiagnostics,
+          model: openaiModel,
+          usageTracker,
+          sourcePath,
+          proposalDir,
+        })
+      : undefined;
   let operatorConsole: OperatorConsoleServer | undefined;
   if (uiEnabled) {
     operatorConsole = new OperatorConsoleServer({
@@ -185,6 +198,7 @@ async function main(): Promise<void> {
       subscribeToAppLogs: appLogBuffer ? (listener) => appLogBuffer.subscribe(listener) : undefined,
       managedInstances,
       managedInstanceDiagnostics,
+      managedInstanceAnalysis,
     });
     try {
       await operatorConsole.start();

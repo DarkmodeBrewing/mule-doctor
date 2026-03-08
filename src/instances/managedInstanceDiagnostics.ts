@@ -30,7 +30,7 @@ export class ManagedInstanceDiagnosticsService {
       return unavailableSnapshot(record, `instance is ${record.status}`);
     }
 
-    const client = this.getClient(record);
+    const client = this.getClientForInstance(record);
     try {
       await client.loadToken();
       const [nodeInfo, peers, routingBuckets, lookupStats] = await Promise.all([
@@ -62,7 +62,7 @@ export class ManagedInstanceDiagnosticsService {
     }
   }
 
-  private getClient(record: ManagedInstanceRecord): RustMuleClient {
+  getClientForInstance(record: ManagedInstanceRecord): RustMuleClient {
     const existing = this.clients.get(record.id);
     if (existing) {
       return existing;
