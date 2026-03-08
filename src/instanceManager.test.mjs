@@ -202,6 +202,45 @@ test("InstanceManager marks records failed when startup reconciliation finds mis
   }
 });
 
+test("InstanceManager monitors reconciled live processes and updates status after exit", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const firstLauncher = new FakeProcessLauncher();
+    const firstManager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      processLauncher: firstLauncher,
+      reconcilePollMs: 50,
+    });
+    await firstManager.initialize();
+    await firstManager.createPlannedInstance({ id: "a" });
+    const started = await firstManager.startInstance("a");
+
+    const secondLauncher = new FakeProcessLauncher();
+    secondLauncher.running.add(started.currentProcess.pid);
+    const secondManager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      processLauncher: secondLauncher,
+      reconcilePollMs: 50,
+    });
+    await secondManager.initialize();
+
+    let record = await secondManager.getInstance("a");
+    assert.equal(record.status, "running");
+
+    secondLauncher.running.delete(started.currentProcess.pid);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    record = await secondManager.getInstance("a");
+    assert.equal(record.status, "stopped");
+    assert.equal(record.currentProcess, undefined);
+    assert.equal(record.lastExit.reason, "process exited after mule-doctor startup reconciliation");
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("InstanceManager restarts a running instance with a new pid", async () => {
   const tmp = await makeTempDir();
   try {

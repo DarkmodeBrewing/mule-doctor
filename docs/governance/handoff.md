@@ -120,7 +120,7 @@
 - Managed-instance launcher phase underway:
   - adding a bounded process-launch abstraction for rust-mule child-process lifecycle
   - persisting per-instance runtime process state (`pid`, command, cwd, last exit)
-  - reconciling stale `running` records on mule-doctor startup
+  - reconciling stale `running` records on mule-doctor startup and polling reconciled live pids so status does not stick forever after a mule-doctor restart
   - deferring operator-console lifecycle controls until backend launch behavior is in place
 
 ## Key Decisions

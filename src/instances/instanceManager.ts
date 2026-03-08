@@ -38,6 +38,7 @@ export interface InstanceManagerConfig extends InstanceCatalogConfig {
   rustMuleBinaryPath?: string;
   rustMuleConfigTemplate?: ManagedRustMuleConfigTemplate;
   processLauncher?: ProcessLauncher;
+  reconcilePollMs?: number;
   stopSignal?: NodeJS.Signals;
   stopTimeoutMs?: number;
 }
@@ -51,6 +52,7 @@ export class InstanceManager {
   private readonly rustMuleBinaryPath: string;
   private readonly rustMuleConfigTemplate: ManagedRustMuleConfigTemplate | undefined;
   private readonly processLauncher: ProcessLauncher;
+  private readonly reconcilePollMs: number;
   private readonly stopSignal: NodeJS.Signals;
   private readonly stopTimeoutMs: number;
   private operationQueue: Promise<void> = Promise.resolve();
@@ -65,6 +67,7 @@ export class InstanceManager {
     this.rustMuleBinaryPath = config.rustMuleBinaryPath?.trim() || "rust-mule";
     this.rustMuleConfigTemplate = config.rustMuleConfigTemplate;
     this.processLauncher = config.processLauncher ?? new NodeProcessLauncher();
+    this.reconcilePollMs = clampPollMs(config.reconcilePollMs ?? 1000);
     this.stopSignal = config.stopSignal ?? "SIGTERM";
     this.stopTimeoutMs = config.stopTimeoutMs ?? 5000;
 
@@ -259,7 +262,9 @@ export class InstanceManager {
             reason: "process missing during mule-doctor startup reconciliation",
           },
         });
+        continue;
       }
+      this.trackReconciledProcess(record.id, pid);
     }
   }
 
@@ -307,6 +312,18 @@ export class InstanceManager {
     this.liveProcesses.set(pid, tracked);
   }
 
+  private trackReconciledProcess(id: string, pid: number): void {
+    if (this.liveProcesses.has(pid)) {
+      return;
+    }
+    const tracked = this.monitorProcessLiveness(id, pid)
+      .then((record) => record)
+      .finally(() => {
+        this.liveProcesses.delete(pid);
+      });
+    this.liveProcesses.set(pid, tracked);
+  }
+
   private async handleProcessExit(
     id: string,
     pid: number,
@@ -340,6 +357,21 @@ export class InstanceManager {
 
   private buildCommand(record: ManagedInstanceRecord): string[] {
     return [this.rustMuleBinaryPath, "--config", record.runtime.configPath];
+  }
+
+  private async monitorProcessLiveness(
+    id: string,
+    pid: number,
+  ): Promise<ManagedInstanceRecord> {
+    while (await this.processLauncher.isRunning(pid)) {
+      await new Promise<void>((resolveWait) => setTimeout(resolveWait, this.reconcilePollMs));
+    }
+    return this.handleProcessExit(id, pid, {
+      at: new Date().toISOString(),
+      exitCode: null,
+      signal: null,
+      reason: "process exited after mule-doctor startup reconciliation",
+    });
   }
 
   private async requireInstance(id: string): Promise<ManagedInstanceRecord> {
@@ -421,6 +453,13 @@ function normalizeRequestedPort(value: number, start: number, end: number): numb
     );
   }
   return port;
+}
+
+function clampPollMs(value: number): number {
+  if (!Number.isInteger(value) || value < 50 || value > 60_000) {
+    throw new Error(`Invalid reconcile poll interval: ${value}`);
+  }
+  return value;
 }
 
 async function materializeRuntimePaths(
