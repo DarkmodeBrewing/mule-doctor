@@ -34,7 +34,7 @@ export function getNetworkHealth(input: NetworkHealthInput): NetworkHealthResult
   const bucketBalanceScore = scoreBucketBalance(input.routingBuckets);
   const lookupSuccessScore = scoreLookupSuccess(input.lookupStats);
   const lookupEfficiencyScore = scoreLookupEfficiency(
-    input.avgHops ?? readNumber(input.lookupStats, ["avgHops", "avg_hops"])
+    input.avgHops ?? readNumber(input.lookupStats, ["avgHops", "avg_hops"]),
   );
   const errorRateScore = scoreErrorRate(input.lookupStats, lookupSuccessScore);
 
@@ -44,8 +44,8 @@ export function getNetworkHealth(input: NetworkHealthInput): NetworkHealthResult
         0.2 * bucketBalanceScore +
         0.25 * lookupSuccessScore +
         0.15 * lookupEfficiencyScore +
-        0.15 * errorRateScore
-    )
+        0.15 * errorRateScore,
+    ),
   );
 
   return {
@@ -76,8 +76,7 @@ function scoreBucketBalance(buckets: RoutingBucket[]): number {
   if (total <= 0) return 0;
 
   const mean = total / sizes.length;
-  const variance =
-    sizes.reduce((acc, value) => acc + (value - mean) ** 2, 0) / sizes.length;
+  const variance = sizes.reduce((acc, value) => acc + (value - mean) ** 2, 0) / sizes.length;
   const stdDev = Math.sqrt(variance);
   const coefficientOfVariation = mean > 0 ? stdDev / mean : 1;
   const balanceScore = clamp(Math.round(100 - coefficientOfVariation * 100));
@@ -123,10 +122,7 @@ function scoreLookupEfficiency(avgHops: number | undefined): number {
   return clamp(Math.round((1 - normalized) * 100));
 }
 
-function scoreErrorRate(
-  lookupStats: Record<string, unknown>,
-  lookupSuccessScore: number
-): number {
+function scoreErrorRate(lookupStats: Record<string, unknown>, lookupSuccessScore: number): number {
   const total = readNumber(lookupStats, ["total", "sent_reqs_total"]);
   const timeoutsPerSent = readNumber(lookupStats, ["timeoutsPerSent", "timeouts_per_sent"]);
   const failed = readNumber(lookupStats, ["failed"]);
@@ -147,10 +143,7 @@ function scoreErrorRate(
   return clamp(Math.round((1 - clampRatio(baseErrorRate + shaperPenalty)) * 100));
 }
 
-function readNumber(
-  payload: Record<string, unknown>,
-  keys: string[]
-): number | undefined {
+function readNumber(payload: Record<string, unknown>, keys: string[]): number | undefined {
   for (const key of keys) {
     const value = payload[key];
     if (typeof value === "number" && Number.isFinite(value)) {

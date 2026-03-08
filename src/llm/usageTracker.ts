@@ -46,14 +46,8 @@ export class UsageTracker {
   constructor(config: UsageTrackerConfig = {}) {
     this.runtimeStore = config.runtimeStore;
     this.dataDir = config.dataDir ?? DEFAULT_DATA_DIR;
-    this.inputCostPer1k = positiveOrDefault(
-      config.inputCostPer1k,
-      DEFAULT_INPUT_COST_PER_1K
-    );
-    this.outputCostPer1k = positiveOrDefault(
-      config.outputCostPer1k,
-      DEFAULT_OUTPUT_COST_PER_1K
-    );
+    this.inputCostPer1k = positiveOrDefault(config.inputCostPer1k, DEFAULT_INPUT_COST_PER_1K);
+    this.outputCostPer1k = positiveOrDefault(config.outputCostPer1k, DEFAULT_OUTPUT_COST_PER_1K);
   }
 
   async record(input: LlmUsageRecordInput): Promise<LlmUsageRecord> {
@@ -155,7 +149,7 @@ export class UsageTracker {
     const run = this.mutationQueue.then(op, op);
     this.mutationQueue = run.then(
       () => undefined,
-      () => undefined
+      () => undefined,
     );
     return run;
   }

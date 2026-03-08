@@ -26,9 +26,7 @@ export class LogWatcher {
     await this.tail();
     this.watcher = watch(this.filePath, { persistent: false }, (event) => {
       if (event === "change") {
-        this.tail().catch((err) =>
-          log("warn", "logWatcher", `Tail error: ${String(err)}`)
-        );
+        this.tail().catch((err) => log("warn", "logWatcher", `Tail error: ${String(err)}`));
       }
     });
     log("info", "logWatcher", `Watching ${this.filePath}`);
@@ -88,7 +86,5 @@ export class LogWatcher {
 }
 
 function log(level: string, module: string, msg: string): void {
-  process.stdout.write(
-    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
-  );
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

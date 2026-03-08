@@ -101,7 +101,11 @@ test("MattermostClient posts patch proposal metadata and diff content", async ()
   assert.equal(payload.text, "rust-mule patch proposal available");
   assert.equal(payload.attachments.length, 2);
   assert.equal(payload.attachments[0].title, "Patch Proposal Metadata");
-  assert.ok(payload.attachments[0].text.includes("Artifact: .mule-doctor/proposals/proposal-2026-03-05.patch"));
+  assert.ok(
+    payload.attachments[0].text.includes(
+      "Artifact: .mule-doctor/proposals/proposal-2026-03-05.patch",
+    ),
+  );
   assert.ok(payload.attachments[0].text.includes("Content truncated: no"));
   assert.equal(payload.attachments[1].title, "Patch Content");
   assert.ok(payload.attachments[1].text.includes("```diff"));

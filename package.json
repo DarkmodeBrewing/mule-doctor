@@ -9,14 +9,24 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test src/*.test.mjs",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
-    "typescript": "^5.4.0"
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.56.1"
   },
   "license": "MIT"
 }

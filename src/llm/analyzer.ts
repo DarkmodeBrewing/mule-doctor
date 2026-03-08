@@ -7,10 +7,7 @@
 
 import type { ToolRegistry } from "../tools/toolRegistry.js";
 import type { ToolResult } from "../types/contracts.js";
-import {
-  type UsageSummary,
-  type UsageTracker,
-} from "./usageTracker.js";
+import { type UsageSummary, type UsageTracker } from "./usageTracker.js";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-5-mini";
@@ -140,12 +137,8 @@ export class Analyzer {
         await this.usageTracker.record({
           timestamp: new Date().toISOString(),
           model: modelUsed,
-          tokensIn:
-            typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : 0,
-          tokensOut:
-            typeof usage.completion_tokens === "number"
-              ? usage.completion_tokens
-              : 0,
+          tokensIn: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : 0,
+          tokensOut: typeof usage.completion_tokens === "number" ? usage.completion_tokens : 0,
         });
       } catch (err) {
         log("warn", "analyzer", `Usage tracking failed: ${String(err)}`);
@@ -178,7 +171,5 @@ export class Analyzer {
 }
 
 function log(level: string, module: string, msg: string): void {
-  process.stdout.write(
-    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
-  );
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

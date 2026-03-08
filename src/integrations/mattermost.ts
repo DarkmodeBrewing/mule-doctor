@@ -57,16 +57,25 @@ export class MattermostClient {
     const color = healthColor(report.healthScore);
     const status = healthStatus(report.healthScore);
     const metricsLines = [
-      metricLine("Health score", formatMaybe(report.healthScore, (v) => `${v}/100`)),
-      metricLine("Peers", formatMaybe(report.peerCount, (v) => String(v))),
-      metricLine("Routing buckets", formatMaybe(report.routingBucketCount, (v) => String(v))),
+      metricLine(
+        "Health score",
+        formatMaybe(report.healthScore, (v) => `${v}/100`),
+      ),
+      metricLine(
+        "Peers",
+        formatMaybe(report.peerCount, (v) => String(v)),
+      ),
+      metricLine(
+        "Routing buckets",
+        formatMaybe(report.routingBucketCount, (v) => String(v)),
+      ),
       metricLine(
         "Lookup success",
-        formatMaybe(report.lookupSuccessPct, (v) => `${v.toFixed(1)}%`)
+        formatMaybe(report.lookupSuccessPct, (v) => `${v.toFixed(1)}%`),
       ),
       metricLine(
         "Timeout rate",
-        formatMaybe(report.lookupTimeoutPct, (v) => `${v.toFixed(1)}%`)
+        formatMaybe(report.lookupTimeoutPct, (v) => `${v.toFixed(1)}%`),
       ),
     ]
       .filter((line): line is string => Boolean(line))
@@ -156,7 +165,10 @@ export class MattermostClient {
    *   @mule-doctor peers    – peer list summary
    */
   async handleCommand(ctx: MattermostCommandContext): Promise<void> {
-    const cmd = ctx.command.trim().replace(/^@mule-doctor\s*/i, "").toLowerCase();
+    const cmd = ctx.command
+      .trim()
+      .replace(/^@mule-doctor\s*/i, "")
+      .toLowerCase();
     log("info", "mattermost", `Handling command: ${cmd}`);
 
     let prompt: string;
@@ -176,8 +188,7 @@ export class MattermostClient {
         break;
       default:
         await this.post(
-          `Unknown command: \`${cmd}\`.\n` +
-            "Available commands: `status`, `analyze`, `peers`"
+          `Unknown command: \`${cmd}\`.\n` + "Available commands: `status`, `analyze`, `peers`",
         );
         return;
     }
@@ -213,7 +224,7 @@ function formatMaybe<T>(value: T | undefined, formatter: (value: T) => string): 
 
 function usageBucketText(
   bucket: { calls: number; tokensIn: number; tokensOut: number; estimatedCost: number },
-  key: string
+  key: string,
 ): string {
   return [
     `Period: ${key}`,
@@ -238,7 +249,5 @@ function escapeCodeFence(text: string): string {
 }
 
 function log(level: string, module: string, msg: string): void {
-  process.stdout.write(
-    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
-  );
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

@@ -57,7 +57,7 @@ export class ToolRegistry {
     client: RustMuleClient,
     logWatcher: LogWatcher,
     runtimeStore?: RuntimeStore,
-    options: ToolRegistryOptions = {}
+    options: ToolRegistryOptions = {},
   ) {
     this.patchProposalNotifier = options.patchProposalNotifier;
 
@@ -70,7 +70,7 @@ export class ToolRegistry {
           parameters: { type: "object", properties: {}, required: [] },
         },
       },
-      () => client.getNodeInfo()
+      () => client.getNodeInfo(),
     );
 
     this.register(
@@ -82,7 +82,7 @@ export class ToolRegistry {
           parameters: { type: "object", properties: {}, required: [] },
         },
       },
-      () => client.getPeers()
+      () => client.getPeers(),
     );
 
     this.register(
@@ -94,7 +94,7 @@ export class ToolRegistry {
           parameters: { type: "object", properties: {}, required: [] },
         },
       },
-      () => client.getRoutingBuckets()
+      () => client.getRoutingBuckets(),
     );
 
     this.register(
@@ -106,7 +106,7 @@ export class ToolRegistry {
           parameters: { type: "object", properties: {}, required: [] },
         },
       },
-      () => client.getLookupStats()
+      () => client.getLookupStats(),
     );
 
     this.register(
@@ -130,7 +130,7 @@ export class ToolRegistry {
       (args) => {
         const n = clampInt(args["n"], 50, 1, 1000);
         return Promise.resolve(logWatcher.getRecentLines(n));
-      }
+      },
     );
 
     if (runtimeStore) {
@@ -155,7 +155,7 @@ export class ToolRegistry {
         async (args): Promise<HistoryEntry[]> => {
           const n = clampInt(args["n"], 50, 1, 1000);
           return runtimeStore.getRecentHistory(n);
-        }
+        },
       );
     }
 
@@ -164,8 +164,7 @@ export class ToolRegistry {
         type: "function",
         function: {
           name: "searchLogs",
-          description:
-            "Searches recent rust-mule logs using safe bounded substring matching.",
+          description: "Searches recent rust-mule logs using safe bounded substring matching.",
           parameters: {
             type: "object",
             properties: {
@@ -220,7 +219,7 @@ export class ToolRegistry {
           totalMatches,
           matches,
         };
-      }
+      },
     );
 
     this.register(
@@ -251,7 +250,7 @@ export class ToolRegistry {
           pollIntervalMs: clampInt(args["pollIntervalMs"], 500, 10, 30_000),
           maxWaitMs: clampInt(args["maxWaitMs"], 15_000, 100, 300_000),
         });
-      }
+      },
     );
 
     this.register(
@@ -287,7 +286,7 @@ export class ToolRegistry {
           pollIntervalMs: clampInt(args["pollIntervalMs"], 500, 10, 30_000),
           maxWaitMs: clampInt(args["maxWaitMs"], 15_000, 100, 300_000),
         });
-      }
+      },
     );
 
     if (options.sourcePath) {
@@ -318,7 +317,7 @@ export class ToolRegistry {
         async (args) => {
           const query = typeof args["query"] === "string" ? args["query"] : "";
           return sourceTools.searchCode(query);
-        }
+        },
       );
 
       this.register(
@@ -343,7 +342,7 @@ export class ToolRegistry {
         async (args) => {
           const path = typeof args["path"] === "string" ? args["path"] : "";
           return sourceTools.readFile(path);
-        }
+        },
       );
 
       this.register(
@@ -368,7 +367,7 @@ export class ToolRegistry {
         async (args) => {
           const name = typeof args["name"] === "string" ? args["name"] : "";
           return sourceTools.showFunction(name);
-        }
+        },
       );
 
       this.register(
@@ -402,15 +401,11 @@ export class ToolRegistry {
                 lines: proposal.lines,
               });
             } catch (err) {
-              log(
-                "warn",
-                "toolRegistry",
-                `Patch proposal notification failed: ${String(err)}`
-              );
+              log("warn", "toolRegistry", `Patch proposal notification failed: ${String(err)}`);
             }
           }
           return proposal;
-        }
+        },
       );
 
       this.register(
@@ -418,8 +413,7 @@ export class ToolRegistry {
           type: "function",
           function: {
             name: "git_blame",
-            description:
-              "Runs git blame for a specific file and line under RUST_MULE_SOURCE_PATH.",
+            description: "Runs git blame for a specific file and line under RUST_MULE_SOURCE_PATH.",
             parameters: {
               type: "object",
               properties: {
@@ -440,7 +434,7 @@ export class ToolRegistry {
           const file = typeof args["file"] === "string" ? args["file"] : "";
           const line = typeof args["line"] === "number" ? args["line"] : 1;
           return sourceTools.gitBlame(file, line);
-        }
+        },
       );
     }
   }
@@ -492,7 +486,5 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
 }
 
 function log(level: string, module: string, msg: string): void {
-  process.stdout.write(
-    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
-  );
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

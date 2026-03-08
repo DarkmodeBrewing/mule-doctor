@@ -90,21 +90,14 @@ export class RustMuleClient {
   private authToken: string | undefined;
   private debugToken: string | undefined;
 
-  constructor(
-    baseUrl: string,
-    tokenPath?: string,
-    apiPrefix = "/api/v1",
-    debugTokenPath?: string
-  ) {
+  constructor(baseUrl: string, tokenPath?: string, apiPrefix = "/api/v1", debugTokenPath?: string) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     const trimmedPrefix = apiPrefix.trim();
     if (trimmedPrefix === "") {
       this.apiPrefix = "";
     } else {
       const withoutTrailing = trimmedPrefix.replace(/\/+$/, "");
-      this.apiPrefix = withoutTrailing.startsWith("/")
-        ? withoutTrailing
-        : `/${withoutTrailing}`;
+      this.apiPrefix = withoutTrailing.startsWith("/") ? withoutTrailing : `/${withoutTrailing}`;
     }
     this.tokenPath = tokenPath;
     this.debugTokenPath = debugTokenPath;
@@ -152,7 +145,7 @@ export class RustMuleClient {
   private async post<T>(
     path: string,
     body: Record<string, unknown> = {},
-    options: RequestOptions = {}
+    options: RequestOptions = {},
   ): Promise<T> {
     const url = `${this.baseUrl}${this.apiPrefix}${path}`;
     const res = await fetch(url, {
@@ -170,25 +163,14 @@ export class RustMuleClient {
     const status = await this.get<Record<string, unknown>>("/status");
     return {
       ...status,
-      nodeId:
-        typeof status["node_id_hex"] === "string"
-          ? status["node_id_hex"]
-          : "unknown",
-      version:
-        typeof status["version"] === "string"
-          ? status["version"]
-          : "unknown",
-      uptime:
-        typeof status["uptime_secs"] === "number"
-          ? status["uptime_secs"]
-          : 0,
+      nodeId: typeof status["node_id_hex"] === "string" ? status["node_id_hex"] : "unknown",
+      version: typeof status["version"] === "string" ? status["version"] : "unknown",
+      uptime: typeof status["uptime_secs"] === "number" ? status["uptime_secs"] : 0,
     };
   }
 
   async getPeers(): Promise<Peer[]> {
-    const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>(
-      "/kad/peers"
-    );
+    const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>("/kad/peers");
     const peers = Array.isArray(payload.peers) ? payload.peers : [];
     return peers.map((p) => ({
       ...p,
@@ -232,7 +214,7 @@ export class RustMuleClient {
       log(
         "warn",
         "rustMuleClient",
-        `Routing buckets unavailable (debug endpoint disabled or token rejected): ${String(err)}`
+        `Routing buckets unavailable (debug endpoint disabled or token rejected): ${String(err)}`,
       );
       return [];
     }
@@ -241,15 +223,13 @@ export class RustMuleClient {
   async getLookupStats(): Promise<LookupStats> {
     const events = await this.get<Record<string, unknown>>("/events");
 
-    const total =
-      typeof events["sent_reqs_total"] === "number" ? events["sent_reqs_total"] : 0;
+    const total = typeof events["sent_reqs_total"] === "number" ? events["sent_reqs_total"] : 0;
     const matched =
       typeof events["tracked_out_matched_total"] === "number"
         ? events["tracked_out_matched_total"]
         : 0;
     const hasMatchedField = typeof events["tracked_out_matched_total"] === "number";
-    const timeouts =
-      typeof events["timeouts_total"] === "number" ? events["timeouts_total"] : 0;
+    const timeouts = typeof events["timeouts_total"] === "number" ? events["timeouts_total"] : 0;
     const unmatched =
       typeof events["tracked_out_unmatched_total"] === "number"
         ? events["tracked_out_unmatched_total"]
@@ -287,7 +267,7 @@ export class RustMuleClient {
     const started = await this.post<Record<string, unknown>>(
       "/debug/bootstrap/restart",
       {},
-      { debug: true }
+      { debug: true },
     );
     const jobId = readString(started, ["job_id", "jobId"]);
     if (!jobId) {
@@ -296,7 +276,7 @@ export class RustMuleClient {
 
     const result = await this.pollDebugResult<Record<string, unknown>>(
       `/debug/bootstrap/jobs/${encodeURIComponent(jobId)}`,
-      options
+      options,
     );
 
     return {
@@ -312,11 +292,9 @@ export class RustMuleClient {
       body["target_id"] = targetId.trim();
     }
 
-    const started = await this.post<Record<string, unknown>>(
-      "/debug/trace_lookup",
-      body,
-      { debug: true }
-    );
+    const started = await this.post<Record<string, unknown>>("/debug/trace_lookup", body, {
+      debug: true,
+    });
     const traceId = readString(started, ["trace_id", "traceId"]);
     if (!traceId) {
       throw new Error(`Trace lookup response missing trace_id: ${JSON.stringify(started)}`);
@@ -324,7 +302,7 @@ export class RustMuleClient {
 
     const result = await this.pollDebugResult<Record<string, unknown>>(
       `/debug/trace_lookup/${encodeURIComponent(traceId)}`,
-      options
+      options,
     );
 
     return {
@@ -337,13 +315,12 @@ export class RustMuleClient {
 
   private async pollDebugResult<T extends Record<string, unknown>>(
     path: string,
-    options: PollOptions = {}
+    options: PollOptions = {},
   ): Promise<T> {
     const pollIntervalMs = clampInt(options.pollIntervalMs, DEFAULT_POLL_INTERVAL_MS, 10, 30_000);
     const maxWaitMs = clampInt(options.maxWaitMs, DEFAULT_MAX_WAIT_MS, 100, 300_000);
 
     const deadline = Date.now() + maxWaitMs;
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const result = await this.get<Record<string, unknown>>(path, { debug: true });
       if (isTerminalDebugResult(result)) {
@@ -364,7 +341,8 @@ function normalizeTraceHops(raw: unknown): TraceLookupHop[] {
     const payload = typeof hop === "object" && hop !== null ? (hop as Record<string, unknown>) : {};
     return {
       ...payload,
-      peerQueried: readString(payload, ["peer_queried", "peerQueried", "peer", "node_id"]) ?? "unknown",
+      peerQueried:
+        readString(payload, ["peer_queried", "peerQueried", "peer", "node_id"]) ?? "unknown",
       distance: readNumber(payload, ["distance", "distance_to_target"]),
       rttMs: readNumber(payload, ["rtt_ms", "rttMs", "latency_ms"]),
       contactsReturned: readNumber(payload, ["contacts_returned", "contactsReturned"]),
@@ -430,7 +408,5 @@ async function sleep(ms: number): Promise<void> {
 
 // Minimal structured logger shared across the module.
 function log(level: string, module: string, msg: string): void {
-  process.stdout.write(
-    JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n"
-  );
+  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

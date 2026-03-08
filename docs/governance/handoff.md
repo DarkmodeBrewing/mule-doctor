@@ -1,16 +1,18 @@
 # Handoff
 
 ## Branch
-- `main` (current integrated state)
-- Last merged PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/15
+
+- `feature/eslint-prettier-setup`
+- PR: (pending)
 - Last updated: 2026-03-06
 
 ## Status
-- PR #15 is merged into `main` (merge commit: `394882361f688159d7842c4d66242613a9ebf5aa`).
-- Observer scheduling + source proposal artifact path/runtime tooling changes are integrated.
-- Current phase is runtime validation against a stable rust-mule release window.
+
+- In progress; branch adds lint/format toolchain and applies repo formatting cleanup.
+- Prior architecture/runtime hardening from PR #15 remains merged in `main`.
 
 ## Completed Work
+
 - Updated observer loop scheduling to prevent overlapping cycles:
   - replaced fixed `setInterval` cycle dispatch with chained `setTimeout` after each cycle finishes.
   - added duplicate-start guard (`started` flag).
@@ -34,21 +36,26 @@
   - strengthened observer scheduling semantics across `stop()` + `start()` transitions with in-flight cycle/generation guards.
   - added tests for duplicate `start()` and `stop()`/`start()` while a cycle is in flight.
   - clarified README wording that proposal artifact path is default/configurable.
+- Added lint/format toolchain:
+  - installed dev dependencies: `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-config-prettier`, `prettier`, `globals`.
+  - added flat ESLint config (`eslint.config.mjs`) and Prettier config/ignore files.
+  - added npm scripts: `lint`, `lint:fix`, `format`, `format:check`.
+  - updated `check` script to run `typecheck + lint + test`.
+- Ran `npm run format` across the repository and fixed new lint findings surfaced by ESLint.
 
 ## Key Decisions
+
 - Use non-overlapping observer scheduling to avoid concurrent diagnostic cycles when analysis exceeds the configured interval.
 - Keep proposal artifacts on disk under `/data` by default for operational visibility and reviewer access.
 - Preserve test portability by injecting per-test temp `proposalDir` instead of writing to `/data` in test runs.
 - For bundled source safety, preserve local git history for `git_blame` while stripping `origin` remote.
 
 ## Validation
-- `npm run check` passes (typecheck + build + full test suite).
+
+- `npm run lint` passes.
+- `npm run check` passes (typecheck + lint + build + full test suite).
 
 ## Next Steps
-- Run end-to-end validation with a stable rust-mule release once available (debug endpoints, token flows, observer/report loop).
-- Execute containerized smoke run (`docker compose`) with mounted `/data` and confirm persisted artifacts/state behavior.
-- Continue backlog from `docs/TASK.md` based on validation findings and any upstream rust-mule API changes.
-- Deferred follow-ups are now explicitly documented in `docs/TASK.md` under:
-  - End-to-end smoke harness
-  - Integration coverage for rust-mule API edge cases
-  - Runtime readiness validation
+
+- Open PR for lint/format setup and process review feedback.
+- After merge, continue deferred runtime validation tasks documented in `docs/TASK.md`.
