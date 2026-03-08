@@ -201,6 +201,14 @@ button:hover,
   min-height: 120px;
 }
 
+.target-status-card[data-state="error"] {
+  border-color: rgba(255, 107, 107, 0.45);
+}
+
+.target-status-card[data-state="warn"] {
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
 .target-status-line {
   display: flex;
   justify-content: space-between;

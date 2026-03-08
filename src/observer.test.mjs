@@ -25,6 +25,10 @@ class StubAnalyzer {
   async analyze() {
     return "ok";
   }
+
+  async consumeDailyUsageReport() {
+    return null;
+  }
 }
 
 class StubMattermost {
@@ -181,6 +185,8 @@ test("Observer persists health score and includes it in cycle context", async ()
     assert.equal(state.logOffset, 321);
     assert.deepEqual(state.lastObservedTarget, { kind: "external" });
     assert.equal(state.lastTargetFailureReason, undefined);
+    assert.equal(state.currentCycleStartedAt, undefined);
+    assert.equal(state.currentCycleTarget, undefined);
 
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
@@ -223,6 +229,10 @@ test("Observer routes cycle analysis through the resolved managed target", async
     assert.deepEqual(state.lastObservedTarget, { kind: "managed_instance", instanceId: "a" });
     assert.equal(state.logOffset, undefined);
     assert.equal(state.lastTargetFailureReason, undefined);
+    assert.equal(state.lastCycleOutcome, "success");
+    assert.equal(typeof state.lastCycleDurationMs, "number");
+    assert.equal(typeof state.lastCycleStartedAt, "string");
+    assert.equal(typeof state.lastCycleCompletedAt, "string");
 
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
@@ -260,6 +270,10 @@ test("Observer reports unavailable active targets without stopping the loop", as
       instanceId: "missing",
     });
     assert.match(state.lastTargetFailureReason, /Managed instance missing is stopped/);
+    assert.equal(state.currentCycleStartedAt, undefined);
+    assert.equal(state.currentCycleTarget, undefined);
+    assert.equal(state.lastCycleOutcome, "unavailable");
+    assert.equal(typeof state.lastCycleDurationMs, "number");
 
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
@@ -268,6 +282,43 @@ test("Observer reports unavailable active targets without stopping the loop", as
       kind: "managed_instance",
       instanceId: "missing",
     });
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("Observer records scheduler error outcomes for failed cycles", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const runtimeStore = new RuntimeStore({ dataDir: tmp.dir });
+    await runtimeStore.initialize();
+
+    const observer = new Observer(
+      {
+        async analyze() {
+          throw new Error("analysis failed: api_key=secret");
+        },
+        async consumeDailyUsageReport() {
+          return null;
+        },
+      },
+      new CountingMattermost(),
+      {
+        client: new StubClient(),
+        logWatcher: new StubLogWatcher(),
+        runtimeStore,
+        intervalMs: 999999,
+      },
+    );
+
+    await observer.runCycle();
+
+    const state = await runtimeStore.loadState();
+    assert.equal(state.lastCycleOutcome, "error");
+    assert.equal(state.currentCycleStartedAt, undefined);
+    assert.equal(state.currentCycleTarget, undefined);
+    assert.match(state.lastTargetFailureReason, /\[redacted\]/);
   } finally {
     await tmp.cleanup();
   }
@@ -358,4 +409,48 @@ test("Observer triggerRunNow rejects while a cycle is already in progress", asyn
 
   assert.equal(result.accepted, false);
   assert.match(result.reason, /already in progress/);
+});
+
+test("Observer getStatus exposes current cycle target while a cycle is running", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const runtimeStore = new RuntimeStore({ dataDir: tmp.dir });
+    await runtimeStore.initialize();
+
+    const slowAnalyzer = new SlowAnalyzer(60);
+    const observer = new Observer(slowAnalyzer, new CountingMattermost(), {
+      runtimeStore,
+      targetResolver: new StubTargetResolver({
+        target: { kind: "managed_instance", instanceId: "a" },
+        label: "managed instance a",
+        client: new StubClient(),
+        logSource: { getRecentLines: () => ["managed log line"] },
+      }),
+      analyzerFactory: () => slowAnalyzer,
+      intervalMs: 999999,
+    });
+
+    observer.start();
+    await sleep(10);
+
+    const statusWhileRunning = observer.getStatus();
+    assert.equal(statusWhileRunning.started, true);
+    assert.equal(statusWhileRunning.cycleInFlight, true);
+    assert.deepEqual(statusWhileRunning.currentCycleTarget, {
+      kind: "managed_instance",
+      instanceId: "a",
+    });
+    assert.equal(typeof statusWhileRunning.currentCycleStartedAt, "string");
+
+    observer.stop();
+    await sleep(80);
+
+    const statusAfterRun = observer.getStatus();
+    assert.equal(statusAfterRun.cycleInFlight, false);
+    assert.equal(statusAfterRun.currentCycleStartedAt, undefined);
+    assert.equal(statusAfterRun.currentCycleTarget, undefined);
+  } finally {
+    await tmp.cleanup();
+  }
 });

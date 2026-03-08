@@ -326,6 +326,11 @@ Acceptance criteria:
    - missing token files
    - version-dependent 404 endpoints
    - transient timeouts
+8. Surface scheduler execution state in runtime/API/UI:
+   - current cycle start time
+   - current cycle target
+   - last cycle duration
+   - last cycle outcome
 
 Acceptance criteria:
 
@@ -334,3 +339,4 @@ Acceptance criteria:
 - Scheduled observation uses the selected target without crashing when that target is unavailable.
 - Reports and runtime state identify which target was observed.
 - Operator can trigger a one-off scheduled-cycle run without changing the background scheduler model.
+- Operator console shows scheduler execution state without requiring raw log inspection.

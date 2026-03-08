@@ -182,3 +182,7 @@
   - expose scheduler status (`started`, `cycleInFlight`, `intervalMs`) in `/api/health`
   - add `POST /api/observer/run`
   - show a `Run cycle now` action in the scheduled-target card
+- Add dedicated scheduler execution visibility in runtime state and the operator console:
+  - store `currentCycleStartedAt` and `currentCycleTarget` while a cycle is running
+  - store `lastCycleStartedAt`, `lastCycleCompletedAt`, `lastCycleDurationMs`, and `lastCycleOutcome`
+  - render a scheduler card in the console so operators can inspect execution state without reading raw logs

@@ -213,6 +213,9 @@ function renderHealth(data) {
   if (data.scheduler) {
     observerLines.push(`Scheduler running: ${data.scheduler.started ? "yes" : "no"}`);
     observerLines.push(`Cycle in progress: ${data.scheduler.cycleInFlight ? "yes" : "no"}`);
+    observerLines.push(
+      `Last cycle outcome: ${data.scheduler.lastCycleOutcome || "unknown"}`,
+    );
   }
 
   setText(
@@ -230,6 +233,7 @@ function renderHealth(data) {
       .join("\n"),
   );
   renderTargetStatusCard();
+  renderSchedulerStatusCard();
 }
 
 async function refreshHealth() {
@@ -322,6 +326,7 @@ async function updateObserverTarget(target) {
 
 function renderTargetStatusCard(errorText) {
   const element = document.getElementById("target-status-card");
+  element.dataset.state = "default";
   if (errorText) {
     element.textContent = errorText;
     element.className = "target-status-card muted";
@@ -353,25 +358,105 @@ function renderTargetStatusCard(errorText) {
     ),
   );
   lines.push(renderTargetStatusLine("Last run", currentObserver?.lastRun || "unknown"));
-  lines.push(
-    renderTargetStatusLine("Scheduler", currentScheduler?.started ? "running" : "stopped"),
-  );
-  lines.push(
-    renderTargetStatusLine(
-      "Cycle",
-      currentScheduler?.cycleInFlight ? "in progress" : "idle",
-    ),
-  );
+  const schedulerStatus =
+    currentScheduler == null ? "unknown" : currentScheduler.started ? "running" : "stopped";
+  lines.push(renderTargetStatusLine("Scheduler", schedulerStatus));
+  const cycleStatus =
+    currentScheduler == null
+      ? "unknown"
+      : currentScheduler.cycleInFlight
+        ? "in progress"
+        : "idle";
+  lines.push(renderTargetStatusLine("Cycle", cycleStatus));
   if (currentObserver?.lastTargetFailureReason) {
     lines.push(renderTargetStatusLine("Reason", currentObserver.lastTargetFailureReason));
   }
   if (isUnavailableObservedTarget(currentScheduledTarget)) {
     lines.push(renderTargetStatusLine("State", "unavailable"));
     element.className = "target-status-card";
+    element.dataset.state = "warn";
   } else {
     lines.push(renderTargetStatusLine("State", "active"));
     element.className = "target-status-card";
   }
+  element.replaceChildren(...lines);
+}
+
+function renderSchedulerStatusCard(errorText) {
+  const element = document.getElementById("scheduler-status-card");
+  element.dataset.state = "default";
+  if (errorText) {
+    element.textContent = errorText;
+    element.className = "target-status-card muted";
+    return;
+  }
+
+  if (!currentScheduler && !currentObserver) {
+    element.textContent = "No scheduler state loaded yet.";
+    element.className = "target-status-card muted";
+    return;
+  }
+
+  const lines = [];
+  const schedulerStatus =
+    currentScheduler == null ? "unknown" : currentScheduler.started ? "running" : "stopped";
+  const cycleStatus =
+    currentScheduler == null
+      ? "unknown"
+      : currentScheduler.cycleInFlight
+        ? "in progress"
+        : "idle";
+  lines.push(renderTargetStatusLine("Scheduler", schedulerStatus));
+  lines.push(renderTargetStatusLine("Cycle", cycleStatus));
+  lines.push(
+    renderTargetStatusLine(
+      "Current target",
+      currentScheduler?.currentCycleTarget ? targetLabel(currentScheduler.currentCycleTarget) : "none",
+    ),
+  );
+  lines.push(
+    renderTargetStatusLine(
+      "Cycle started",
+      currentScheduler?.currentCycleStartedAt || "unknown",
+    ),
+  );
+  lines.push(
+    renderTargetStatusLine(
+      "Last outcome",
+      currentScheduler?.lastCycleOutcome || "unknown",
+    ),
+  );
+  lines.push(
+    renderTargetStatusLine(
+      "Last duration",
+      formatDurationMs(currentScheduler?.lastCycleDurationMs),
+    ),
+  );
+  lines.push(
+    renderTargetStatusLine(
+      "Last target",
+      currentObserver?.lastObservedTarget ? targetLabel(currentObserver.lastObservedTarget) : "unknown",
+    ),
+  );
+  lines.push(
+    renderTargetStatusLine(
+      "Last started",
+      currentScheduler?.lastCycleStartedAt || "unknown",
+    ),
+  );
+  lines.push(
+    renderTargetStatusLine(
+      "Last completed",
+      currentScheduler?.lastCycleCompletedAt || "unknown",
+    ),
+  );
+
+  if (currentScheduler?.lastCycleOutcome === "error") {
+    element.dataset.state = "error";
+  } else if (currentScheduler?.lastCycleOutcome === "unavailable") {
+    element.dataset.state = "warn";
+  }
+  element.className = "target-status-card";
   element.replaceChildren(...lines);
 }
 
@@ -404,6 +489,16 @@ function renderTargetStatusLine(label, value) {
   row.appendChild(left);
   row.appendChild(right);
   return row;
+}
+
+function formatDurationMs(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "unknown";
+  }
+  if (value < 1000) {
+    return `${Math.round(value)} ms`;
+  }
+  return `${(value / 1000).toFixed(1)} s`;
 }
 
 async function mutateInstance(id, action) {
@@ -475,6 +570,7 @@ setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
 setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
 renderTargetStatusCard();
+renderSchedulerStatusCard();
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });
@@ -515,6 +611,7 @@ document.getElementById("refresh-llm-list").onclick = refreshLlmList;
 document.getElementById("refresh-proposals").onclick = refreshProposalList;
 document.getElementById("refresh-instances").onclick = refreshInstances;
 document.getElementById("refresh-target-status").onclick = refreshHealth;
+document.getElementById("refresh-scheduler-status").onclick = refreshHealth;
 document.getElementById("run-observer-now").onclick = () => {
   void runObserverNow();
 };

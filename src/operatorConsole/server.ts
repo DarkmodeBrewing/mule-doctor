@@ -13,6 +13,7 @@ import type {
   ManagedInstanceAnalysisResult,
   ManagedInstanceDiagnosticSnapshot,
   ManagedInstanceRecord,
+  ObserverCycleOutcome,
   RuntimeState,
 } from "../types/contracts.js";
 
@@ -67,7 +68,13 @@ export interface DiagnosticTargetControl {
 }
 
 export interface ObserverControl {
-  getStatus(): { started: boolean; cycleInFlight: boolean; intervalMs: number };
+  getStatus(): {
+    started: boolean;
+    cycleInFlight: boolean;
+    intervalMs: number;
+    currentCycleStartedAt?: string;
+    currentCycleTarget?: DiagnosticTargetRef;
+  };
   triggerRunNow(): { accepted: boolean; reason?: string };
 }
 
@@ -286,18 +293,39 @@ export class OperatorConsoleServer {
 
     if (path === "/api/health") {
       const runtimeState = this.getRuntimeState ? await this.getRuntimeState() : undefined;
+      const schedulerStatus = this.observerControl?.getStatus();
       sendJson(res, 200, {
         ok: true,
         startedAt: this.startedAt,
         now: new Date().toISOString(),
         uptimeSec: Math.round(process.uptime()),
-        scheduler: this.observerControl?.getStatus(),
+        scheduler: schedulerStatus
+          ? {
+              started: schedulerStatus.started,
+              cycleInFlight: schedulerStatus.cycleInFlight,
+              intervalMs: schedulerStatus.intervalMs,
+              currentCycleStartedAt:
+                schedulerStatus.currentCycleStartedAt ?? runtimeState?.currentCycleStartedAt,
+              currentCycleTarget:
+                schedulerStatus.currentCycleTarget ?? runtimeState?.currentCycleTarget,
+              lastCycleStartedAt: runtimeState?.lastCycleStartedAt,
+              lastCycleCompletedAt: runtimeState?.lastCycleCompletedAt,
+              lastCycleDurationMs: runtimeState?.lastCycleDurationMs,
+              lastCycleOutcome: sanitizeCycleOutcome(runtimeState?.lastCycleOutcome),
+            }
+          : undefined,
         observer: runtimeState
           ? {
               activeDiagnosticTarget: runtimeState.activeDiagnosticTarget,
               lastObservedTarget: runtimeState.lastObservedTarget,
               lastRun: runtimeState.lastRun,
               lastHealthScore: runtimeState.lastHealthScore,
+              currentCycleStartedAt: runtimeState.currentCycleStartedAt,
+              currentCycleTarget: runtimeState.currentCycleTarget,
+              lastCycleStartedAt: runtimeState.lastCycleStartedAt,
+              lastCycleCompletedAt: runtimeState.lastCycleCompletedAt,
+              lastCycleDurationMs: runtimeState.lastCycleDurationMs,
+              lastCycleOutcome: sanitizeCycleOutcome(runtimeState.lastCycleOutcome),
               lastTargetFailureReason: runtimeState.lastTargetFailureReason
                 ? redactText(runtimeState.lastTargetFailureReason)
                 : runtimeState.lastTargetFailureReason,
@@ -758,6 +786,10 @@ export class OperatorConsoleServer {
     req.on("close", finalize);
     res.on("close", finalize);
   }
+}
+
+function sanitizeCycleOutcome(value: RuntimeState["lastCycleOutcome"]): ObserverCycleOutcome | undefined {
+  return value === "success" || value === "unavailable" || value === "error" ? value : undefined;
 }
 
 async function listFiles(
