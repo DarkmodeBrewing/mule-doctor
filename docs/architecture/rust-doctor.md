@@ -287,6 +287,11 @@ State includes:
 - active diagnostic target
 - last observed target
 - last target failure reason
+- current cycle start time
+- current cycle target
+- last cycle start/completion timestamps
+- last cycle duration
+- last cycle outcome
 
 Example state object:
 
@@ -302,7 +307,15 @@ Example state object:
   "lastObservedTarget": {
     "kind": "external"
   },
-  "lastTargetFailureReason": "Managed instance a is stopped"
+  "lastTargetFailureReason": "Managed instance a is stopped",
+  "currentCycleStartedAt": "2026-03-05T12:10:00Z",
+  "currentCycleTarget": {
+    "kind": "external"
+  },
+  "lastCycleStartedAt": "2026-03-05T12:05:00Z",
+  "lastCycleCompletedAt": "2026-03-05T12:05:08Z",
+  "lastCycleDurationMs": 8000,
+  "lastCycleOutcome": "success"
 }
 ```
 

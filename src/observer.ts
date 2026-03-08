@@ -9,7 +9,12 @@ import type { MattermostClient } from "./integrations/mattermost.js";
 import type { RustMuleClient } from "./api/rustMuleClient.js";
 import type { LogWatcher } from "./logs/logWatcher.js";
 import type { RuntimeStore } from "./storage/runtimeStore.js";
-import type { HistoryEntry, RuntimeState } from "./types/contracts.js";
+import type {
+  DiagnosticTargetRef,
+  HistoryEntry,
+  ObserverCycleOutcome,
+  RuntimeState,
+} from "./types/contracts.js";
 import { getNetworkHealth } from "./health/healthScore.js";
 import type { NetworkHealthResult } from "./health/healthScore.js";
 import { redactText } from "./logs/redaction.js";
@@ -34,6 +39,8 @@ export interface ObserverStatus {
   started: boolean;
   cycleInFlight: boolean;
   intervalMs: number;
+  currentCycleStartedAt?: string;
+  currentCycleTarget?: DiagnosticTargetRef;
 }
 
 export interface ObserverRunNowResult {
@@ -66,6 +73,8 @@ export class Observer {
   private started = false;
   private cycleInFlight: Promise<void> | undefined;
   private generation = 0;
+  private currentCycleStartedAt: string | undefined;
+  private currentCycleTarget: DiagnosticTargetRef | undefined;
 
   constructor(analyzer: Analyzer, mattermost: MattermostClient, config: ObserverConfig = {}) {
     this.analyzer = analyzer;
@@ -107,6 +116,8 @@ export class Observer {
       started: this.started,
       cycleInFlight: Boolean(this.cycleInFlight),
       intervalMs: this.intervalMs,
+      currentCycleStartedAt: this.currentCycleStartedAt,
+      currentCycleTarget: this.currentCycleTarget,
     };
   }
 
@@ -159,37 +170,51 @@ export class Observer {
 
   private async runCycle(): Promise<void> {
     log("info", "observer", "Running diagnostic cycle");
-    const targetDescriptor = await this.describeTarget();
-    let target: ObserverTargetRuntime | undefined;
     try {
-      target = await this.resolveTarget();
-    } catch (err) {
-      await this.handleUnavailableTarget(targetDescriptor, err);
-      return;
-    }
-    const context = await this.collectAndPersistContext(target);
-    const prompt = this.buildPrompt(context);
-    const analyzer = target && this.analyzerFactory ? this.analyzerFactory(target) : this.analyzer;
-    const summary = await analyzer.analyze(prompt);
-    await this.mattermost.postPeriodicReport({
-      summary,
-      targetLabel: context?.targetLabel ?? targetDescriptor.label,
-      healthScore: context?.networkHealth.score,
-      peerCount: context?.peerCount,
-      routingBucketCount: context?.routingBucketCount,
-      lookupSuccessPct:
-        typeof context?.networkHealth.components.lookup_success === "number"
-          ? context.networkHealth.components.lookup_success
-          : undefined,
-      lookupTimeoutPct:
-        typeof context?.lookupStats.timeoutsPerSent === "number"
-          ? context.lookupStats.timeoutsPerSent * 100
-          : undefined,
-    });
+      const targetDescriptor = await this.describeTarget();
+      const cycleStartedAt = new Date().toISOString();
+      await this.markCycleStarted(cycleStartedAt, targetDescriptor.target);
 
-    const usageSummary = await analyzer.consumeDailyUsageReport();
-    if (usageSummary) {
-      await this.mattermost.postDailyUsageReport(usageSummary);
+      let target: ObserverTargetRuntime | undefined;
+      try {
+        target = await this.resolveTarget();
+      } catch (err) {
+        await this.handleUnavailableTarget(targetDescriptor, err, cycleStartedAt);
+        return;
+      }
+
+      const context = await this.collectAndPersistContext(target);
+      const prompt = this.buildPrompt(context);
+      const analyzer = target && this.analyzerFactory ? this.analyzerFactory(target) : this.analyzer;
+      const summary = await analyzer.analyze(prompt);
+      await this.mattermost.postPeriodicReport({
+        summary,
+        targetLabel: context?.targetLabel ?? targetDescriptor.label,
+        healthScore: context?.networkHealth.score,
+        peerCount: context?.peerCount,
+        routingBucketCount: context?.routingBucketCount,
+        lookupSuccessPct:
+          typeof context?.networkHealth.components.lookup_success === "number"
+            ? context.networkHealth.components.lookup_success
+            : undefined,
+        lookupTimeoutPct:
+          typeof context?.lookupStats.timeoutsPerSent === "number"
+            ? context.lookupStats.timeoutsPerSent * 100
+            : undefined,
+      });
+
+      const usageSummary = await analyzer.consumeDailyUsageReport();
+      if (usageSummary) {
+        await this.mattermost.postDailyUsageReport(usageSummary);
+      }
+
+      await this.finishCycle({
+        target: targetDescriptor.target,
+        startedAt: cycleStartedAt,
+        outcome: "success",
+      });
+    } catch (err) {
+      await this.handleCycleError(err);
     }
   }
 
@@ -299,12 +324,13 @@ export class Observer {
   private async handleUnavailableTarget(
     target: ObserverTargetDescriptor,
     err: unknown,
+    startedAt: string,
   ): Promise<void> {
     const reason = redactText(err instanceof Error ? err.message : String(err));
     log("warn", "observer", `Active target unavailable (${target.label}): ${reason}`);
 
+    const timestamp = new Date().toISOString();
     if (this.runtimeStore) {
-      const timestamp = new Date().toISOString();
       await this.runtimeStore.appendHistory({
         timestamp,
         target: target.target,
@@ -316,8 +342,18 @@ export class Observer {
         lastObservedTarget: target.target,
         lastTargetFailureReason: reason,
         logOffset: undefined,
+        ...buildCycleStatePatch({
+          target: target.target,
+          startedAt,
+          completedAt: timestamp,
+          outcome: "unavailable",
+          lastRun: timestamp,
+        }),
       });
     }
+
+    this.currentCycleStartedAt = undefined;
+    this.currentCycleTarget = undefined;
 
     await this.mattermost.postPeriodicReport({
       summary: `Active diagnostic target unavailable: ${reason}`,
@@ -325,6 +361,94 @@ export class Observer {
       healthScore: 0,
     });
   }
+
+  private async handleCycleError(err: unknown): Promise<void> {
+    const reason = redactText(err instanceof Error ? err.message : String(err));
+    log("error", "observer", `Cycle failed: ${reason}`);
+    const completedAt = new Date().toISOString();
+    const target = this.currentCycleTarget;
+    const startedAt = this.currentCycleStartedAt ?? completedAt;
+    this.currentCycleStartedAt = undefined;
+    this.currentCycleTarget = undefined;
+
+    if (!this.runtimeStore) {
+      return;
+    }
+
+    await this.runtimeStore.updateState({
+      lastRun: completedAt,
+      lastObservedTarget: target,
+      lastTargetFailureReason: reason,
+      ...buildCycleStatePatch({
+        target,
+        startedAt,
+        completedAt,
+        outcome: "error",
+        lastRun: completedAt,
+      }),
+    });
+  }
+
+  private async markCycleStarted(
+    startedAt: string,
+    target: DiagnosticTargetRef | undefined,
+  ): Promise<void> {
+    this.currentCycleStartedAt = startedAt;
+    this.currentCycleTarget = target;
+    if (!this.runtimeStore) {
+      return;
+    }
+    await this.runtimeStore.updateState({
+      currentCycleStartedAt: startedAt,
+      currentCycleTarget: target,
+    });
+  }
+
+  private async finishCycle(config: {
+    target: DiagnosticTargetRef | undefined;
+    startedAt: string;
+    outcome: ObserverCycleOutcome;
+  }): Promise<void> {
+    const completedAt = new Date().toISOString();
+    this.currentCycleStartedAt = undefined;
+    this.currentCycleTarget = undefined;
+    if (!this.runtimeStore) {
+      return;
+    }
+    await this.runtimeStore.updateState(
+      buildCycleStatePatch({
+        target: config.target,
+        startedAt: config.startedAt,
+        completedAt,
+        outcome: config.outcome,
+        lastRun: completedAt,
+      }),
+    );
+  }
+}
+
+function buildCycleStatePatch(config: {
+  target: DiagnosticTargetRef | undefined;
+  startedAt: string;
+  completedAt: string;
+  outcome: ObserverCycleOutcome;
+  lastRun?: string;
+}): RuntimeState {
+  const startedMs = Date.parse(config.startedAt);
+  const completedMs = Date.parse(config.completedAt);
+  const durationMs =
+    Number.isFinite(startedMs) && Number.isFinite(completedMs)
+      ? Math.max(0, completedMs - startedMs)
+      : undefined;
+  return {
+    currentCycleStartedAt: undefined,
+    currentCycleTarget: undefined,
+    lastCycleStartedAt: config.startedAt,
+    lastCycleCompletedAt: config.completedAt,
+    lastCycleDurationMs: durationMs,
+    lastCycleOutcome: config.outcome,
+    lastRun: config.lastRun,
+  };
 }
 
 function readAverageHops(lookupStats: Record<string, unknown>): number | undefined {

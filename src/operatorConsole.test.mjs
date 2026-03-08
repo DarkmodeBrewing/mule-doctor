@@ -167,7 +167,13 @@ class StubDiagnosticTargetControl {
 
 class StubObserverControl {
   constructor() {
-    this.status = { started: true, cycleInFlight: false, intervalMs: 300000 };
+    this.status = {
+      started: true,
+      cycleInFlight: false,
+      intervalMs: 300000,
+      currentCycleStartedAt: undefined,
+      currentCycleTarget: undefined,
+    };
   }
 
   getStatus() {
@@ -178,7 +184,12 @@ class StubObserverControl {
     if (this.status.cycleInFlight) {
       return { accepted: false, reason: "observer cycle already in progress" };
     }
-    this.status = { ...this.status, cycleInFlight: true };
+    this.status = {
+      ...this.status,
+      cycleInFlight: true,
+      currentCycleStartedAt: "2026-03-08T02:10:00.000Z",
+      currentCycleTarget: { kind: "external" },
+    };
     return { accepted: true };
   }
 }
@@ -310,6 +321,8 @@ test("OperatorConsoleServer triggers observer run-now and reports scheduler stat
     const runPayload = await runRes.json();
     assert.equal(runPayload.ok, true);
     assert.equal(runPayload.scheduler.cycleInFlight, true);
+    assert.equal(runPayload.scheduler.currentCycleStartedAt, "2026-03-08T02:10:00.000Z");
+    assert.deepEqual(runPayload.scheduler.currentCycleTarget, { kind: "external" });
 
     const secondRunRes = await fetch(`${server.publicAddress()}/api/observer/run`, {
       method: "POST",
@@ -411,10 +424,22 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
         lastObservedTarget: { kind: "managed_instance", instanceId: "a" },
         lastRun: "2026-03-08T03:00:00.000Z",
         lastHealthScore: 0,
+        currentCycleStartedAt: undefined,
+        currentCycleTarget: undefined,
+        lastCycleStartedAt: "2026-03-08T02:58:00.000Z",
+        lastCycleCompletedAt: "2026-03-08T03:00:00.000Z",
+        lastCycleDurationMs: 120000,
+        lastCycleOutcome: "unavailable",
         lastTargetFailureReason: "Managed instance a is stopped",
       }),
       observerControl: {
-        getStatus: () => ({ started: true, cycleInFlight: false, intervalMs: 300000 }),
+        getStatus: () => ({
+          started: true,
+          cycleInFlight: false,
+          intervalMs: 300000,
+          currentCycleStartedAt: undefined,
+          currentCycleTarget: undefined,
+        }),
         triggerRunNow: () => ({ accepted: true }),
       },
       subscribeToAppLogs: () => () => {},
@@ -462,12 +487,20 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       lastObservedTarget: { kind: "managed_instance", instanceId: "a" },
       lastRun: "2026-03-08T03:00:00.000Z",
       lastHealthScore: 0,
+      lastCycleStartedAt: "2026-03-08T02:58:00.000Z",
+      lastCycleCompletedAt: "2026-03-08T03:00:00.000Z",
+      lastCycleDurationMs: 120000,
+      lastCycleOutcome: "unavailable",
       lastTargetFailureReason: "Managed instance a is stopped",
     });
     assert.deepEqual(health.scheduler, {
       started: true,
       cycleInFlight: false,
       intervalMs: 300000,
+      lastCycleStartedAt: "2026-03-08T02:58:00.000Z",
+      lastCycleCompletedAt: "2026-03-08T03:00:00.000Z",
+      lastCycleDurationMs: 120000,
+      lastCycleOutcome: "unavailable",
     });
 
     const staticUiRes = await fetch(`${baseUrl}/static/operatorConsole/app.js`, {

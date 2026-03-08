@@ -42,8 +42,16 @@ export interface RuntimeState {
   activeDiagnosticTarget?: DiagnosticTargetRef;
   lastObservedTarget?: DiagnosticTargetRef;
   lastTargetFailureReason?: string;
+  currentCycleStartedAt?: string;
+  currentCycleTarget?: DiagnosticTargetRef;
+  lastCycleStartedAt?: string;
+  lastCycleCompletedAt?: string;
+  lastCycleDurationMs?: number;
+  lastCycleOutcome?: ObserverCycleOutcome;
   usage?: RuntimeUsageState;
 }
+
+export type ObserverCycleOutcome = "success" | "unavailable" | "error";
 
 export type DiagnosticTargetKind = "external" | "managed_instance";
 
