@@ -20,10 +20,10 @@ test("buildRuntimePaths derives isolated per-instance paths", () => {
   const paths = buildRuntimePaths("/data/instances", "a");
   assert.equal(paths.rootDir, "/data/instances/a");
   assert.equal(paths.configPath, "/data/instances/a/config.toml");
-  assert.equal(paths.tokenPath, "/data/instances/a/token");
-  assert.equal(paths.debugTokenPath, "/data/instances/a/debug.token");
-  assert.equal(paths.logDir, "/data/instances/a/logs");
-  assert.equal(paths.logPath, "/data/instances/a/logs/rust-mule.log");
+  assert.equal(paths.tokenPath, "/data/instances/a/state/api.token");
+  assert.equal(paths.debugTokenPath, "/data/instances/a/state/debug.token");
+  assert.equal(paths.logDir, "/data/instances/a/state/logs");
+  assert.equal(paths.logPath, "/data/instances/a/state/logs/rust-mule.log");
   assert.equal(paths.stateDir, "/data/instances/a/state");
   assert.equal(paths.metadataPath, "/data/instances/a/instance.json");
 });
@@ -54,7 +54,55 @@ test("InstanceManager creates and persists planned instances", async () => {
     assert.equal(metadata.id, "a");
 
     const configRaw = await readFile(created.runtime.configPath, "utf8");
-    assert.match(configRaw, /Placeholder config/);
+    assert.match(configRaw, /\[sam\]/);
+    assert.match(configRaw, /session_name = "rust-mule-a"/);
+    assert.match(configRaw, /\[general\]/);
+    assert.match(configRaw, /auto_open_ui = false/);
+    assert.match(configRaw, new RegExp(`data_dir = "${escapeRegExp(created.runtime.stateDir)}"`));
+    assert.match(configRaw, /\[api\]/);
+    assert.match(configRaw, /port = 19000/);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager renders configured rust-mule template values", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+      rustMuleConfigTemplate: {
+        samHost: "10.99.0.2",
+        samPort: 7656,
+        samUdpPort: 7655,
+        samDatagramTransport: "tcp",
+        samForwardHost: "10.99.0.1",
+        samForwardPort: 40000,
+        samControlTimeoutSecs: 120,
+        generalLogLevel: "info",
+        generalLogToFile: true,
+        generalLogFileName: "rust-mule.log",
+        generalLogFileLevel: "debug",
+        apiEnableDebugEndpoints: true,
+        apiAuthMode: "headless_remote",
+        sessionNamePrefix: "managed",
+      },
+    });
+    await manager.initialize();
+
+    const created = await manager.createPlannedInstance({ id: "b", apiPort: 19003 });
+    const configRaw = await readFile(created.runtime.configPath, "utf8");
+
+    assert.match(configRaw, /session_name = "managed-b"/);
+    assert.match(configRaw, /host = "10.99.0.2"/);
+    assert.match(configRaw, /udp_port = 7655/);
+    assert.match(configRaw, /forward_host = "10.99.0.1"/);
+    assert.match(configRaw, /forward_port = 40000/);
+    assert.match(configRaw, /auth_mode = "headless_remote"/);
+    assert.match(configRaw, /enable_debug_endpoints = true/);
   } finally {
     await tmp.cleanup();
   }
@@ -80,6 +128,10 @@ test("InstanceManager allocates non-overlapping API ports", async () => {
     await tmp.cleanup();
   }
 });
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 test("InstanceManager rejects duplicate ids and reserved ports", async () => {
   const tmp = await makeTempDir();

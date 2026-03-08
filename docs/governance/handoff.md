@@ -114,7 +114,9 @@
   - adding persisted managed-instance metadata separate from process launch
   - adding deterministic runtime directory planning under `/data/instances/<id>`
   - reserving unique API ports for planned instances
-  - explicitly deferring process spawn/config generation details until rust-mule startup behavior is confirmed
+  - generating bounded per-instance `config.toml` files from confirmed rust-mule settings (`sam.session_name`, `general.data_dir`, `api.port`) plus optional shared template overrides
+  - aligning managed runtime token/log paths with rust-mule `general.data_dir`
+  - explicitly deferring process spawn until rust-mule startup behavior is confirmed
 
 ## Key Decisions
 
@@ -124,7 +126,7 @@
 - For bundled source safety, preserve local git history for `git_blame` while stripping `origin` remote.
 - Keep external rust-mule nodes observer-only, while allowing future controlled lifecycle actions only for mule-doctor-owned local test instances.
 - Use a bounded `InstanceManager` as the future control plane rather than allowing the UI to shell out directly.
-- Build `InstanceManager` in two steps: first metadata/path/port planning, then process lifecycle once rust-mule startup assumptions are verified.
+- Build `InstanceManager` in two steps: first metadata/path/port/config planning, then process lifecycle once rust-mule startup assumptions are verified.
 
 ## Validation
 

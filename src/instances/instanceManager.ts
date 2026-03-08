@@ -7,6 +7,10 @@ import { mkdir, rm, writeFile } from "fs/promises";
 import { resolve } from "path";
 import { InstanceCatalog, type InstanceCatalogConfig } from "./instanceCatalog.js";
 import type { ManagedInstanceRecord, ManagedInstanceRuntimePaths } from "../types/contracts.js";
+import {
+  renderManagedRustMuleConfig,
+  type ManagedRustMuleConfigTemplate,
+} from "./rustMuleConfig.js";
 
 const DEFAULT_INSTANCE_ROOT_DIR = "/data/instances";
 const DEFAULT_API_HOST = "127.0.0.1";
@@ -23,6 +27,7 @@ export interface InstanceManagerConfig extends InstanceCatalogConfig {
   apiPortStart?: number;
   apiPortEnd?: number;
   instanceRootDir?: string;
+  rustMuleConfigTemplate?: ManagedRustMuleConfigTemplate;
 }
 
 export class InstanceManager {
@@ -31,6 +36,7 @@ export class InstanceManager {
   private readonly apiPortStart: number;
   private readonly apiPortEnd: number;
   private readonly instanceRootDir: string;
+  private readonly rustMuleConfigTemplate: ManagedRustMuleConfigTemplate | undefined;
   private creationQueue: Promise<void> = Promise.resolve();
 
   constructor(config: InstanceManagerConfig = {}) {
@@ -39,6 +45,7 @@ export class InstanceManager {
     this.apiPortStart = clampPort(config.apiPortStart ?? DEFAULT_API_PORT_START);
     this.apiPortEnd = clampPort(config.apiPortEnd ?? DEFAULT_API_PORT_END);
     this.instanceRootDir = resolve(config.instanceRootDir ?? DEFAULT_INSTANCE_ROOT_DIR);
+    this.rustMuleConfigTemplate = config.rustMuleConfigTemplate;
 
     if (this.apiPortEnd < this.apiPortStart) {
       throw new Error(
@@ -90,7 +97,7 @@ export class InstanceManager {
       };
       await this.catalog.add(record);
       try {
-        await materializeRuntimePaths(runtime, id);
+        await materializeRuntimePaths(record, this.rustMuleConfigTemplate);
         await writeMetadata(runtime.metadataPath, record);
       } catch (err) {
         await this.catalog.remove(id);
@@ -116,14 +123,16 @@ export function buildRuntimePaths(
   id: string,
 ): ManagedInstanceRuntimePaths {
   const rootDir = resolve(instanceRootDir, id);
+  const stateDir = `${rootDir}/state`;
+  const logDir = `${stateDir}/logs`;
   return {
     rootDir,
     configPath: `${rootDir}/config.toml`,
-    tokenPath: `${rootDir}/token`,
-    debugTokenPath: `${rootDir}/debug.token`,
-    logDir: `${rootDir}/logs`,
-    logPath: `${rootDir}/logs/rust-mule.log`,
-    stateDir: `${rootDir}/state`,
+    tokenPath: `${stateDir}/api.token`,
+    debugTokenPath: `${stateDir}/debug.token`,
+    logDir,
+    logPath: `${logDir}/rust-mule.log`,
+    stateDir,
     metadataPath: `${rootDir}/instance.json`,
   };
 }
@@ -166,13 +175,22 @@ function normalizeRequestedPort(value: number, start: number, end: number): numb
 }
 
 async function materializeRuntimePaths(
-  runtime: ManagedInstanceRuntimePaths,
-  id: string,
+  record: ManagedInstanceRecord,
+  template?: ManagedRustMuleConfigTemplate,
 ): Promise<void> {
-  await mkdir(runtime.rootDir, { recursive: true });
-  await mkdir(runtime.logDir, { recursive: true });
-  await mkdir(runtime.stateDir, { recursive: true });
-  await writeFile(runtime.configPath, buildConfigPlaceholder(id), "utf8");
+  await mkdir(record.runtime.rootDir, { recursive: true });
+  await mkdir(record.runtime.logDir, { recursive: true });
+  await mkdir(record.runtime.stateDir, { recursive: true });
+  await writeFile(
+    record.runtime.configPath,
+    renderManagedRustMuleConfig({
+      instanceId: record.id,
+      apiPort: record.apiPort,
+      runtime: record.runtime,
+      template,
+    }),
+    "utf8",
+  );
 }
 
 async function writeMetadata(path: string, record: ManagedInstanceRecord): Promise<void> {
@@ -181,13 +199,4 @@ async function writeMetadata(path: string, record: ManagedInstanceRecord): Promi
 
 async function cleanupRuntimePaths(runtime: ManagedInstanceRuntimePaths): Promise<void> {
   await rm(runtime.rootDir, { recursive: true, force: true });
-}
-
-function buildConfigPlaceholder(id: string): string {
-  return [
-    "# Placeholder config for mule-doctor-managed rust-mule instance.",
-    "# Fill in required rust-mule settings before process launch is implemented.",
-    `# instance_id = "${id}"`,
-    "",
-  ].join("\n");
 }
