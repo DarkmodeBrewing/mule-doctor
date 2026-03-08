@@ -16,6 +16,54 @@ async function makeTempDir() {
   };
 }
 
+class FakeProcessLauncher {
+  nextPid = 5000;
+  running = new Set();
+  handles = new Map();
+  launches = [];
+  stopCalls = [];
+
+  async launch(spec) {
+    const pid = this.nextPid++;
+    let resolveExit;
+    const exit = new Promise((resolve) => {
+      resolveExit = resolve;
+    });
+    this.running.add(pid);
+    this.handles.set(pid, { resolveExit });
+    this.launches.push(spec);
+    return { pid, exit };
+  }
+
+  async stop(pid, signal = "SIGTERM") {
+    this.stopCalls.push({ pid, signal });
+    this.exitProcess(pid, { exitCode: 0, signal });
+  }
+
+  async isRunning(pid) {
+    return this.running.has(pid);
+  }
+
+  exitProcess(pid, exit = {}) {
+    if (!this.running.has(pid)) {
+      return;
+    }
+    this.running.delete(pid);
+    const handle = this.handles.get(pid);
+    if (!handle) {
+      return;
+    }
+    this.handles.delete(pid);
+    handle.resolveExit({
+      at: new Date().toISOString(),
+      exitCode: exit.exitCode ?? 0,
+      signal: exit.signal ?? null,
+      reason: exit.reason,
+      error: exit.error,
+    });
+  }
+}
+
 test("buildRuntimePaths derives isolated per-instance paths", () => {
   const paths = buildRuntimePaths("/data/instances", "a");
   assert.equal(paths.rootDir, "/data/instances/a");
@@ -61,6 +109,119 @@ test("InstanceManager creates and persists planned instances", async () => {
     assert.match(configRaw, new RegExp(`data_dir = "${escapeRegExp(created.runtime.stateDir)}"`));
     assert.match(configRaw, /\[api\]/);
     assert.match(configRaw, /port = 19000/);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager starts a planned instance and persists process state", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const launcher = new FakeProcessLauncher();
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath: "/opt/rust-mule/rust-mule",
+      processLauncher: launcher,
+    });
+    await manager.initialize();
+    await manager.createPlannedInstance({ id: "a", apiPort: 19005 });
+
+    const started = await manager.startInstance("a");
+
+    assert.equal(started.status, "running");
+    assert.equal(started.currentProcess.pid, 5000);
+    assert.deepEqual(started.currentProcess.command, [
+      "/opt/rust-mule/rust-mule",
+      "--config",
+      started.runtime.configPath,
+    ]);
+    assert.equal(launcher.launches.length, 1);
+
+    const persisted = await manager.getInstance("a");
+    assert.equal(persisted.status, "running");
+    assert.equal(persisted.currentProcess.pid, 5000);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager stops a running instance and records last exit", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const launcher = new FakeProcessLauncher();
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      processLauncher: launcher,
+      stopTimeoutMs: 500,
+    });
+    await manager.initialize();
+    await manager.createPlannedInstance({ id: "a" });
+    await manager.startInstance("a");
+
+    const stopped = await manager.stopInstance("a", "manual stop");
+
+    assert.equal(stopped.status, "stopped");
+    assert.equal(stopped.currentProcess, undefined);
+    assert.equal(stopped.lastExit.reason, "manual stop");
+    assert.equal(stopped.lastExit.signal, "SIGTERM");
+    assert.deepEqual(launcher.stopCalls, [{ pid: 5000, signal: "SIGTERM" }]);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager marks records failed when startup reconciliation finds missing process", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const firstLauncher = new FakeProcessLauncher();
+    const firstManager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      processLauncher: firstLauncher,
+    });
+    await firstManager.initialize();
+    await firstManager.createPlannedInstance({ id: "a" });
+    await firstManager.startInstance("a");
+    firstLauncher.running.clear();
+
+    const secondManager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      processLauncher: new FakeProcessLauncher(),
+    });
+    await secondManager.initialize();
+
+    const record = await secondManager.getInstance("a");
+    assert.equal(record.status, "failed");
+    assert.equal(record.currentProcess, undefined);
+    assert.match(record.lastError, /startup reconciliation/);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager restarts a running instance with a new pid", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const launcher = new FakeProcessLauncher();
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      processLauncher: launcher,
+      stopTimeoutMs: 500,
+    });
+    await manager.initialize();
+    await manager.createPlannedInstance({ id: "a" });
+    await manager.startInstance("a");
+
+    const restarted = await manager.restartInstance("a");
+
+    assert.equal(restarted.status, "running");
+    assert.equal(restarted.currentProcess.pid, 5001);
+    assert.equal(launcher.stopCalls.length, 1);
+    assert.equal(launcher.launches.length, 2);
   } finally {
     await tmp.cleanup();
   }

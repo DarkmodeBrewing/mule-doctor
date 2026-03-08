@@ -72,6 +72,31 @@ export class InstanceCatalog {
     });
   }
 
+  async update(
+    id: string,
+    updater: (record: ManagedInstanceRecord) => ManagedInstanceRecord,
+  ): Promise<ManagedInstanceRecord> {
+    return this.enqueueMutation(async () => {
+      const records = await this.readCatalogOrThrow();
+      const index = records.findIndex((record) => record.id === id);
+      if (index === -1) {
+        throw new Error(`Managed instance not found: ${id}`);
+      }
+      const nextRecord = updater(records[index]);
+      if (
+        records.some(
+          (existing, existingIndex) =>
+            existingIndex !== index && existing.apiPort === nextRecord.apiPort,
+        )
+      ) {
+        throw new Error(`Managed instance API port already in use: ${nextRecord.apiPort}`);
+      }
+      records[index] = nextRecord;
+      await this.writeCatalog(records);
+      return nextRecord;
+    });
+  }
+
   private async readCatalogOrThrow(): Promise<ManagedInstanceRecord[]> {
     try {
       const raw = await readFile(this.catalogPath, "utf8");

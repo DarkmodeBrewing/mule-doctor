@@ -56,6 +56,21 @@ export interface RuntimeUsageState {
 
 export type ManagedInstanceStatus = "planned" | "stopped" | "running" | "failed";
 
+export interface ManagedInstanceProcessState {
+  pid: number;
+  command: string[];
+  cwd: string;
+  startedAt: string;
+}
+
+export interface ManagedInstanceExitState {
+  at: string;
+  exitCode: number | null;
+  signal: string | null;
+  reason?: string;
+  error?: string;
+}
+
 export interface ManagedInstanceRuntimePaths {
   rootDir: string;
   configPath: string;
@@ -75,4 +90,7 @@ export interface ManagedInstanceRecord {
   apiHost: string;
   apiPort: number;
   runtime: ManagedInstanceRuntimePaths;
+  currentProcess?: ManagedInstanceProcessState;
+  lastExit?: ManagedInstanceExitState;
+  lastError?: string;
 }
