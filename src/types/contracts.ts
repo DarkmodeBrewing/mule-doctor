@@ -53,3 +53,26 @@ export interface RuntimeUsageState {
   monthly: Record<string, UsageBucket>;
   lastReportDate?: string;
 }
+
+export type ManagedInstanceStatus = "planned" | "stopped" | "running" | "failed";
+
+export interface ManagedInstanceRuntimePaths {
+  rootDir: string;
+  configPath: string;
+  tokenPath: string;
+  debugTokenPath: string;
+  logDir: string;
+  logPath: string;
+  stateDir: string;
+  metadataPath: string;
+}
+
+export interface ManagedInstanceRecord {
+  id: string;
+  status: ManagedInstanceStatus;
+  createdAt: string;
+  updatedAt: string;
+  apiHost: string;
+  apiPort: number;
+  runtime: ManagedInstanceRuntimePaths;
+}
