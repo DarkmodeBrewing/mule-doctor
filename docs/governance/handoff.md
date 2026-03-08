@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/openai-sdk-client`
-- PR: (pending)
+- `feature/hardening-bugs-security-error-handling`
+- PR: #20
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; branch migrates OpenAI integration from raw HTTP `fetch` to the official OpenAI SDK client.
-- Prior lint/format/tooling hardening from PR #18 remains merged in `main`.
+- In progress; branch applies security and reliability hardening across API, source tools, observer paths, and integrations.
+- Prior OpenAI SDK migration from PR #19 remains merged in `main`.
 
 ## Completed Work
 
@@ -52,6 +52,24 @@
   - preserved existing tool-calling loop semantics and usage tracking behavior.
   - improved API error wrapping via structured SDK error handling.
   - enhanced SDK error formatting to explicitly include API status/code/type when available.
+- Security and reliability hardening:
+  - enforced required bearer token path at startup (`RUST_MULE_TOKEN_PATH`).
+  - made rust-mule auth/debug token file load failures explicit and fatal when configured.
+  - added bounded HTTP timeouts for rust-mule API calls and Mattermost webhook posts.
+  - made read-only rust-mule endpoint calls resilient to transient/unavailable endpoints (including 404 and timeout), with warning logs and safe fallback values.
+  - guarded analyzer against empty OpenAI choices responses.
+  - removed tool-result payload snippets from analyzer logs to reduce sensitive-data leakage.
+  - fixed log watcher offset progression so read failures do not skip unread log bytes.
+  - blocked sensitive paths in source tools (`read_file`/`git_blame`) and excluded sensitive files from search scanning.
+  - added `propose_patch` maximum diff size enforcement to prevent oversized proposal artifacts.
+  - expanded tests for timeout handling and source-tool sensitive path protections.
+- Addressed PR #20 review feedback:
+  - exported `RUST_MULE_TOKEN_PATH` in `entrypoint.sh` so the Node process receives the validated value.
+  - widened sensitive `.env` path detection to block `.env` directory segments as well as files.
+  - aligned `propose_patch` byte-limit enforcement with exact bytes written to disk.
+  - updated `LogWatcher` to advance offsets by consumed bytes and always close/destroy stream resources in `finally`.
+  - made core read endpoints treat HTTP 403 as non-recoverable (while keeping debug endpoint fallback behavior).
+  - added test coverage for `.env` directory blocking, log-watcher offset handling, and core-read 403 behavior.
 
 ## Key Decisions
 
@@ -67,5 +85,5 @@
 
 ## Next Steps
 
-- Open PR for OpenAI SDK migration and process review feedback.
+- Resolve remaining PR #20 review threads and merge.
 - After merge, continue deferred runtime validation tasks documented in `docs/TASK.md`.

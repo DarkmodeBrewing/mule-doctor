@@ -111,3 +111,15 @@ test("MattermostClient posts patch proposal metadata and diff content", async ()
   assert.ok(payload.attachments[1].text.includes("```diff"));
   assert.ok(payload.attachments[1].text.includes("+pub fn new() {}"));
 });
+
+test("MattermostClient fails with timeout when webhook does not respond", async () => {
+  global.fetch = async (_url, init = {}) =>
+    new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => {
+        reject(new DOMException("Aborted", "AbortError"));
+      });
+    });
+
+  const client = new MattermostClient("https://example.test/hook", new StubAnalyzer(), 200);
+  await assert.rejects(() => client.post("hello"), /Mattermost webhook timed out after 200ms/);
+});

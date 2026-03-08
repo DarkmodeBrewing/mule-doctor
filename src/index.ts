@@ -57,7 +57,7 @@ async function main(): Promise<void> {
   const logPath = requireEnv("RUST_MULE_LOG_PATH");
   const openaiKey = requireEnv("OPENAI_API_KEY");
   const webhookUrl = requireEnv("MATTERMOST_WEBHOOK_URL");
-  const tokenPath = optionalEnv("RUST_MULE_TOKEN_PATH");
+  const tokenPath = requireEnv("RUST_MULE_TOKEN_PATH");
   const debugTokenPath = optionalEnv("RUST_MULE_DEBUG_TOKEN_FILE");
   const apiPrefix = optionalEnv("RUST_MULE_API_PREFIX") ?? "/api/v1";
   const openaiModel = optionalEnv("OPENAI_MODEL");

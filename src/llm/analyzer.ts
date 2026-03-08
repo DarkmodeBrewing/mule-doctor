@@ -54,6 +54,9 @@ export class Analyzer {
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const response = await this.chatCompletion(messages);
+      if (!response.choices.length) {
+        throw new Error("OpenAI response contained no choices");
+      }
       const choice = response.choices[0];
       const msg = choice.message;
 
@@ -67,7 +70,11 @@ export class Analyzer {
       for (const call of msg.tool_calls) {
         const toolResult = await this.executeToolCall(call);
         const result = JSON.stringify(toolResult);
-        log("info", "analyzer", `Tool ${readToolCallName(call)} → ${result.slice(0, 80)}…`);
+        log(
+          "info",
+          "analyzer",
+          `Tool ${readToolCallName(call)} completed (success=${toolResult.success})`,
+        );
         messages.push({
           role: "tool",
           tool_call_id: call.id,

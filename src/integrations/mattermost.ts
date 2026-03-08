@@ -39,13 +39,17 @@ export interface PatchProposalInput {
   lines: number;
 }
 
+const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
+
 export class MattermostClient {
   private readonly webhookUrl: string;
   private readonly analyzer: Analyzer;
+  private readonly requestTimeoutMs: number;
 
-  constructor(webhookUrl: string, analyzer: Analyzer) {
+  constructor(webhookUrl: string, analyzer: Analyzer, requestTimeoutMs = DEFAULT_HTTP_TIMEOUT_MS) {
     this.webhookUrl = webhookUrl;
     this.analyzer = analyzer;
+    this.requestTimeoutMs = clampTimeout(requestTimeoutMs);
   }
 
   /** Post a plain-text message to the configured Mattermost channel. */
@@ -145,11 +149,30 @@ export class MattermostClient {
   }
 
   private async postPayload(payload: MattermostPayload): Promise<void> {
-    const res = await fetch(this.webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, this.requestTimeoutMs);
+
+    let res: Response;
+    try {
+      res = await fetch(this.webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (isAbortError(err)) {
+        throw new Error(`Mattermost webhook timed out after ${this.requestTimeoutMs}ms`, {
+          cause: err,
+        });
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+
     if (!res.ok) {
       throw new Error(`Mattermost webhook error: ${res.status}`);
     }
@@ -250,4 +273,21 @@ function escapeCodeFence(text: string): string {
 
 function log(level: string, module: string, msg: string): void {
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
+}
+
+function clampTimeout(value: number): number {
+  if (!Number.isInteger(value) || value < 100 || value > 120_000) {
+    return DEFAULT_HTTP_TIMEOUT_MS;
+  }
+  return value;
+}
+
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "name" in err &&
+    typeof err["name"] === "string" &&
+    err["name"] === "AbortError"
+  );
 }

@@ -69,6 +69,16 @@ interface PollOptions {
   maxWaitMs?: number;
 }
 
+class RequestTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(method: string, url: string, timeoutMs: number) {
+    super(`${method} ${url} timed out after ${timeoutMs}ms`);
+    this.name = "RequestTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
 class HttpError extends Error {
   readonly status: number;
 
@@ -81,16 +91,24 @@ class HttpError extends Error {
 
 const DEFAULT_POLL_INTERVAL_MS = 500;
 const DEFAULT_MAX_WAIT_MS = 15_000;
+const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
 
 export class RustMuleClient {
   private readonly baseUrl: string;
   private readonly apiPrefix: string;
   private readonly tokenPath: string | undefined;
   private readonly debugTokenPath: string | undefined;
+  private readonly httpTimeoutMs: number;
   private authToken: string | undefined;
   private debugToken: string | undefined;
 
-  constructor(baseUrl: string, tokenPath?: string, apiPrefix = "/api/v1", debugTokenPath?: string) {
+  constructor(
+    baseUrl: string,
+    tokenPath?: string,
+    apiPrefix = "/api/v1",
+    debugTokenPath?: string,
+    httpTimeoutMs = DEFAULT_HTTP_TIMEOUT_MS,
+  ) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     const trimmedPrefix = apiPrefix.trim();
     if (trimmedPrefix === "") {
@@ -101,25 +119,38 @@ export class RustMuleClient {
     }
     this.tokenPath = tokenPath;
     this.debugTokenPath = debugTokenPath;
+    this.httpTimeoutMs = clampInt(httpTimeoutMs, DEFAULT_HTTP_TIMEOUT_MS, 100, 120_000);
   }
 
   /** Load bearer/debug tokens from disk (if configured). */
   async loadToken(): Promise<void> {
     if (this.tokenPath) {
       try {
-        this.authToken = (await readFile(this.tokenPath, "utf8")).trim();
+        const token = (await readFile(this.tokenPath, "utf8")).trim();
+        if (!token) {
+          throw new Error("Auth token file is empty");
+        }
+        this.authToken = token;
         log("info", "rustMuleClient", "Auth token loaded");
       } catch (err) {
-        log("warn", "rustMuleClient", `Failed to load token: ${String(err)}`);
+        throw new Error(`Failed to load auth token from ${this.tokenPath}: ${String(err)}`, {
+          cause: err,
+        });
       }
     }
 
     if (this.debugTokenPath) {
       try {
-        this.debugToken = (await readFile(this.debugTokenPath, "utf8")).trim();
+        const token = (await readFile(this.debugTokenPath, "utf8")).trim();
+        if (!token) {
+          throw new Error("Debug token file is empty");
+        }
+        this.debugToken = token;
         log("info", "rustMuleClient", "Debug token loaded");
       } catch (err) {
-        log("warn", "rustMuleClient", `Failed to load debug token: ${String(err)}`);
+        throw new Error(`Failed to load debug token from ${this.debugTokenPath}: ${String(err)}`, {
+          cause: err,
+        });
       }
     }
   }
@@ -135,7 +166,7 @@ export class RustMuleClient {
 
   private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const url = `${this.baseUrl}${this.apiPrefix}${path}`;
-    const res = await fetch(url, { headers: this.headers(options) });
+    const res = await this.fetchWithTimeout("GET", url, { headers: this.headers(options) });
     if (!res.ok) {
       throw new HttpError("GET", url, res.status);
     }
@@ -148,7 +179,7 @@ export class RustMuleClient {
     options: RequestOptions = {},
   ): Promise<T> {
     const url = `${this.baseUrl}${this.apiPrefix}${path}`;
-    const res = await fetch(url, {
+    const res = await this.fetchWithTimeout("POST", url, {
       method: "POST",
       headers: this.headers(options),
       body: JSON.stringify(body),
@@ -159,34 +190,76 @@ export class RustMuleClient {
     return res.json() as Promise<T>;
   }
 
+  private async fetchWithTimeout(
+    method: string,
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, this.httpTimeoutMs);
+
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } catch (err) {
+      if (isAbortError(err)) {
+        throw new RequestTimeoutError(method, url, this.httpTimeoutMs);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   async getNodeInfo(): Promise<NodeInfo> {
-    const status = await this.get<Record<string, unknown>>("/status");
-    return {
-      ...status,
-      nodeId: typeof status["node_id_hex"] === "string" ? status["node_id_hex"] : "unknown",
-      version: typeof status["version"] === "string" ? status["version"] : "unknown",
-      uptime: typeof status["uptime_secs"] === "number" ? status["uptime_secs"] : 0,
-    };
+    try {
+      const status = await this.get<Record<string, unknown>>("/status");
+      return {
+        ...status,
+        nodeId: typeof status["node_id_hex"] === "string" ? status["node_id_hex"] : "unknown",
+        version: typeof status["version"] === "string" ? status["version"] : "unknown",
+        uptime: typeof status["uptime_secs"] === "number" ? status["uptime_secs"] : 0,
+      };
+    } catch (err) {
+      if (!isRecoverableReadError(err)) {
+        throw err;
+      }
+      log("warn", "rustMuleClient", `Node info unavailable, using fallback: ${String(err)}`);
+      return {
+        nodeId: "unknown",
+        version: "unknown",
+        uptime: 0,
+      };
+    }
   }
 
   async getPeers(): Promise<Peer[]> {
-    const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>("/kad/peers");
-    const peers = Array.isArray(payload.peers) ? payload.peers : [];
-    return peers.map((p) => ({
-      ...p,
-      id:
-        typeof p["kad_id_hex"] === "string"
-          ? p["kad_id_hex"]
-          : typeof p["source_id_hex"] === "string"
-            ? p["source_id_hex"]
-            : "unknown",
-      address:
-        typeof p["udp_dest_short"] === "string"
-          ? p["udp_dest_short"]
-          : typeof p["udp_dest_b64"] === "string"
-            ? p["udp_dest_b64"]
-            : "unknown",
-    }));
+    try {
+      const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>("/kad/peers");
+      const peers = Array.isArray(payload.peers) ? payload.peers : [];
+      return peers.map((p) => ({
+        ...p,
+        id:
+          typeof p["kad_id_hex"] === "string"
+            ? p["kad_id_hex"]
+            : typeof p["source_id_hex"] === "string"
+              ? p["source_id_hex"]
+              : "unknown",
+        address:
+          typeof p["udp_dest_short"] === "string"
+            ? p["udp_dest_short"]
+            : typeof p["udp_dest_b64"] === "string"
+              ? p["udp_dest_b64"]
+              : "unknown",
+      }));
+    } catch (err) {
+      if (!isRecoverableReadError(err)) {
+        throw err;
+      }
+      log("warn", "rustMuleClient", `Peer list unavailable, using fallback: ${String(err)}`);
+      return [];
+    }
   }
 
   async getRoutingBuckets(): Promise<RoutingBucket[]> {
@@ -208,20 +281,38 @@ export class RustMuleClient {
       const unavailableDebugEndpoint =
         err instanceof HttpError &&
         (err.status === 403 || err.status === 404 || err.status === 501);
-      if (!unavailableDebugEndpoint) {
+      const recoverableTransient = isRecoverableReadError(err);
+      if (err instanceof RequestTimeoutError) {
+        log(
+          "warn",
+          "rustMuleClient",
+          `Routing buckets unavailable (debug endpoint timeout): ${String(err)}`,
+        );
+        return [];
+      }
+      if (!unavailableDebugEndpoint && !recoverableTransient) {
         throw err;
       }
       log(
         "warn",
         "rustMuleClient",
-        `Routing buckets unavailable (debug endpoint disabled or token rejected): ${String(err)}`,
+        `Routing buckets unavailable (debug endpoint disabled/rejected/transient): ${String(err)}`,
       );
       return [];
     }
   }
 
   async getLookupStats(): Promise<LookupStats> {
-    const events = await this.get<Record<string, unknown>>("/events");
+    let events: Record<string, unknown>;
+    try {
+      events = await this.get<Record<string, unknown>>("/events");
+    } catch (err) {
+      if (!isRecoverableReadError(err)) {
+        throw err;
+      }
+      log("warn", "rustMuleClient", `Lookup stats unavailable, using fallback: ${String(err)}`);
+      events = {};
+    }
 
     const total = typeof events["sent_reqs_total"] === "number" ? events["sent_reqs_total"] : 0;
     const matched =
@@ -400,6 +491,33 @@ function readNumber(payload: Record<string, unknown>, keys: string[]): number | 
 function clampInt(value: number | undefined, fallback: number, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
   return Math.min(max, Math.max(min, value));
+}
+
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "name" in err &&
+    typeof err["name"] === "string" &&
+    err["name"] === "AbortError"
+  );
+}
+
+function isRecoverableReadError(err: unknown): boolean {
+  if (err instanceof RequestTimeoutError) {
+    return true;
+  }
+  if (!(err instanceof HttpError)) {
+    return false;
+  }
+  return (
+    err.status === 404 ||
+    err.status === 429 ||
+    err.status === 500 ||
+    err.status === 502 ||
+    err.status === 503 ||
+    err.status === 504
+  );
 }
 
 async function sleep(ms: number): Promise<void> {

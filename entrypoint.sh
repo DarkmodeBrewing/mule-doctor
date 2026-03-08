@@ -61,8 +61,11 @@ if [ -n "$RUST_MULE_TOKEN_PATH" ]; then
     sleep 1
   done
 else
-  echo "Token wait disabled (RUST_MULE_TOKEN_PATH is empty)"
+  echo "RUST_MULE_TOKEN_PATH must be set and non-empty" >&2
+  exit 1
 fi
+
+export RUST_MULE_TOKEN_PATH
 
 echo "Starting mule-doctor..."
 node /app/dist/index.js &
