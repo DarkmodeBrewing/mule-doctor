@@ -3,8 +3,8 @@
 ## Branch
 
 - `feature/eslint-prettier-setup`
-- PR: (pending)
-- Last updated: 2026-03-06
+- PR: https://github.com/DarkmodeBrewing/mule-doctor/pull/18
+- Last updated: 2026-03-08
 
 ## Status
 
