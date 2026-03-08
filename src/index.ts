@@ -94,7 +94,9 @@ async function main(): Promise<void> {
   const uiHost = optionalEnv("MULE_DOCTOR_UI_HOST") ?? "127.0.0.1";
   const uiPort = parsePositiveIntEnv("MULE_DOCTOR_UI_PORT") ?? 18080;
   const uiAuthToken = uiEnabled ? requireEnv("MULE_DOCTOR_UI_AUTH_TOKEN") : undefined;
-  const managedRustMuleBinaryPath = optionalEnv("MANAGED_RUST_MULE_BINARY_PATH");
+  const managedRustMuleBinaryPath =
+    optionalEnv("MULE_DOCTOR_MANAGED_RUST_MULE_BINARY_PATH") ??
+    optionalEnv("MANAGED_RUST_MULE_BINARY_PATH");
   const managedInstanceRootDir = optionalEnv("MULE_DOCTOR_MANAGED_INSTANCE_ROOT");
   const managedApiPortStart = parsePositiveIntEnv("MULE_DOCTOR_MANAGED_API_PORT_START");
   const managedApiPortEnd = parsePositiveIntEnv("MULE_DOCTOR_MANAGED_API_PORT_END");

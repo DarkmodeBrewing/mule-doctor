@@ -342,7 +342,9 @@ export class OperatorConsoleServer {
       typeof payload.apiPort === "number" && Number.isInteger(payload.apiPort)
         ? payload.apiPort
         : undefined;
-    const created = await this.managedInstances.createPlannedInstance({ id, apiPort });
+    const created = await handleManagedInstanceErrors(() =>
+      this.managedInstances!.createPlannedInstance({ id, apiPort }),
+    );
     sendJson(res, 201, { ok: true, instance: created });
   }
 
@@ -385,11 +387,13 @@ export class OperatorConsoleServer {
 
     let instance: ManagedInstanceRecord;
     if (action === "start") {
-      instance = await this.managedInstances.startInstance(id);
+      instance = await handleManagedInstanceErrors(() => this.managedInstances!.startInstance(id));
     } else if (action === "stop") {
-      instance = await this.managedInstances.stopInstance(id, "stopped from operator console");
+      instance = await handleManagedInstanceErrors(() =>
+        this.managedInstances!.stopInstance(id, "stopped from operator console"),
+      );
     } else if (action === "restart") {
-      instance = await this.managedInstances.restartInstance(id);
+      instance = await handleManagedInstanceErrors(() => this.managedInstances!.restartInstance(id));
     } else {
       sendJson(res, 404, { ok: false, error: "not found" });
       return;
@@ -846,6 +850,30 @@ async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknow
     return parsed as Record<string, unknown>;
   } catch (err) {
     throw new RequestError(400, `invalid JSON body: ${String(err)}`);
+  }
+}
+
+async function handleManagedInstanceErrors<T>(op: () => Promise<T>): Promise<T> {
+  try {
+    return await op();
+  } catch (err) {
+    if (!(err instanceof Error)) {
+      throw err;
+    }
+    if (err.message.startsWith("Managed instance not found")) {
+      throw new RequestError(404, err.message);
+    }
+    if (
+      err.message.startsWith("Invalid managed instance") ||
+      err.message.includes("already exists") ||
+      err.message.includes("already reserved") ||
+      err.message.includes("already in use") ||
+      err.message.includes("Invalid port") ||
+      err.message.includes("outside the allowed range")
+    ) {
+      throw new RequestError(400, err.message);
+    }
+    throw err;
   }
 }
 

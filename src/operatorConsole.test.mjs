@@ -45,6 +45,12 @@ class StubManagedInstances {
   }
 
   async createPlannedInstance(input) {
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(input.id)) {
+      throw new Error(`Invalid managed instance id: ${input.id}`);
+    }
+    if (this.instances.some((instance) => instance.id === input.id)) {
+      throw new Error(`Managed instance already exists: ${input.id}`);
+    }
     const instance = {
       ...this.instances[0],
       id: input.id,
@@ -58,6 +64,9 @@ class StubManagedInstances {
 
   async startInstance(id) {
     const instance = this.instances.find((candidate) => candidate.id === id);
+    if (!instance) {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
     instance.status = "running";
     instance.updatedAt = "2026-03-08T01:10:00.000Z";
     return instance;
@@ -65,6 +74,9 @@ class StubManagedInstances {
 
   async stopInstance(id) {
     const instance = this.instances.find((candidate) => candidate.id === id);
+    if (!instance) {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
     instance.status = "stopped";
     instance.updatedAt = "2026-03-08T01:20:00.000Z";
     return instance;
@@ -72,6 +84,9 @@ class StubManagedInstances {
 
   async restartInstance(id) {
     const instance = this.instances.find((candidate) => candidate.id === id);
+    if (!instance) {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
     instance.status = "running";
     instance.updatedAt = "2026-03-08T01:30:00.000Z";
     return instance;
@@ -256,6 +271,23 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       headers: { Cookie: cookie, Origin: "http://evil.example" },
     });
     assert.equal(crossOriginRes.status, 403);
+
+    const invalidCreateRes = await fetch(`${baseUrl}/api/instances`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: baseUrl,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: "../bad" }),
+    });
+    assert.equal(invalidCreateRes.status, 400);
+
+    const missingInstanceRes = await fetch(`${baseUrl}/api/instances/missing/start`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: baseUrl },
+    });
+    assert.equal(missingInstanceRes.status, 404);
 
     const llmListRes = await fetch(`${baseUrl}/api/llm/logs`, {
       headers: { Cookie: cookie },

@@ -168,8 +168,13 @@ async function postJson(url, payload = {}) {
 }
 
 async function refreshInstances() {
-  const data = await fetchJson("/api/instances");
-  renderInstanceList(data.instances);
+  try {
+    const data = await fetchJson("/api/instances");
+    renderInstanceList(data.instances);
+  } catch (err) {
+    renderInstanceList([]);
+    setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
+  }
 }
 
 async function mutateInstance(id, action) {
