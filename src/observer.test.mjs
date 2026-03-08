@@ -114,8 +114,28 @@ class StubTargetResolver {
     this.target = target;
   }
 
+  async describeActiveTarget() {
+    return {
+      target: this.target.target,
+      label: this.target.label,
+    };
+  }
+
   async resolve() {
     return this.target;
+  }
+}
+
+class FailingTargetResolver {
+  async describeActiveTarget() {
+    return {
+      target: { kind: "managed_instance", instanceId: "missing" },
+      label: "managed instance missing",
+    };
+  }
+
+  async resolve() {
+    throw new Error("Managed instance missing is stopped");
   }
 }
 
@@ -205,6 +225,46 @@ test("Observer routes cycle analysis through the resolved managed target", async
     const history = await runtimeStore.loadHistory();
     assert.equal(history.length, 1);
     assert.deepEqual(history[0].target, { kind: "managed_instance", instanceId: "a" });
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("Observer reports unavailable active targets without stopping the loop", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const runtimeStore = new RuntimeStore({ dataDir: tmp.dir });
+    await runtimeStore.initialize();
+
+    const mattermost = new CountingMattermost();
+    const observer = new Observer(new StubAnalyzer(), mattermost, {
+      runtimeStore,
+      targetResolver: new FailingTargetResolver(),
+      intervalMs: 999999,
+    });
+
+    await observer.runCycle();
+
+    assert.equal(mattermost.periodicCalls, 1);
+    assert.match(mattermost.lastPeriodicReport.summary, /Active diagnostic target unavailable/);
+    assert.equal(mattermost.lastPeriodicReport.targetLabel, "managed instance missing");
+    assert.equal(mattermost.lastPeriodicReport.healthScore, 0);
+
+    const state = await runtimeStore.loadState();
+    assert.equal(state.lastHealthScore, 0);
+    assert.deepEqual(state.lastObservedTarget, {
+      kind: "managed_instance",
+      instanceId: "missing",
+    });
+
+    const history = await runtimeStore.loadHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].healthScore, 0);
+    assert.deepEqual(history[0].target, {
+      kind: "managed_instance",
+      instanceId: "missing",
+    });
   } finally {
     await tmp.cleanup();
   }

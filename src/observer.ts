@@ -12,7 +12,11 @@ import type { RuntimeStore } from "./storage/runtimeStore.js";
 import type { HistoryEntry, RuntimeState } from "./types/contracts.js";
 import { getNetworkHealth } from "./health/healthScore.js";
 import type { NetworkHealthResult } from "./health/healthScore.js";
-import type { ObserverTargetRuntime, ObserverTargetResolver } from "./observerTargetResolver.js";
+import type {
+  ObserverTargetDescriptor,
+  ObserverTargetRuntime,
+  ObserverTargetResolver,
+} from "./observerTargetResolver.js";
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -120,14 +124,21 @@ export class Observer {
 
   private async runCycle(): Promise<void> {
     log("info", "observer", "Running diagnostic cycle");
-    const target = await this.resolveTarget();
+    const targetDescriptor = await this.describeTarget();
+    let target: ObserverTargetRuntime | undefined;
+    try {
+      target = await this.resolveTarget();
+    } catch (err) {
+      await this.handleUnavailableTarget(targetDescriptor, err);
+      return;
+    }
     const context = await this.collectAndPersistContext(target);
     const prompt = this.buildPrompt(context);
     const analyzer = target && this.analyzerFactory ? this.analyzerFactory(target) : this.analyzer;
     const summary = await analyzer.analyze(prompt);
     await this.mattermost.postPeriodicReport({
       summary,
-      targetLabel: context?.targetLabel ?? target?.label,
+      targetLabel: context?.targetLabel ?? targetDescriptor.label,
       healthScore: context?.networkHealth.score,
       peerCount: context?.peerCount,
       routingBucketCount: context?.routingBucketCount,
@@ -237,6 +248,44 @@ export class Observer {
       logSource: this.logWatcher,
       logOffset: this.logWatcher.getOffset(),
     };
+  }
+
+  private async describeTarget(): Promise<ObserverTargetDescriptor> {
+    if (this.targetResolver) {
+      return this.targetResolver.describeActiveTarget();
+    }
+    return {
+      target: { kind: "external" },
+      label: "external configured rust-mule client",
+    };
+  }
+
+  private async handleUnavailableTarget(
+    target: ObserverTargetDescriptor,
+    err: unknown,
+  ): Promise<void> {
+    const reason = String(err);
+    log("warn", "observer", `Active target unavailable (${target.label}): ${reason}`);
+
+    if (this.runtimeStore) {
+      const timestamp = new Date().toISOString();
+      await this.runtimeStore.appendHistory({
+        timestamp,
+        target: target.target,
+        healthScore: 0,
+      });
+      await this.runtimeStore.updateState({
+        lastRun: timestamp,
+        lastHealthScore: 0,
+        lastObservedTarget: target.target,
+      });
+    }
+
+    await this.mattermost.postPeriodicReport({
+      summary: `Active diagnostic target unavailable: ${reason}`,
+      targetLabel: target.label,
+      healthScore: 0,
+    });
   }
 }
 

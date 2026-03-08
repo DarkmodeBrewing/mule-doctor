@@ -160,6 +160,10 @@ without stopping mule-doctor itself.
 Periodic reports and persisted observer state should identify the target that
 was actually observed.
 
+If target resolution fails before a full observation can run, mule-doctor
+should still emit an explicit degraded/unavailable report and persist a zero
+health score for that target rather than silently skipping the cycle.
+
 Example workflow:
 
 1. Collect node metrics from the rust-mule API

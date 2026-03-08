@@ -139,6 +139,7 @@
   - routing the scheduled observer through a resolved active target each cycle
   - recording `lastObservedTarget` in runtime state and labeling history entries with the observed target
   - labeling periodic Mattermost reports with the observed target
+  - emitting explicit degraded/unavailable reports with `healthScore=0` when the selected target cannot be resolved at cycle start
 
 ## Key Decisions
 
@@ -167,4 +168,4 @@
 - Finish the active-target foundation slice:
   - review
   - merge
-- After that, harden unavailable-target behavior so scheduled cycles produce explicit degraded/unavailable reporting instead of only logging cycle errors.
+- Surface `lastObservedTarget` and unavailable-target state more clearly in the operator console health view if operators need it.

@@ -16,6 +16,11 @@ export interface ObserverTargetRuntime {
   logOffset?: number;
 }
 
+export interface ObserverTargetDescriptor {
+  target: DiagnosticTargetRef;
+  label: string;
+}
+
 export class ObserverTargetResolver {
   private readonly targetService: DiagnosticTargetService;
   private readonly externalClient: RustMuleClient;
@@ -35,11 +40,12 @@ export class ObserverTargetResolver {
   }
 
   async resolve(): Promise<ObserverTargetRuntime> {
-    const target = await this.targetService.getActiveTarget();
+    const descriptor = await this.describeActiveTarget();
+    const target = descriptor.target;
     if (target.kind === "external") {
       return {
         target,
-        label: "external configured rust-mule client",
+        label: descriptor.label,
         client: this.externalClient,
         logSource: this.externalLogSource,
         logOffset: this.externalLogSource.getOffset?.(),
@@ -61,9 +67,20 @@ export class ObserverTargetResolver {
 
     return {
       target,
-      label: `managed instance ${record.id}`,
+      label: descriptor.label,
       client: this.managedDiagnostics.getClientForInstance(record),
       logSource: new StaticLogSource(await readTailLines(record.runtime.logPath, DEFAULT_LOG_LINES)),
+    };
+  }
+
+  async describeActiveTarget(): Promise<ObserverTargetDescriptor> {
+    const target = await this.targetService.getActiveTarget();
+    return {
+      target,
+      label:
+        target.kind === "external"
+          ? "external configured rust-mule client"
+          : `managed instance ${target.instanceId}`,
     };
   }
 }
