@@ -41,6 +41,10 @@
   - added flat ESLint config (`eslint.config.mjs`) and Prettier config/ignore files.
   - added npm scripts: `lint`, `lint:fix`, `format`, `format:check`.
   - updated `check` script to run `typecheck + lint + test`.
+- Addressed PR #18 review feedback:
+  - aligned declared Node engine with ESLint v10 requirements (`>=20.19.0`).
+  - pinned CI Node setup to `20.19.0` and renamed CI job to explicitly reflect lint stage.
+  - restored intended indentation in architecture tree under `mule-doctor` using a fenced `text` block.
 - Ran `npm run format` across the repository and fixed new lint findings surfaced by ESLint.
 
 ## Key Decisions

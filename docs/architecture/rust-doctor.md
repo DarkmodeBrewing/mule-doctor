@@ -26,18 +26,20 @@ tool interface implemented by mule-doctor.
 
 System architecture:
 
+```text
 rust-mule
 │
 ├─ API (/api/v1)
 ├─ logs
 │
 └── mule-doctor
-│
-├─ observer loop
-├─ tool registry
-├─ LLM diagnostics
-├─ history storage
-└─ Mattermost reporting
+    │
+    ├─ observer loop
+    ├─ tool registry
+    ├─ LLM diagnostics
+    ├─ history storage
+    └─ Mattermost reporting
+```
 
 The design intentionally separates:
 
