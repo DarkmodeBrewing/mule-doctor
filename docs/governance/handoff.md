@@ -105,6 +105,7 @@
   - architecture now explicitly documents the operator console as part of the system.
   - architecture now distinguishes external observation mode from future mule-doctor-managed local test instances.
   - backlog now includes `InstanceManager` and operator-console control-plane tasks for multi-instance rust-mule supervision.
+  - backlog now also includes splitting the operator-console frontend into static assets instead of inline HTML in server code.
 
 ## Key Decisions
 
@@ -124,3 +125,4 @@
 
 - Finish PR for operator console phase 2 and process review feedback.
 - After phase 2, first document and implement the `InstanceManager` data model before adding instance lifecycle controls to the UI.
+- Before the control-plane UI grows further, split the operator-console frontend out of inline server templates into static assets.

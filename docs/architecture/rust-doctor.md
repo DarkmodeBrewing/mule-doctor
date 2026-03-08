@@ -172,6 +172,10 @@ Current phase:
 - JSON API for health, logs, and proposal artifacts
 - SSE streams for live app-log and rust-mule-log viewing
 
+Implementation note:
+
+- the current prototype may serve UI markup directly from backend code, but the intended steady-state architecture is to serve the operator console frontend as static assets, kept separate from backend auth/API/SSE route logic
+
 Primary purpose:
 
 - inspect mule-doctor runtime health

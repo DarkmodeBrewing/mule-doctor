@@ -292,3 +292,19 @@ Acceptance criteria:
 - Operator can boot multiple local rust-mule instances from the browser.
 - Each managed instance is clearly labeled and observable independently.
 - Control actions do not apply to external production-like nodes.
+
+## Task G: Split Operator Console UI From Server Code
+
+1. Move the operator console frontend out of inline HTML strings in `server.ts`.
+2. Serve static UI assets from a dedicated directory such as `src/operatorConsole/public/`.
+3. Separate concerns into:
+   - static HTML/CSS/JS assets
+   - backend API/auth routes
+   - backend SSE stream handlers
+4. Keep the backend lightweight; do not add a new web framework unless routing complexity justifies it later.
+
+Acceptance criteria:
+
+- The operator console frontend is served as static assets rather than inline string templates.
+- UI review and testing are easier because frontend changes are isolated from backend route logic.
+- The current auth/API/SSE behavior remains intact after the split.
