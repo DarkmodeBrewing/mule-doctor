@@ -4,6 +4,8 @@ const LOG_LINE_LIMIT = 250;
 const INSTANCE_DETAIL_PLACEHOLDER = "Select an instance to inspect details.";
 const INSTANCE_DIAGNOSTICS_PLACEHOLDER =
   "Select an instance to inspect diagnostics for that managed rust-mule node.";
+const INSTANCE_ANALYSIS_PLACEHOLDER =
+  "Run on-demand analysis for the selected managed instance.";
 const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
 let selectedInstanceId = null;
 
@@ -84,6 +86,7 @@ function renderInstanceList(instances) {
     const stop = document.createElement("button");
     const restart = document.createElement("button");
     const inspect = document.createElement("button");
+    const analyze = document.createElement("button");
 
     wrapper.className = "instance-entry";
     controls.className = "controls";
@@ -92,11 +95,13 @@ function renderInstanceList(instances) {
     meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}`;
 
     inspect.textContent = "Inspect";
+    analyze.textContent = "Analyze";
     start.textContent = "Start";
     stop.textContent = "Stop";
     restart.textContent = "Restart";
 
     inspect.onclick = () => inspectInstance(instance.id);
+    analyze.onclick = () => analyzeInstance(instance.id);
     start.onclick = () => mutateInstance(instance.id, "start");
     stop.onclick = () => mutateInstance(instance.id, "stop");
     restart.onclick = () => mutateInstance(instance.id, "restart");
@@ -108,6 +113,7 @@ function renderInstanceList(instances) {
     }
 
     controls.appendChild(inspect);
+    controls.appendChild(analyze);
     controls.appendChild(start);
     controls.appendChild(stop);
     controls.appendChild(restart);
@@ -186,6 +192,7 @@ async function refreshInstances() {
         selectedInstanceId = null;
         setText("instance-detail", "Selected instance no longer exists.");
         setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
+        setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
         setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
       }
     }
@@ -246,8 +253,21 @@ async function inspectInstance(id) {
   }
 }
 
+async function analyzeInstance(id) {
+  selectedInstanceId = id;
+  setText("instance-analysis", "Running analysis...");
+  try {
+    const result = await postJson(`/api/instances/${encodeURIComponent(id)}/analyze`);
+    setText("instance-analysis", result.analysis.summary || "(no analysis summary)");
+    await inspectInstance(id);
+  } catch (err) {
+    setText("instance-analysis", `Failed to analyze instance: ${String(err)}`);
+  }
+}
+
 setText("instance-detail", INSTANCE_DETAIL_PLACEHOLDER);
 setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
+setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
 setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 
 function connectStream(url, targetId, statusId) {

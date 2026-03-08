@@ -9,7 +9,6 @@ import type {
   RustMuleClient,
   TraceLookupResult,
 } from "../api/rustMuleClient.js";
-import type { LogWatcher } from "../logs/logWatcher.js";
 import type { RuntimeStore } from "../storage/runtimeStore.js";
 import type { HistoryEntry, ToolResult } from "../types/contracts.js";
 import { SourceCodeTools } from "./sourceCodeTools.js";
@@ -27,6 +26,9 @@ export interface ToolDefinition {
 /** A callable implementation keyed by tool name. */
 export type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
 export type PatchProposalNotifier = (proposal: PatchProposalEvent) => Promise<void>;
+export interface RecentLogSource {
+  getRecentLines(n?: number): string[];
+}
 
 interface SearchLogsResult {
   query: string;
@@ -55,7 +57,7 @@ export class ToolRegistry {
 
   constructor(
     client: RustMuleClient,
-    logWatcher: LogWatcher,
+    logWatcher: RecentLogSource,
     runtimeStore?: RuntimeStore,
     options: ToolRegistryOptions = {},
   ) {

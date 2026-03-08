@@ -7,7 +7,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { open, readFile, readdir, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Stats } from "node:fs";
+import { redactLine, redactText } from "../logs/redaction.js";
 import type {
+  ManagedInstanceAnalysisResult,
   ManagedInstanceDiagnosticSnapshot,
   ManagedInstanceRecord,
 } from "../types/contracts.js";
@@ -53,6 +55,10 @@ export interface ManagedInstanceDiagnostics {
   getSnapshot(id: string): Promise<ManagedInstanceDiagnosticSnapshot>;
 }
 
+export interface ManagedInstanceAnalysis {
+  analyze(id: string): Promise<ManagedInstanceAnalysisResult>;
+}
+
 export interface OperatorConsoleConfig {
   authToken?: string;
   host?: string;
@@ -65,6 +71,7 @@ export interface OperatorConsoleConfig {
   rustMuleStreamPollMs?: number;
   managedInstances?: ManagedInstanceControl;
   managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
+  managedInstanceAnalysis?: ManagedInstanceAnalysis;
 }
 
 export class OperatorConsoleServer {
@@ -79,6 +86,7 @@ export class OperatorConsoleServer {
   private readonly rustMuleStreamPollMs: number;
   private readonly managedInstances: ManagedInstanceControl | undefined;
   private readonly managedInstanceDiagnostics: ManagedInstanceDiagnostics | undefined;
+  private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -102,6 +110,7 @@ export class OperatorConsoleServer {
     );
     this.managedInstances = config.managedInstances;
     this.managedInstanceDiagnostics = config.managedInstanceDiagnostics;
+    this.managedInstanceAnalysis = config.managedInstanceAnalysis;
     this.startedAt = new Date().toISOString();
   }
 
@@ -376,6 +385,10 @@ export class OperatorConsoleServer {
         sendJson(res, 405, { ok: false, error: "method not allowed" });
         return;
       }
+      if (!this.managedInstances) {
+        sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
+        return;
+      }
       const instance = await this.findManagedInstance(id);
       if (!instance) {
         sendJson(res, 404, { ok: false, error: `managed instance not found: ${id}` });
@@ -388,6 +401,10 @@ export class OperatorConsoleServer {
     if (action === "logs") {
       if (req.method !== "GET") {
         sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      if (!this.managedInstances) {
+        sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
         return;
       }
       const instance = await this.findManagedInstance(id);
@@ -426,6 +443,22 @@ export class OperatorConsoleServer {
         this.managedInstanceDiagnostics!.getSnapshot(id),
       );
       sendJson(res, 200, { ok: true, snapshot });
+      return;
+    }
+
+    if (action === "analyze") {
+      if (req.method !== "POST") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      if (!this.managedInstanceAnalysis) {
+        sendJson(res, 501, { ok: false, error: "managed instance analysis unavailable" });
+        return;
+      }
+      const analysis = await handleManagedInstanceErrors(() =>
+        this.managedInstanceAnalysis!.analyze(id),
+      );
+      sendJson(res, 200, { ok: true, analysis });
       return;
     }
 
@@ -841,18 +874,6 @@ async function getFileSize(filePath: string): Promise<number> {
   }
 }
 
-function redactLine(line: string): string {
-  return redactText(line);
-}
-
-function redactText(text: string): string {
-  return text
-    .replace(/(authorization"\s*:\s*"bearer\s+)[^"]+/gi, "$1[redacted]")
-    .replace(/(x-debug-token"\s*:\s*")[^"]+/gi, '$1[redacted]')
-    .replace(/(openai_api_key\s*=\s*)\S+/gi, "$1[redacted]")
-    .replace(/(api[_-]?key\s*[=:]\s*)\S+/gi, "$1[redacted]")
-    .replace(/(token\s*[=:]\s*)\S+/gi, "$1[redacted]");
-}
 
 function getCookie(rawCookieHeader: string | undefined, cookieName: string): string | undefined {
   if (!rawCookieHeader) return undefined;

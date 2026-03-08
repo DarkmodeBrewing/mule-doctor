@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/managed-instance-diagnostics-routing`
+- `feature/managed-instance-on-demand-analysis`
 - PR: (pending)
 - Last updated: 2026-03-08
 
 ## Status
 
-- In progress; adding selected managed-instance diagnostics routing so the operator console can inspect metrics/health for a chosen managed rust-mule instance.
-- PR #28 is merged to `main`.
+- In progress; adding on-demand analysis for a selected managed rust-mule instance without changing the existing scheduled observer pipeline.
+- PR #29 is merged to `main`.
 
 ## Completed Work
 
@@ -127,6 +127,11 @@
   - loading managed-instance bearer/debug tokens from each instance runtime directory before snapshot collection
   - exposing operator-console diagnostics route for a selected managed instance
   - extending the console UI to show selected-instance diagnostics alongside detail and per-instance logs
+- Managed-instance on-demand analysis underway:
+  - adding a `ManagedInstanceAnalysisService` that reuses `Analyzer` + `ToolRegistry` against a selected managed instance
+  - capturing a bounded recent log snapshot from the selected instance for tool-based analysis
+  - exposing an operator-console route for on-demand analysis of the selected managed instance
+  - preserving the background observer/Mattermost pipeline on the original configured external client for now
 
 ## Key Decisions
 
@@ -140,6 +145,7 @@
 - Port allocation in this phase guarantees non-overlap inside the managed-instance catalog only; probing host-level port availability is deferred until launch wiring.
 - Managed-instance lifecycle should fail locally per instance and never take down mule-doctor as a whole.
 - Managed-instance diagnostics should be selected-instance scoped first; do not jump directly to observing all managed instances concurrently until the per-instance client/session model is stable.
+- Keep selected-instance analysis on-demand until target-aware observer scheduling and reporting semantics are explicitly designed.
 
 ## Validation
 
@@ -148,5 +154,5 @@
 
 ## Next Steps
 
-- Finish the selected managed-instance diagnostics routing slice and process review feedback.
-- After that, consider whether the next slice should be observer/tool routing against a chosen managed instance or a broader multi-instance comparison model.
+- Finish the selected managed-instance on-demand analysis slice and process review feedback.
+- After that, decide whether to route the periodic observer/tool loop to a chosen target or to add broader multi-instance comparison/reporting.

@@ -130,6 +130,62 @@ class StubManagedInstanceDiagnostics {
   }
 }
 
+class StubManagedInstanceAnalysis {
+  async analyze(id) {
+    if (id !== "a") {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
+    return {
+      instanceId: "a",
+      analyzedAt: "2026-03-08T02:05:00.000Z",
+      available: true,
+      summary: "Managed instance is healthy with mild timeout pressure.",
+    };
+  }
+}
+
+test("OperatorConsoleServer reports 501 for instance detail routes when control is unavailable", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
+      managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const detailRes = await fetch(`${server.publicAddress()}/api/instances/a`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(detailRes.status, 501);
+
+    const logsRes = await fetch(`${server.publicAddress()}/api/instances/a/logs`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(logsRes.status, 501);
+
+    const diagnosticsRes = await fetch(`${server.publicAddress()}/api/instances/a/diagnostics`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(diagnosticsRes.status, 200);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 async function loginAndGetCookie(baseUrl) {
   const loginRes = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
@@ -212,6 +268,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       rustMuleStreamPollMs: 25,
       managedInstances: new StubManagedInstances(),
       managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
+      managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
     });
     await server.start();
 
@@ -315,6 +372,15 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     const diagnostics = await diagnosticsRes.json();
     assert.equal(diagnostics.snapshot.instanceId, "a");
     assert.equal(diagnostics.snapshot.available, true);
+
+    const analysisRes = await fetch(`${baseUrl}/api/instances/a/analyze`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: baseUrl },
+    });
+    assert.equal(analysisRes.status, 200);
+    const analysis = await analysisRes.json();
+    assert.equal(analysis.analysis.instanceId, "a");
+    assert.match(analysis.analysis.summary, /healthy/);
 
     const createRes = await fetch(`${baseUrl}/api/instances`, {
       method: "POST",

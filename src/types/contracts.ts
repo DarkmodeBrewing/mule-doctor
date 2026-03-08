@@ -109,3 +109,12 @@ export interface ManagedInstanceDiagnosticSnapshot {
     components: Record<string, number>;
   };
 }
+
+export interface ManagedInstanceAnalysisResult {
+  instanceId: string;
+  analyzedAt: string;
+  available: boolean;
+  reason?: string;
+  summary: string;
+  snapshot?: ManagedInstanceDiagnosticSnapshot;
+}
