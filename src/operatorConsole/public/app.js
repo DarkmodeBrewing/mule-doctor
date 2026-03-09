@@ -110,6 +110,65 @@ function renderOperatorEvents(events, errorText) {
   }
 }
 
+function renderInstanceGroups(instances) {
+  const list = document.getElementById("instance-groups");
+  list.replaceChildren();
+
+  const groups = new Map();
+  for (const instance of instances) {
+    if (!instance.preset?.prefix) {
+      continue;
+    }
+    const key = instance.preset.prefix;
+    const existing = groups.get(key) || {
+      prefix: key,
+      presetId: instance.preset.presetId,
+      instances: [],
+    };
+    existing.instances.push(instance);
+    groups.set(key, existing);
+  }
+
+  if (groups.size === 0) {
+    const item = document.createElement("li");
+    item.className = "muted";
+    item.textContent = "No preset groups created yet.";
+    list.appendChild(item);
+    return;
+  }
+
+  for (const group of Array.from(groups.values()).sort((left, right) => left.prefix.localeCompare(right.prefix))) {
+    const item = document.createElement("li");
+    const wrapper = document.createElement("div");
+    const header = document.createElement("div");
+    const title = document.createElement("strong");
+    const meta = document.createElement("span");
+    const controls = document.createElement("div");
+    const start = document.createElement("button");
+    const runningCount = group.instances.filter((instance) => instance.status === "running").length;
+
+    wrapper.className = "instance-entry";
+    header.className = "instance-header";
+    controls.className = "controls";
+    title.textContent = `${group.prefix} (${group.presetId})`;
+    meta.className = "file-meta";
+    meta.textContent = `${group.instances.length} instances • ${runningCount} running`;
+    start.textContent = "Start preset";
+    start.onclick = () => bulkStartPreset(group.prefix);
+    if (runningCount === group.instances.length) {
+      start.disabled = true;
+    }
+
+    header.appendChild(title);
+    controls.appendChild(start);
+    wrapper.appendChild(header);
+    wrapper.appendChild(meta);
+    wrapper.appendChild(controls);
+    item.appendChild(wrapper);
+    list.appendChild(item);
+  }
+}
+
 function targetLabel(target) {
   if (!target || target.kind === "external") {
     return "external configured rust-mule client";
@@ -167,7 +226,7 @@ function renderInstanceList(instances) {
     controls.className = "controls";
     title.textContent = `${instance.id} (${instance.status})`;
     meta.className = "file-meta";
-    meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}`;
+    meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}${instance.preset ? ` • preset ${instance.preset.prefix}/${instance.preset.presetId}` : ""}`;
 
     inspect.textContent = "Inspect";
     analyze.textContent = "Analyze";
@@ -437,6 +496,7 @@ async function refreshInstances() {
   try {
     const data = await fetchJson("/api/instances");
     renderInstanceList(data.instances);
+    renderInstanceGroups(data.instances);
     renderTargetStatusCard();
     if (selectedInstanceId) {
       const exists = data.instances.some((instance) => instance.id === selectedInstanceId);
@@ -449,6 +509,7 @@ async function refreshInstances() {
       }
     }
   } catch (err) {
+    renderInstanceGroups([]);
     renderInstanceList([]);
     setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
     renderTargetStatusCard();
@@ -723,6 +784,24 @@ async function applyInstancePreset(event) {
       `applied preset ${data.applied.presetId}: ${data.applied.instances.map((instance) => instance.id).join(", ")}`,
     );
     await refreshInstances();
+  } catch (err) {
+    setInstanceFeedback(String(err), true);
+  }
+}
+
+async function bulkStartPreset(prefix) {
+  try {
+    const data = await postJson(`/api/instance-presets/${encodeURIComponent(prefix)}/start`);
+    const startedIds = data.started.instances.map((instance) => instance.id);
+    const failureCount = data.started.failures.length;
+    setInstanceFeedback(
+      failureCount > 0
+        ? `started preset ${prefix}: ${startedIds.join(", ")} (${failureCount} failures)`
+        : `started preset ${prefix}: ${startedIds.join(", ")}`,
+      failureCount > 0,
+    );
+    await refreshInstances();
+    await refreshOperatorEvents();
   } catch (err) {
     setInstanceFeedback(String(err), true);
   }

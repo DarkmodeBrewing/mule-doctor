@@ -414,6 +414,13 @@ Preset application must not:
 
 The purpose of presets is to shorten repeated local cluster setup, not to widen scheduler scope.
 
+Preset-driven lifecycle actions may later include bounded bulk operations such as
+`start preset group`, but those actions must still:
+
+- run through explicit backend services rather than browser-side loops
+- keep partial instance-start failures local to the group operation
+- avoid changing the scheduled observer target implicitly
+
 ---
 
 # LLM Tools

@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/managed-instance-presets`
+- `feature/managed-instance-bulk-start`
 - PR: (pending)
 - Last updated: 2026-03-09
 
 ## Status
 
-- In progress; adding bounded cluster presets/templates for managed local rust-mule instances.
-- PR #37 is merged to `main`.
+- In progress; adding bounded bulk-start flows for preset-created managed-instance groups.
+- PR #38 is merged to `main`.
 
 ## Completed Work
 
@@ -153,6 +153,11 @@
   - adding `InstanceManager.createPlannedInstances()` for batch planned-instance creation with rollback on failure
   - exposing preset list/apply flows through the operator console API/UI
   - preserving the single-target scheduler model; preset application does not change active observer targeting
+- Preset-group bulk start underway:
+  - persisting preset membership metadata on managed-instance records
+  - exposing a bounded backend `start preset group` flow
+  - surfacing preset groups in the operator console with one-click group start
+  - keeping group-start failures local to the operation rather than fatal to mule-doctor
 
 ## Key Decisions
 
@@ -172,6 +177,7 @@
 - Keep the existing external analyzer for Mattermost command handling, while the scheduled observer may construct target-specific analyzers/tool registries per cycle.
 - Cluster presets should create planned instances in one backend operation rather than driving per-instance creation loops from the browser.
 - Preset application must not implicitly start instances or retarget the scheduled observer.
+- Bulk preset-group lifecycle should operate on persisted preset membership metadata rather than inferring groups from ad hoc naming alone.
 
 ## Validation
 
@@ -180,11 +186,11 @@
 
 ## Next Steps
 
-- Finish the managed-instance preset slice:
+- Finish the preset-group bulk-start slice:
   - review
   - merge
-- After presets, add richer cluster ergonomics rather than more scheduler scope:
+- After bulk start, add richer cluster ergonomics rather than more scheduler scope:
   - optional preset metadata/help text in the UI
-  - explicit bulk start flows for preset-created instances
+  - bulk stop/restart flows for preset-created instances
   - clearer per-cluster grouping in the managed-instance list
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.

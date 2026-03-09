@@ -125,7 +125,10 @@ test("InstanceManager creates planned instances in a batch", async () => {
     });
     await manager.initialize();
 
-    const created = await manager.createPlannedInstances([{ id: "a" }, { id: "b" }]);
+    const created = await manager.createPlannedInstances([
+      { id: "a", preset: { presetId: "pair", prefix: "lab" } },
+      { id: "b", preset: { presetId: "pair", prefix: "lab" } },
+    ]);
 
     assert.deepEqual(
       created.map((instance) => instance.id),
@@ -134,6 +137,13 @@ test("InstanceManager creates planned instances in a batch", async () => {
     assert.deepEqual(
       created.map((instance) => instance.apiPort),
       [19000, 19001],
+    );
+    assert.deepEqual(
+      created.map((instance) => instance.preset),
+      [
+        { presetId: "pair", prefix: "lab" },
+        { presetId: "pair", prefix: "lab" },
+      ],
     );
   } finally {
     await tmp.cleanup();
