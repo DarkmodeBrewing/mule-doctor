@@ -421,6 +421,15 @@ Preset-driven lifecycle actions may later include bounded bulk operations such a
 - keep partial instance-start failures local to the group operation
 - avoid changing the scheduled observer target implicitly
 
+The operator console should present preset-created groups as first-class cluster views rather than
+only as a flat list of instances. Group cards should summarize:
+
+- planned/running/stopped/failed counts
+- member instances
+- recent failure reasons when any member is in a failed state
+
+This improves operator readability without changing the single-target observer model.
+
 ---
 
 # LLM Tools

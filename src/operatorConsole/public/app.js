@@ -110,13 +110,12 @@ function renderOperatorEvents(events, errorText) {
   }
 }
 
-function renderInstanceGroups(instances) {
-  const list = document.getElementById("instance-groups");
-  list.replaceChildren();
-
+function partitionInstances(instances) {
   const groups = new Map();
+  const standalone = [];
   for (const instance of instances) {
     if (!instance.preset?.prefix) {
+      standalone.push(instance);
       continue;
     }
     const key = instance.preset.prefix;
@@ -129,7 +128,18 @@ function renderInstanceGroups(instances) {
     groups.set(key, existing);
   }
 
-  if (groups.size === 0) {
+  return {
+    groups: Array.from(groups.values()).sort((left, right) => left.prefix.localeCompare(right.prefix)),
+    standalone,
+  };
+}
+
+function renderInstanceGroups(instances) {
+  const list = document.getElementById("instance-groups");
+  list.replaceChildren();
+  const { groups } = partitionInstances(instances);
+
+  if (groups.length === 0) {
     const item = document.createElement("li");
     item.className = "muted";
     item.textContent = "No preset groups created yet.";
@@ -137,24 +147,31 @@ function renderInstanceGroups(instances) {
     return;
   }
 
-  for (const group of Array.from(groups.values()).sort((left, right) => left.prefix.localeCompare(right.prefix))) {
+  for (const group of groups) {
     const item = document.createElement("li");
     const wrapper = document.createElement("div");
     const header = document.createElement("div");
     const title = document.createElement("strong");
     const meta = document.createElement("span");
     const controls = document.createElement("div");
+    const stats = document.createElement("div");
+    const members = document.createElement("div");
     const start = document.createElement("button");
     const stop = document.createElement("button");
     const restart = document.createElement("button");
     const runningCount = group.instances.filter((instance) => instance.status === "running").length;
+    const plannedCount = group.instances.filter((instance) => instance.status === "planned").length;
+    const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
+    const failedInstances = group.instances.filter((instance) => instance.status === "failed");
 
-    wrapper.className = "instance-entry";
+    wrapper.className = "group-card";
     header.className = "instance-header";
     controls.className = "controls";
+    stats.className = "group-stats";
+    members.className = "group-members";
     title.textContent = `${group.prefix} (${group.presetId})`;
     meta.className = "file-meta";
-    meta.textContent = `${group.instances.length} instances • ${runningCount} running`;
+    meta.textContent = `${group.instances.length} instances`;
     start.textContent = "Start preset";
     stop.textContent = "Stop preset";
     restart.textContent = "Restart preset";
@@ -169,16 +186,97 @@ function renderInstanceGroups(instances) {
       restart.disabled = true;
     }
 
+    stats.appendChild(buildGroupStat("running", runningCount));
+    stats.appendChild(buildGroupStat("planned", plannedCount));
+    stats.appendChild(buildGroupStat("stopped", stoppedCount));
+    stats.appendChild(buildGroupStat("failed", failedInstances.length));
+
     header.appendChild(title);
     controls.appendChild(start);
     controls.appendChild(stop);
     controls.appendChild(restart);
     wrapper.appendChild(header);
     wrapper.appendChild(meta);
+    wrapper.appendChild(stats);
+    if (failedInstances.length > 0) {
+      const errorBanner = document.createElement("div");
+      errorBanner.className = "error-banner";
+      errorBanner.textContent = failedInstances
+        .map((instance) => `${instance.id}: ${instance.lastError || "failed"}`)
+        .join(" | ");
+      wrapper.appendChild(errorBanner);
+    }
+    for (const instance of group.instances) {
+      members.appendChild(buildGroupMember(instance));
+    }
+    wrapper.appendChild(members);
     wrapper.appendChild(controls);
     item.appendChild(wrapper);
     list.appendChild(item);
   }
+}
+
+function buildGroupStat(label, value) {
+  const chip = document.createElement("span");
+  chip.className = "group-stat";
+  chip.textContent = `${label} ${value}`;
+  return chip;
+}
+
+function buildGroupMember(instance) {
+  const wrapper = document.createElement("div");
+  const header = document.createElement("div");
+  const title = document.createElement("strong");
+  const controls = document.createElement("div");
+  const meta = document.createElement("div");
+  const inspect = document.createElement("button");
+  const analyze = document.createElement("button");
+  const useAsTarget = document.createElement("button");
+
+  wrapper.className = "group-member";
+  header.className = "instance-header";
+  controls.className = "controls";
+  meta.className = "group-member-meta";
+  title.textContent = `${instance.id} (${instance.status})`;
+  meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}${instance.lastExit?.reason ? ` • last exit ${instance.lastExit.reason}` : ""}`;
+
+  inspect.textContent = "Inspect";
+  analyze.textContent = "Analyze";
+  useAsTarget.textContent = "Use as target";
+  inspect.onclick = () => inspectInstance(instance.id);
+  analyze.onclick = () => analyzeInstance(instance.id);
+  useAsTarget.onclick = () =>
+    updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
+  if (
+    currentScheduledTarget?.kind === "managed_instance" &&
+    currentScheduledTarget.instanceId === instance.id
+  ) {
+    useAsTarget.disabled = true;
+  }
+
+  header.appendChild(title);
+  if (
+    currentScheduledTarget?.kind === "managed_instance" &&
+    currentScheduledTarget.instanceId === instance.id
+  ) {
+    const targetPill = document.createElement("span");
+    targetPill.className = "pill target";
+    targetPill.textContent = "scheduled target";
+    header.appendChild(targetPill);
+  }
+  if (isUnavailableObservedTarget({ kind: "managed_instance", instanceId: instance.id })) {
+    const degradedPill = document.createElement("span");
+    degradedPill.className = "pill degraded";
+    degradedPill.textContent = "unavailable";
+    header.appendChild(degradedPill);
+  }
+  controls.appendChild(inspect);
+  controls.appendChild(analyze);
+  controls.appendChild(useAsTarget);
+  wrapper.appendChild(header);
+  wrapper.appendChild(meta);
+  wrapper.appendChild(controls);
+  return wrapper;
 }
 
 function targetLabel(target) {
@@ -211,15 +309,16 @@ function renderInstanceList(instances) {
   renderComparisonSelectors(instances);
   const ul = document.getElementById("instance-list");
   ul.replaceChildren();
-  if (!instances.length) {
+  const { standalone } = partitionInstances(instances);
+  if (!standalone.length) {
     const li = document.createElement("li");
-    li.textContent = "No managed instances.";
+    li.textContent = "No standalone managed instances.";
     li.className = "muted";
     ul.appendChild(li);
     return;
   }
 
-  for (const instance of instances) {
+  for (const instance of standalone) {
     const li = document.createElement("li");
     const wrapper = document.createElement("div");
     const header = document.createElement("div");

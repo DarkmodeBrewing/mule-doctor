@@ -379,3 +379,22 @@ Acceptance criteria:
 - Operator can trigger bounded bulk start/stop/restart actions for a preset-created group from the console.
 - Bulk preset-group actions surface partial failures as data, not as a mule-doctor-wide failure.
 - Scheduled observation remains single-target and unchanged after preset application.
+
+## Task J: Operator Console Cluster Grouping
+
+1. Make preset-created groups first-class in the operator console UI.
+2. Show a per-group summary with:
+   - planned/running/stopped/failed counts
+   - group membership
+   - last known failure summaries when present
+3. Keep grouped members operable from the group view:
+   - inspect
+   - analyze
+   - use as target
+4. Keep standalone instances visible separately so non-preset instances are not lost.
+
+Acceptance criteria:
+
+- Preset-created groups are easier to scan than the flat instance list.
+- Operators can understand group state without opening raw per-instance detail first.
+- Grouped members remain directly inspectable/selectable from the cluster view.
