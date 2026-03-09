@@ -430,6 +430,10 @@ only as a flat list of instances. Group cards should summarize:
 
 This improves operator readability without changing the single-target observer model.
 
+The group view may also provide shortcuts into the existing managed-instance comparison surface so
+operators can compare two members of the same preset-created cluster without manually rebuilding the
+selection each time.
+
 ---
 
 # LLM Tools

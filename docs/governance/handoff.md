@@ -168,6 +168,7 @@
   - surfacing planned/running/stopped/failed counts per group
   - surfacing per-group failure summaries
   - keeping standalone instances visible separately from preset groups
+  - adding group-level shortcuts into the existing compare view
 
 ## Key Decisions
 
@@ -190,6 +191,7 @@
 - Bulk preset-group lifecycle should operate on persisted preset membership metadata rather than inferring groups from ad hoc naming alone.
 - Preset-group lifecycle semantics should stay symmetric across `start`, `stop`, and `restart` rather than special-casing `start` only.
 - Operator-console cluster grouping should improve readability without introducing new lifecycle semantics or scheduler coupling.
+- Group-level compare shortcuts should reuse the existing compare flow rather than introducing a new comparison backend.
 
 ## Validation
 
@@ -203,5 +205,5 @@
   - merge
 - After bulk start, add richer cluster ergonomics rather than more scheduler scope:
   - optional preset metadata/help text in the UI
-  - group-level compare shortcuts or filtered event views
+  - filtered event views by group or instance
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.

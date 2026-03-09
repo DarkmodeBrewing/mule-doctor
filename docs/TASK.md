@@ -398,3 +398,4 @@ Acceptance criteria:
 - Preset-created groups are easier to scan than the flat instance list.
 - Operators can understand group state without opening raw per-instance detail first.
 - Grouped members remain directly inspectable/selectable from the cluster view.
+- Preset groups provide a quick path into the existing side-by-side compare view.
