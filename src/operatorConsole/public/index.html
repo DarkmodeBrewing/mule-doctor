@@ -55,6 +55,20 @@
             <button id="refresh-operator-events">Refresh timeline</button>
           </div>
         </div>
+        <div class="instance-form">
+          <select
+            id="operator-event-group-filter"
+            aria-label="Filter operator events by group"
+          ></select>
+          <select
+            id="operator-event-instance-filter"
+            aria-label="Filter operator events by instance"
+          ></select>
+          <select
+            id="operator-event-type-filter"
+            aria-label="Filter operator events by type"
+          ></select>
+        </div>
         <ul id="operator-events" class="event-list">
           <li class="muted">Loading operator events...</li>
         </ul>

@@ -399,3 +399,4 @@ Acceptance criteria:
 - Operators can understand group state without opening raw per-instance detail first.
 - Grouped members remain directly inspectable/selectable from the cluster view.
 - Preset groups provide a quick path into the existing side-by-side compare view.
+- Operators can filter the timeline by group, managed instance, and event type.
