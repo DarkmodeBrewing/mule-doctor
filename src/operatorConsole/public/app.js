@@ -729,6 +729,7 @@ async function refreshInstances() {
   } catch (err) {
     currentManagedInstances = [];
     populateOperatorEventFilters();
+    applyOperatorEventFilters();
     renderInstanceGroups([]);
     renderInstanceList([]);
     setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
