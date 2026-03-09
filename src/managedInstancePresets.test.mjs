@@ -93,6 +93,28 @@ test("ManagedInstancePresetService rejects invalid prefixes", async () => {
   }
 });
 
+test("ManagedInstancePresetService rejects reused preset prefixes", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+    });
+    await manager.initialize();
+    const service = new ManagedInstancePresetService(manager);
+    await service.applyPreset({ presetId: "pair", prefix: "lab" });
+
+    await assert.rejects(
+      service.applyPreset({ presetId: "trio", prefix: "lab" }),
+      /Managed instance preset prefix already exists: lab/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("ManagedInstancePresetService starts all instances in a preset group", async () => {
   const tmp = await makeTempDir();
   try {

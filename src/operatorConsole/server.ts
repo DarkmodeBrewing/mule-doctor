@@ -714,7 +714,16 @@ export class OperatorConsoleServer {
 
     const suffix = path.slice("/api/instance-presets/".length);
     const [prefixRaw, action] = suffix.split("/");
-    const prefix = decodeURIComponent(prefixRaw ?? "").trim();
+    let prefix = "";
+    try {
+      prefix = decodeURIComponent(prefixRaw ?? "").trim();
+    } catch {
+      sendJson(res, 400, {
+        ok: false,
+        error: "invalid percent-encoding in preset group prefix",
+      });
+      return;
+    }
     if (!prefix) {
       sendJson(res, 400, { ok: false, error: "missing preset group prefix" });
       return;
@@ -1346,6 +1355,7 @@ async function handleManagedInstanceErrors<T>(op: () => Promise<T>): Promise<T> 
       err.message.startsWith("Invalid managed instance preset") ||
       err.message.startsWith("Unsupported diagnostic target kind") ||
       err.message.includes("requires an instanceId") ||
+      err.message.includes("preset prefix already exists") ||
       err.message.includes("already exists") ||
       err.message.includes("already reserved") ||
       err.message.includes("already in use") ||

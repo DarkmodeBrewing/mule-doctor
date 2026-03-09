@@ -272,6 +272,7 @@ class ThrowingOperatorEvents {
 class StubManagedInstancePresets {
   constructor() {
     this.startedPrefixes = [];
+    this.appliedPrefixes = new Set();
   }
 
   listPresets() {
@@ -298,6 +299,10 @@ class StubManagedInstancePresets {
     if (!input.prefix) {
       throw new Error("Invalid managed instance preset prefix: ");
     }
+    if (this.appliedPrefixes.has(input.prefix)) {
+      throw new Error(`Managed instance preset prefix already exists: ${input.prefix}`);
+    }
+    this.appliedPrefixes.add(input.prefix);
     const ids =
       input.presetId === "pair"
         ? [`${input.prefix}-a`, `${input.prefix}-b`]
@@ -556,6 +561,17 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
     });
     assert.equal(invalidPresetRes.status, 404);
 
+    const duplicatePrefixRes = await fetch(`${server.publicAddress()}/api/instance-presets/apply`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ presetId: "trio", prefix: "lab" }),
+    });
+    assert.equal(duplicatePrefixRes.status, 400);
+
     const startPresetRes = await fetch(`${server.publicAddress()}/api/instance-presets/lab/start`, {
       method: "POST",
       headers: {
@@ -567,6 +583,18 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
     const startPresetPayload = await startPresetRes.json();
     assert.equal(startPresetPayload.started.prefix, "lab");
     assert.equal(startPresetPayload.started.instances.length, 2);
+
+    const malformedPrefixRes = await fetch(
+      `${server.publicAddress()}/api/instance-presets/%E0/start`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          Origin: server.publicAddress(),
+        },
+      },
+    );
+    assert.equal(malformedPrefixRes.status, 400);
 
     await server.stop();
   } finally {

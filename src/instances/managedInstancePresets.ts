@@ -53,6 +53,10 @@ export class ManagedInstancePresetService {
     }
 
     const prefix = normalizePresetPrefix(input.prefix);
+    const existing = await this.instanceManager.listInstances();
+    if (existing.some((instance) => instance.preset?.prefix === prefix)) {
+      throw new Error(`Managed instance preset prefix already exists: ${prefix}`);
+    }
     const created = await this.instanceManager.createPlannedInstances(
       preset.nodes.map((node) => ({
         id: `${prefix}-${node.suffix}`,

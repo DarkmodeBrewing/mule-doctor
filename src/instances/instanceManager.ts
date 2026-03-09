@@ -217,49 +217,6 @@ export class InstanceManager {
     return this.startInstance(id);
   }
 
-  async startInstances(ids: string[]): Promise<ManagedInstanceRecord[]> {
-    return this.enqueueOperation(async () => {
-      if (!Array.isArray(ids) || ids.length === 0) {
-        throw new Error("At least one managed instance id is required");
-      }
-
-      const started: ManagedInstanceRecord[] = [];
-      for (const id of ids) {
-        const record = await this.requireInstance(id);
-        const current = await this.refreshRecordIfProcessMissing(record);
-        if (current.status === "running" && current.currentProcess) {
-          started.push(current);
-          continue;
-        }
-
-        const command = this.buildCommand(current);
-        const handle = await this.processLauncher.launch({
-          command: command[0],
-          args: command.slice(1),
-          cwd: current.runtime.rootDir,
-          logPath: current.runtime.logPath,
-        });
-        const now = new Date().toISOString();
-        const persisted = await this.persistRecord({
-          ...current,
-          status: "running",
-          updatedAt: now,
-          currentProcess: {
-            pid: handle.pid,
-            command,
-            cwd: current.runtime.rootDir,
-            startedAt: now,
-          },
-          lastError: undefined,
-        });
-        this.trackLiveProcess(persisted.id, handle.pid, handle.exit);
-        started.push(persisted);
-      }
-
-      return started;
-    });
-  }
-
   private async reconcileRunningInstances(): Promise<void> {
     const records = await this.catalog.list();
     for (const record of records) {
