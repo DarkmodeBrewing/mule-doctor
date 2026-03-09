@@ -159,6 +159,7 @@ function renderInstanceGroups(instances) {
     const start = document.createElement("button");
     const stop = document.createElement("button");
     const restart = document.createElement("button");
+    const compare = document.createElement("button");
     const runningCount = group.instances.filter((instance) => instance.status === "running").length;
     const plannedCount = group.instances.filter((instance) => instance.status === "planned").length;
     const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
@@ -175,15 +176,20 @@ function renderInstanceGroups(instances) {
     start.textContent = "Start preset";
     stop.textContent = "Stop preset";
     restart.textContent = "Restart preset";
+    compare.textContent = "Compare group";
     start.onclick = () => bulkMutatePreset(group.prefix, "start");
     stop.onclick = () => bulkMutatePreset(group.prefix, "stop");
     restart.onclick = () => bulkMutatePreset(group.prefix, "restart");
+    compare.onclick = () => comparePresetGroup(group.instances);
     if (runningCount === group.instances.length) {
       start.disabled = true;
     }
     if (runningCount === 0) {
       stop.disabled = true;
       restart.disabled = true;
+    }
+    if (group.instances.length < 2) {
+      compare.disabled = true;
     }
 
     stats.appendChild(buildGroupStat("running", runningCount));
@@ -195,6 +201,7 @@ function renderInstanceGroups(instances) {
     controls.appendChild(start);
     controls.appendChild(stop);
     controls.appendChild(restart);
+    controls.appendChild(compare);
     wrapper.appendChild(header);
     wrapper.appendChild(meta);
     wrapper.appendChild(stats);
@@ -214,6 +221,23 @@ function renderInstanceGroups(instances) {
     item.appendChild(wrapper);
     list.appendChild(item);
   }
+}
+
+async function comparePresetGroup(instances) {
+  const candidates = instances
+    .map((instance) => instance.id)
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+  if (candidates.length < 2) {
+    setText("instance-compare", "Need at least two instances in the preset group to compare.");
+    return;
+  }
+
+  const left = document.getElementById("compare-left");
+  const right = document.getElementById("compare-right");
+  left.value = candidates[0];
+  right.value = candidates[1];
+  await refreshInstanceCompare();
 }
 
 function buildGroupStat(label, value) {
