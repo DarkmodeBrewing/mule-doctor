@@ -37,6 +37,30 @@ class StubManagedInstances {
           metadataPath: "/data/instances/a/instance.json",
         },
       },
+      {
+        id: "b",
+        status: "running",
+        createdAt: "2026-03-08T00:10:00.000Z",
+        updatedAt: "2026-03-08T00:10:00.000Z",
+        apiHost: "127.0.0.1",
+        apiPort: 19001,
+        currentProcess: {
+          pid: 2222,
+          command: ["rust-mule"],
+          cwd: "/data/instances/b",
+          startedAt: "2026-03-08T00:12:00.000Z",
+        },
+        runtime: {
+          rootDir: "/data/instances/b",
+          configPath: "/data/instances/b/config.toml",
+          tokenPath: "/data/instances/b/state/api.token",
+          debugTokenPath: "/data/instances/b/state/debug.token",
+          logDir: "/data/instances/b/state/logs",
+          logPath: "/data/instances/b/state/logs/rust-mule.log",
+          stateDir: "/data/instances/b/state",
+          metadataPath: "/data/instances/b/instance.json",
+        },
+      },
     ];
   }
 
@@ -106,8 +130,16 @@ class StubManagedInstances {
 
 class StubManagedInstanceDiagnostics {
   async getSnapshot(id) {
-    if (id !== "a") {
+    if (id !== "a" && id !== "b") {
       throw new Error(`Managed instance not found: ${id}`);
+    }
+    if (id === "b") {
+      return {
+        instanceId: "b",
+        observedAt: "2026-03-08T02:03:00.000Z",
+        available: false,
+        reason: "instance is stopped",
+      };
     }
     return {
       instanceId: "a",
@@ -350,6 +382,95 @@ test("OperatorConsoleServer returns operator event history", async () => {
     assert.equal(payload.ok, true);
     assert.equal(payload.events.length, 1);
     assert.equal(payload.events[0].type, "diagnostic_target_changed");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer compares two managed instances", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstances: new StubManagedInstances(),
+      managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(
+      `${server.publicAddress()}/api/instances/compare?left=a&right=b`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(res.status, 200);
+    const payload = await res.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.comparison.left.instance.id, "a");
+    assert.equal(payload.comparison.right.instance.id, "b");
+    assert.equal(payload.comparison.left.snapshot.available, true);
+    assert.equal(payload.comparison.right.snapshot.available, false);
+    assert.equal("logPath" in payload.comparison.left.instance.runtime, false);
+
+    const invalidRes = await fetch(
+      `${server.publicAddress()}/api/instances/compare?left=a&right=a`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(invalidRes.status, 400);
+
+    const missingParamRes = await fetch(
+      `${server.publicAddress()}/api/instances/compare?left=a`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(missingParamRes.status, 400);
+
+    const missingInstanceRes = await fetch(
+      `${server.publicAddress()}/api/instances/compare?left=a&right=missing`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(missingInstanceRes.status, 404);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer reports 501 for managed instance comparison when unavailable", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(
+      `${server.publicAddress()}/api/instances/compare?left=a&right=b`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(res.status, 501);
 
     await server.stop();
   } finally {
@@ -661,7 +782,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     });
     assert.equal(instancesRes.status, 200);
     const instances = await instancesRes.json();
-    assert.equal(instances.instances.length, 1);
+    assert.equal(instances.instances.length, 2);
     assert.equal(instances.instances[0].id, "a");
 
     const instanceDetailRes = await fetch(`${baseUrl}/api/instances/a`, {
@@ -717,7 +838,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
         Origin: baseUrl,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ id: "b", apiPort: 19002 }),
+      body: JSON.stringify({ id: "c", apiPort: 19002 }),
     });
     assert.equal(createRes.status, 201);
 

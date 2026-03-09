@@ -376,6 +376,20 @@ Example event entry:
 
 ---
 
+# Managed Instance Comparison
+
+The operator console may compare two managed local rust-mule instances side by side using
+on-demand diagnostics snapshots. This is intentionally read-only and does not alter:
+
+- the active scheduled diagnostic target
+- the single-target observer loop
+- Mattermost scheduler/reporting semantics
+
+The comparison surface should be built from existing managed-instance diagnostics collection rather
+than introducing concurrent scheduled observation across multiple targets.
+
+---
+
 # LLM Tools
 
 ### getHistory
