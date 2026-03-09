@@ -346,6 +346,7 @@ class StubManagedInstancePresets {
     return {
       presetId: "pair",
       prefix,
+      action: "start",
       instances: ["lab-a", "lab-b"].map((id, index) => ({
         id,
         status: "running",
@@ -362,6 +363,80 @@ class StubManagedInstancePresets {
           command: ["rust-mule"],
           cwd: `/data/instances/${id}`,
           startedAt: "2026-03-09T00:10:00.000Z",
+        },
+        runtime: {
+          rootDir: `/data/instances/${id}`,
+          configPath: `/data/instances/${id}/config.toml`,
+          tokenPath: `/data/instances/${id}/state/api.token`,
+          debugTokenPath: `/data/instances/${id}/state/debug.token`,
+          logDir: `/data/instances/${id}/state/logs`,
+          logPath: `/data/instances/${id}/state/logs/rust-mule.log`,
+          stateDir: `/data/instances/${id}/state`,
+          metadataPath: `/data/instances/${id}/instance.json`,
+        },
+      })),
+      failures: [],
+    };
+  }
+
+  async stopPreset(prefix) {
+    if (prefix !== "lab") {
+      throw new Error(`Managed instance preset group not found: ${prefix}`);
+    }
+    return {
+      presetId: "pair",
+      prefix,
+      action: "stop",
+      instances: ["lab-a", "lab-b"].map((id, index) => ({
+        id,
+        status: "stopped",
+        createdAt: "2026-03-09T00:00:00.000Z",
+        updatedAt: "2026-03-09T00:20:00.000Z",
+        apiHost: "127.0.0.1",
+        apiPort: 19100 + index,
+        preset: {
+          presetId: "pair",
+          prefix,
+        },
+        runtime: {
+          rootDir: `/data/instances/${id}`,
+          configPath: `/data/instances/${id}/config.toml`,
+          tokenPath: `/data/instances/${id}/state/api.token`,
+          debugTokenPath: `/data/instances/${id}/state/debug.token`,
+          logDir: `/data/instances/${id}/state/logs`,
+          logPath: `/data/instances/${id}/state/logs/rust-mule.log`,
+          stateDir: `/data/instances/${id}/state`,
+          metadataPath: `/data/instances/${id}/instance.json`,
+        },
+      })),
+      failures: [],
+    };
+  }
+
+  async restartPreset(prefix) {
+    if (prefix !== "lab") {
+      throw new Error(`Managed instance preset group not found: ${prefix}`);
+    }
+    return {
+      presetId: "pair",
+      prefix,
+      action: "restart",
+      instances: ["lab-a", "lab-b"].map((id, index) => ({
+        id,
+        status: "running",
+        createdAt: "2026-03-09T00:00:00.000Z",
+        updatedAt: "2026-03-09T00:30:00.000Z",
+        apiHost: "127.0.0.1",
+        apiPort: 19100 + index,
+        preset: {
+          presetId: "pair",
+          prefix,
+        },
+        currentProcess: {
+          pid: 5101 + index,
+          command: ["rust-mule"],
+          cwd: `/data/instances/${id}`,
+          startedAt: "2026-03-09T00:30:00.000Z",
         },
         runtime: {
           rootDir: `/data/instances/${id}`,
@@ -581,8 +656,35 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
     });
     assert.equal(startPresetRes.status, 200);
     const startPresetPayload = await startPresetRes.json();
-    assert.equal(startPresetPayload.started.prefix, "lab");
-    assert.equal(startPresetPayload.started.instances.length, 2);
+    assert.equal(startPresetPayload.result.prefix, "lab");
+    assert.equal(startPresetPayload.result.action, "start");
+    assert.equal(startPresetPayload.result.instances.length, 2);
+    assert.equal(startPresetPayload.started.action, "start");
+
+    const stopPresetRes = await fetch(`${server.publicAddress()}/api/instance-presets/lab/stop`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+      },
+    });
+    assert.equal(stopPresetRes.status, 200);
+    const stopPresetPayload = await stopPresetRes.json();
+    assert.equal(stopPresetPayload.result.action, "stop");
+
+    const restartPresetRes = await fetch(
+      `${server.publicAddress()}/api/instance-presets/lab/restart`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          Origin: server.publicAddress(),
+        },
+      },
+    );
+    assert.equal(restartPresetRes.status, 200);
+    const restartPresetPayload = await restartPresetRes.json();
+    assert.equal(restartPresetPayload.result.action, "restart");
 
     const malformedPrefixRes = await fetch(
       `${server.publicAddress()}/api/instance-presets/%E0/start`,

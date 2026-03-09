@@ -145,6 +145,8 @@ function renderInstanceGroups(instances) {
     const meta = document.createElement("span");
     const controls = document.createElement("div");
     const start = document.createElement("button");
+    const stop = document.createElement("button");
+    const restart = document.createElement("button");
     const runningCount = group.instances.filter((instance) => instance.status === "running").length;
 
     wrapper.className = "instance-entry";
@@ -154,13 +156,23 @@ function renderInstanceGroups(instances) {
     meta.className = "file-meta";
     meta.textContent = `${group.instances.length} instances • ${runningCount} running`;
     start.textContent = "Start preset";
-    start.onclick = () => bulkStartPreset(group.prefix);
+    stop.textContent = "Stop preset";
+    restart.textContent = "Restart preset";
+    start.onclick = () => bulkMutatePreset(group.prefix, "start");
+    stop.onclick = () => bulkMutatePreset(group.prefix, "stop");
+    restart.onclick = () => bulkMutatePreset(group.prefix, "restart");
     if (runningCount === group.instances.length) {
       start.disabled = true;
+    }
+    if (runningCount === 0) {
+      stop.disabled = true;
+      restart.disabled = true;
     }
 
     header.appendChild(title);
     controls.appendChild(start);
+    controls.appendChild(stop);
+    controls.appendChild(restart);
     wrapper.appendChild(header);
     wrapper.appendChild(meta);
     wrapper.appendChild(controls);
@@ -789,15 +801,19 @@ async function applyInstancePreset(event) {
   }
 }
 
-async function bulkStartPreset(prefix) {
+async function bulkMutatePreset(prefix, action) {
   try {
-    const data = await postJson(`/api/instance-presets/${encodeURIComponent(prefix)}/start`);
-    const startedIds = data.started.instances.map((instance) => instance.id);
-    const failureCount = data.started.failures.length;
+    if (action !== "start" && action !== "stop" && action !== "restart") {
+      throw new Error(`unsupported preset action: ${action}`);
+    }
+    const data = await postJson(`/api/instance-presets/${encodeURIComponent(prefix)}/${action}`);
+    const changedIds = data.result.instances.map((instance) => instance.id);
+    const failureCount = data.result.failures.length;
+    const pastTense = action === "stop" ? "stopped" : action === "start" ? "started" : "restarted";
     setInstanceFeedback(
       failureCount > 0
-        ? `started preset ${prefix}: ${startedIds.join(", ")} (${failureCount} failures)`
-        : `started preset ${prefix}: ${startedIds.join(", ")}`,
+        ? `${pastTense} preset ${prefix}: ${changedIds.join(", ")} (${failureCount} failures)`
+        : `${pastTense} preset ${prefix}: ${changedIds.join(", ")}`,
       failureCount > 0,
     );
     await refreshInstances();

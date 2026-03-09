@@ -365,6 +365,8 @@ Acceptance criteria:
    - do not start scheduled observation on the new instances automatically
 6. Add bounded bulk lifecycle flows for preset-created groups:
    - start every instance in one preset group from one operator action
+   - stop every instance in one preset group from one operator action
+   - restart every instance in one preset group from one operator action
    - preserve explicit per-instance lifecycle APIs underneath
    - report partial failures without crashing mule-doctor
 7. Keep preset scope bounded; lifecycle start/stop remains explicit operator intent.
@@ -374,6 +376,6 @@ Acceptance criteria:
 - Operator can list available presets in the console.
 - Operator can apply a preset and get multiple planned instances with stable ids such as `lab-a`, `lab-b`, `lab-c`.
 - Batch preset creation preserves existing `InstanceManager` invariants for ids, ports, runtime paths, and rollback on failure.
-- Operator can trigger a bounded bulk start for a preset-created group from the console.
-- Bulk start surfaces partial failures as data, not as a mule-doctor-wide failure.
+- Operator can trigger bounded bulk start/stop/restart actions for a preset-created group from the console.
+- Bulk preset-group actions surface partial failures as data, not as a mule-doctor-wide failure.
 - Scheduled observation remains single-target and unchanged after preset application.

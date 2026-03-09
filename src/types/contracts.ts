@@ -181,12 +181,18 @@ export interface AppliedManagedInstancePreset {
   instances: ManagedInstanceRecord[];
 }
 
-export interface StartedManagedInstancePreset {
+export type ManagedInstancePresetAction = "start" | "stop" | "restart";
+
+export interface ManagedInstancePresetActionResult {
   presetId: string;
   prefix: string;
+  action: ManagedInstancePresetAction;
   instances: ManagedInstanceRecord[];
   failures: Array<{
     instanceId: string;
     error: string;
   }>;
 }
+
+// Backward-compatible alias for older callers that only knew about start results.
+export type StartedManagedInstancePreset = ManagedInstancePresetActionResult;

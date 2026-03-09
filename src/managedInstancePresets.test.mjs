@@ -148,9 +148,66 @@ test("ManagedInstancePresetService starts all instances in a preset group", asyn
 
     assert.equal(started.presetId, "pair");
     assert.equal(started.prefix, "lab");
+    assert.equal(started.action, "start");
     assert.equal(started.failures.length, 0);
     assert.deepEqual(
       started.instances.map((instance) => instance.status),
+      ["running", "running"],
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("ManagedInstancePresetService stops and restarts all instances in a preset group", async () => {
+  const tmp = await makeTempDir();
+  try {
+    let nextPid = 5000;
+    const stoppedPids = new Set();
+    const launcher = {
+      async launch({ command, args, cwd }) {
+        const pid = nextPid += 1;
+        return {
+          pid,
+          command,
+          args,
+          cwd,
+          logPath: `${cwd}/state/logs/rust-mule.log`,
+          exit: new Promise(() => {}),
+        };
+      },
+      async stop(pid) {
+        stoppedPids.add(pid);
+      },
+      async isRunning(pid) {
+        return !stoppedPids.has(pid);
+      },
+    };
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+      processLauncher: launcher,
+    });
+    await manager.initialize();
+    const service = new ManagedInstancePresetService(manager);
+    await service.applyPreset({ presetId: "pair", prefix: "lab" });
+    await service.startPreset("lab");
+
+    const stopped = await service.stopPreset("lab");
+    assert.equal(stopped.action, "stop");
+    assert.equal(stopped.failures.length, 0);
+    assert.deepEqual(
+      stopped.instances.map((instance) => instance.status),
+      ["stopped", "stopped"],
+    );
+
+    const restarted = await service.restartPreset("lab");
+    assert.equal(restarted.action, "restart");
+    assert.equal(restarted.failures.length, 0);
+    assert.deepEqual(
+      restarted.instances.map((instance) => instance.status),
       ["running", "running"],
     );
   } finally {
