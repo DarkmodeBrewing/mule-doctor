@@ -93,52 +93,42 @@ export class InstanceManager {
   }
 
   async createPlannedInstance(input: CreateManagedInstanceInput): Promise<ManagedInstanceRecord> {
+    const created = await this.createPlannedInstances([input]);
+    return created[0];
+  }
+
+  async createPlannedInstances(
+    inputs: CreateManagedInstanceInput[],
+  ): Promise<ManagedInstanceRecord[]> {
     return this.enqueueOperation(async () => {
-      const id = normalizeInstanceId(input.id);
-      const existing = await this.catalog.get(id);
-      if (existing) {
-        throw new Error(`Managed instance already exists: ${id}`);
+      if (!Array.isArray(inputs) || inputs.length === 0) {
+        throw new Error("At least one managed instance input is required");
       }
 
       const current = await this.catalog.list();
-      const apiPort =
-        input.apiPort === undefined
-          ? pickAvailablePort(current, this.apiPortStart, this.apiPortEnd)
-          : normalizeRequestedPort(input.apiPort, this.apiPortStart, this.apiPortEnd);
-      if (current.some((record) => record.apiPort === apiPort)) {
-        throw new Error(`Managed instance API port already reserved: ${apiPort}`);
+      const plannedRecords = planManagedInstanceBatch(
+        inputs,
+        current,
+        this.instanceRootDir,
+        this.apiHost,
+        this.apiPortStart,
+        this.apiPortEnd,
+      );
+
+      const created: ManagedInstanceRecord[] = [];
+      try {
+        for (const record of plannedRecords) {
+          await this.catalog.add(record);
+          created.push(record);
+          await materializeRuntimePaths(record, this.rustMuleConfigTemplate);
+          await writeMetadata(record.runtime.metadataPath, record);
+        }
+      } catch (err) {
+        await rollbackCreatedInstances(this.catalog, created);
+        throw err;
       }
 
-      const runtime = buildRuntimePaths(this.instanceRootDir, id);
-      const now = new Date().toISOString();
-      const record: ManagedInstanceRecord = {
-        id,
-        status: "planned",
-        createdAt: now,
-        updatedAt: now,
-        apiHost: this.apiHost,
-        apiPort,
-        runtime,
-      };
-      await this.catalog.add(record);
-      try {
-        await materializeRuntimePaths(record, this.rustMuleConfigTemplate);
-        await writeMetadata(runtime.metadataPath, record);
-      } catch (err) {
-        let removalError: unknown;
-        try {
-          await this.catalog.remove(id);
-        } catch (rollbackErr) {
-          removalError = rollbackErr;
-        }
-        try {
-          await cleanupRuntimePaths(runtime);
-        } catch {
-          // best-effort cleanup; surface the original failure below
-        }
-        throw removalError ?? err;
-      }
-      return record;
+      return created;
     });
   }
 
@@ -438,6 +428,53 @@ function pickAvailablePort(
   throw new Error(`No managed instance API ports available in range ${start}-${end}`);
 }
 
+function planManagedInstanceBatch(
+  inputs: CreateManagedInstanceInput[],
+  existing: ManagedInstanceRecord[],
+  instanceRootDir: string,
+  apiHost: string,
+  apiPortStart: number,
+  apiPortEnd: number,
+): ManagedInstanceRecord[] {
+  const planned: ManagedInstanceRecord[] = [];
+  const usedIds = new Set(existing.map((record) => record.id));
+  const usedPorts = new Set(existing.map((record) => record.apiPort));
+  const now = new Date().toISOString();
+
+  for (const input of inputs) {
+    const id = normalizeInstanceId(input.id);
+    if (usedIds.has(id)) {
+      throw new Error(`Managed instance already exists: ${id}`);
+    }
+
+    const apiPort =
+      input.apiPort === undefined
+        ? pickAvailablePort(
+            existing.concat(planned),
+            apiPortStart,
+            apiPortEnd,
+          )
+        : normalizeRequestedPort(input.apiPort, apiPortStart, apiPortEnd);
+    if (usedPorts.has(apiPort)) {
+      throw new Error(`Managed instance API port already reserved: ${apiPort}`);
+    }
+
+    usedIds.add(id);
+    usedPorts.add(apiPort);
+    planned.push({
+      id,
+      status: "planned",
+      createdAt: now,
+      updatedAt: now,
+      apiHost,
+      apiPort,
+      runtime: buildRuntimePaths(instanceRootDir, id),
+    });
+  }
+
+  return planned;
+}
+
 function clampPort(value: number): number {
   if (!Number.isInteger(value) || value < 1 || value > 65_535) {
     throw new Error(`Invalid port: ${value}`);
@@ -487,6 +524,24 @@ async function writeMetadata(path: string, record: ManagedInstanceRecord): Promi
 
 async function cleanupRuntimePaths(runtime: ManagedInstanceRuntimePaths): Promise<void> {
   await rm(runtime.rootDir, { recursive: true, force: true });
+}
+
+async function rollbackCreatedInstances(
+  catalog: InstanceCatalog,
+  created: ManagedInstanceRecord[],
+): Promise<void> {
+  for (const record of created.reverse()) {
+    try {
+      await catalog.remove(record.id);
+    } catch {
+      // best-effort rollback
+    }
+    try {
+      await cleanupRuntimePaths(record.runtime);
+    } catch {
+      // best-effort rollback
+    }
+  }
 }
 
 async function waitForProcessExit(

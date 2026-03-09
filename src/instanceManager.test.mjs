@@ -114,6 +114,50 @@ test("InstanceManager creates and persists planned instances", async () => {
   }
 });
 
+test("InstanceManager creates planned instances in a batch", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+    });
+    await manager.initialize();
+
+    const created = await manager.createPlannedInstances([{ id: "a" }, { id: "b" }]);
+
+    assert.deepEqual(
+      created.map((instance) => instance.id),
+      ["a", "b"],
+    );
+    assert.deepEqual(
+      created.map((instance) => instance.apiPort),
+      [19000, 19001],
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager rejects empty planned-instance batches", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+    });
+    await manager.initialize();
+
+    await assert.rejects(
+      manager.createPlannedInstances([]),
+      /At least one managed instance input is required/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("InstanceManager starts a planned instance and persists process state", async () => {
   const tmp = await makeTempDir();
   try {

@@ -351,3 +351,23 @@ Acceptance criteria:
 - Operator console shows scheduler execution state without requiring raw log inspection.
 - Operator console shows a bounded event timeline for recent control and scheduler actions.
 - Operator can compare two managed instances in the console without changing the active scheduled target.
+
+## Task I: Managed Instance Cluster Presets
+
+1. Add a bounded preset model for mule-doctor-managed local test clusters.
+2. Start with simple built-in presets such as:
+   - `pair`
+   - `trio`
+3. Let operators apply a preset by providing an instance-id prefix.
+4. Create all preset instances through `InstanceManager` batch planning rather than per-instance UI loops.
+5. Keep preset application read-only with respect to scheduler targeting:
+   - do not change the active scheduled target
+   - do not start scheduled observation on the new instances automatically
+6. Keep preset scope bounded to planned-instance creation first; lifecycle start/stop remains explicit.
+
+Acceptance criteria:
+
+- Operator can list available presets in the console.
+- Operator can apply a preset and get multiple planned instances with stable ids such as `lab-a`, `lab-b`, `lab-c`.
+- Batch preset creation preserves existing `InstanceManager` invariants for ids, ports, runtime paths, and rollback on failure.
+- Scheduled observation remains single-target and unchanged after preset application.

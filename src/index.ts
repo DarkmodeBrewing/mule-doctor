@@ -20,6 +20,7 @@ import { InstanceManager } from "./instances/instanceManager.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
 import { ManagedInstanceAnalysisService } from "./instances/managedInstanceAnalysis.js";
 import { DiagnosticTargetService } from "./instances/diagnosticTargetService.js";
+import { ManagedInstancePresetService } from "./instances/managedInstancePresets.js";
 import { ObserverTargetResolver } from "./observerTargetResolver.js";
 
 function requireEnv(name: string): string {
@@ -190,6 +191,9 @@ async function main(): Promise<void> {
           patchProposalNotifier,
         })
       : undefined;
+  const managedInstancePresets = managedInstances
+    ? new ManagedInstancePresetService(managedInstances)
+    : undefined;
   const diagnosticTarget = new DiagnosticTargetService({
     runtimeStore,
     instanceManager: managedInstances,
@@ -235,6 +239,7 @@ async function main(): Promise<void> {
       managedInstances,
       managedInstanceDiagnostics,
       managedInstanceAnalysis,
+      managedInstancePresets,
       diagnosticTarget,
       observerControl: observer,
       operatorEvents: operatorEventLog,

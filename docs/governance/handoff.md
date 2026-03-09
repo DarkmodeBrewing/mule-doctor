@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/observer-active-target`
+- `feature/managed-instance-presets`
 - PR: (pending)
-- Last updated: 2026-03-08
+- Last updated: 2026-03-09
 
 ## Status
 
-- In progress; starting active diagnostic target routing for the scheduled observer pipeline.
-- PR #30 is merged to `main`.
+- In progress; adding bounded cluster presets/templates for managed local rust-mule instances.
+- PR #37 is merged to `main`.
 
 ## Completed Work
 
@@ -141,6 +141,18 @@
   - labeling periodic Mattermost reports with the observed target
   - emitting explicit degraded/unavailable reports with `healthScore=0` when the selected target cannot be resolved at cycle start
   - surfacing observer target/runtime state in the operator-console health endpoint and UI
+- Scheduler/operator visibility completed on `main`:
+  - scheduled-target status card and managed-instance target badges
+  - persisted/redacted `lastTargetFailureReason`
+  - bounded `Run cycle now` control
+  - scheduler execution state in runtime/API/UI
+  - bounded operator event timeline
+  - read-only managed-instance comparison view
+- Managed-instance cluster presets underway:
+  - adding a bounded preset catalog (`pair`, `trio`) for local test clusters
+  - adding `InstanceManager.createPlannedInstances()` for batch planned-instance creation with rollback on failure
+  - exposing preset list/apply flows through the operator console API/UI
+  - preserving the single-target scheduler model; preset application does not change active observer targeting
 
 ## Key Decisions
 
@@ -158,6 +170,8 @@
 - Active diagnostic target selection must persist in runtime state before the scheduled observer is rerouted.
 - Scheduled observation should remain single-target even though the console can inspect many managed instances.
 - Keep the existing external analyzer for Mattermost command handling, while the scheduled observer may construct target-specific analyzers/tool registries per cycle.
+- Cluster presets should create planned instances in one backend operation rather than driving per-instance creation loops from the browser.
+- Preset application must not implicitly start instances or retarget the scheduled observer.
 
 ## Validation
 
@@ -166,31 +180,11 @@
 
 ## Next Steps
 
-- Finish the active-target foundation slice:
+- Finish the managed-instance preset slice:
   - review
   - merge
-- Open the PR for active-target routing and process review feedback.
-- Improve operator-console visibility of the scheduled observer target:
-  - add a dedicated scheduled-target status card
-  - mark managed-instance entries that are currently the scheduled target
-  - show when the scheduled managed target is currently unavailable/degraded
-- Persist and surface the last observer target failure reason:
-  - store `lastTargetFailureReason` in runtime state
-  - expose it through `/api/health`
-  - render it in the scheduled-target card and health summary
-- Add bounded operator control to trigger the scheduled observer cycle immediately:
-  - expose scheduler status (`started`, `cycleInFlight`, `intervalMs`) in `/api/health`
-  - add `POST /api/observer/run`
-  - show a `Run cycle now` action in the scheduled-target card
-- Add dedicated scheduler execution visibility in runtime state and the operator console:
-  - store `currentCycleStartedAt` and `currentCycleTarget` while a cycle is running
-  - store `lastCycleStartedAt`, `lastCycleCompletedAt`, `lastCycleDurationMs`, and `lastCycleOutcome`
-  - render a scheduler card in the console so operators can inspect execution state without reading raw logs
-- Add a bounded operator event timeline:
-  - persist recent operator/scheduler events in `operator-events.json`
-  - include target changes, run-now requests, cycle start, and cycle outcome
-  - expose the timeline through the operator console as a concise audit trail
-- Add a read-only managed-instance comparison view:
-  - compare two managed instances using existing diagnostics snapshots
-  - keep the observer scheduler single-target
-  - do not tie comparison to target selection or new control actions
+- After presets, add richer cluster ergonomics rather than more scheduler scope:
+  - optional preset metadata/help text in the UI
+  - explicit bulk start flows for preset-created instances
+  - clearer per-cluster grouping in the managed-instance list
+- Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.

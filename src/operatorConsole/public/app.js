@@ -8,6 +8,7 @@ const INSTANCE_ANALYSIS_PLACEHOLDER =
   "Run on-demand analysis for the selected managed instance.";
 const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
 const OBSERVER_TARGET_PLACEHOLDER = "Loading active diagnostic target...";
+const INSTANCE_PRESET_PLACEHOLDER = "Loading instance presets...";
 let selectedInstanceId = null;
 let currentObserver = null;
 let currentScheduledTarget = null;
@@ -263,6 +264,34 @@ function renderComparisonSelectors(instances) {
   }
 }
 
+function renderInstancePresets(presets, errorText) {
+  const select = document.getElementById("instance-preset-id");
+  select.replaceChildren();
+  if (errorText) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = errorText;
+    select.appendChild(option);
+    select.disabled = true;
+    return;
+  }
+  if (!presets.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No presets available";
+    select.appendChild(option);
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
+  for (const preset of presets) {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = `${preset.name} (${preset.nodes.length})`;
+    select.appendChild(option);
+  }
+}
+
 function summarizeComparisonSide(side) {
   const snapshot = side.snapshot;
   const instance = side.instance;
@@ -374,6 +403,15 @@ async function refreshOperatorEvents() {
     renderOperatorEvents(data.events || []);
   } catch (err) {
     renderOperatorEvents([], `Failed to load operator events: ${String(err)}`);
+  }
+}
+
+async function refreshInstancePresets() {
+  try {
+    const data = await fetchJson("/api/instance-presets");
+    renderInstancePresets(data.presets || []);
+  } catch (err) {
+    renderInstancePresets([], `presets unavailable: ${String(err)}`);
   }
 }
 
@@ -672,6 +710,24 @@ async function createInstance(event) {
   }
 }
 
+async function applyInstancePreset(event) {
+  event.preventDefault();
+  const form = document.getElementById("instance-preset-form");
+  const formData = new FormData(form);
+  const presetId = String(formData.get("presetId") || "").trim();
+  const prefix = String(formData.get("prefix") || "").trim();
+
+  try {
+    const data = await postJson("/api/instance-presets/apply", { presetId, prefix });
+    setInstanceFeedback(
+      `applied preset ${data.applied.presetId}: ${data.applied.instances.map((instance) => instance.id).join(", ")}`,
+    );
+    await refreshInstances();
+  } catch (err) {
+    setInstanceFeedback(String(err), true);
+  }
+}
+
 async function inspectInstance(id) {
   selectedInstanceId = id;
   try {
@@ -707,6 +763,7 @@ setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
 setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
 setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
 setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
+renderInstancePresets([], INSTANCE_PRESET_PLACEHOLDER);
 setText("instance-compare", "Select two managed instances to compare.");
 renderTargetStatusCard();
 renderSchedulerStatusCard();
@@ -738,6 +795,7 @@ async function refreshAll() {
       refreshLlmList(),
       refreshProposalList(),
       refreshInstances(),
+      refreshInstancePresets(),
       refreshOperatorEvents(),
     ]);
   } catch (err) {
@@ -762,6 +820,7 @@ document.getElementById("run-observer-now").onclick = () => {
   void runObserverNow();
 };
 document.getElementById("instance-create-form").onsubmit = createInstance;
+document.getElementById("instance-preset-form").onsubmit = applyInstancePreset;
 document.getElementById("use-external-target").onclick = () => {
   void updateObserverTarget({ kind: "external" });
 };

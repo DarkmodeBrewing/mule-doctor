@@ -261,6 +261,60 @@ class ThrowingOperatorEvents {
   }
 }
 
+class StubManagedInstancePresets {
+  listPresets() {
+    return [
+      {
+        id: "pair",
+        name: "Pair",
+        description: "Two managed instances",
+        nodes: [{ suffix: "a" }, { suffix: "b" }],
+      },
+      {
+        id: "trio",
+        name: "Trio",
+        description: "Three managed instances",
+        nodes: [{ suffix: "a" }, { suffix: "b" }, { suffix: "c" }],
+      },
+    ];
+  }
+
+  async applyPreset(input) {
+    if (input.presetId !== "pair" && input.presetId !== "trio") {
+      throw new Error(`Managed instance preset not found: ${input.presetId}`);
+    }
+    if (!input.prefix) {
+      throw new Error("Invalid managed instance preset prefix: ");
+    }
+    const ids =
+      input.presetId === "pair"
+        ? [`${input.prefix}-a`, `${input.prefix}-b`]
+        : [`${input.prefix}-a`, `${input.prefix}-b`, `${input.prefix}-c`];
+    return {
+      presetId: input.presetId,
+      prefix: input.prefix,
+      instances: ids.map((id, index) => ({
+        id,
+        status: "planned",
+        createdAt: "2026-03-09T00:00:00.000Z",
+        updatedAt: "2026-03-09T00:00:00.000Z",
+        apiHost: "127.0.0.1",
+        apiPort: 19100 + index,
+        runtime: {
+          rootDir: `/data/instances/${id}`,
+          configPath: `/data/instances/${id}/config.toml`,
+          tokenPath: `/data/instances/${id}/state/api.token`,
+          debugTokenPath: `/data/instances/${id}/state/debug.token`,
+          logDir: `/data/instances/${id}/state/logs`,
+          logPath: `/data/instances/${id}/state/logs/rust-mule.log`,
+          stateDir: `/data/instances/${id}/state`,
+          metadataPath: `/data/instances/${id}/instance.json`,
+        },
+      })),
+    };
+  }
+}
+
 test("OperatorConsoleServer reports 501 for instance detail routes when control is unavailable", async () => {
   const tmp = await makeTempDir();
   try {
@@ -382,6 +436,66 @@ test("OperatorConsoleServer returns operator event history", async () => {
     assert.equal(payload.ok, true);
     assert.equal(payload.events.length, 1);
     assert.equal(payload.events[0].type, "diagnostic_target_changed");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer lists and applies managed instance presets", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstancePresets: new StubManagedInstancePresets(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const listRes = await fetch(`${server.publicAddress()}/api/instance-presets`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(listRes.status, 200);
+    const listPayload = await listRes.json();
+    assert.equal(listPayload.presets.length, 2);
+
+    const applyRes = await fetch(`${server.publicAddress()}/api/instance-presets/apply`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ presetId: "pair", prefix: "lab" }),
+    });
+    assert.equal(applyRes.status, 201);
+    const applyPayload = await applyRes.json();
+    assert.deepEqual(
+      applyPayload.applied.instances.map((instance) => instance.id),
+      ["lab-a", "lab-b"],
+    );
+
+    const invalidPresetRes = await fetch(`${server.publicAddress()}/api/instance-presets/apply`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ presetId: "missing", prefix: "lab" }),
+    });
+    assert.equal(invalidPresetRes.status, 404);
 
     await server.stop();
   } finally {

@@ -74,6 +74,17 @@
           <input id="instance-api-port" name="apiPort" type="number" placeholder="api port (optional)" />
           <button type="submit">Create planned instance</button>
         </form>
+        <form id="instance-preset-form" class="instance-form">
+          <select id="instance-preset-id" name="presetId"></select>
+          <input
+            id="instance-preset-prefix"
+            name="prefix"
+            type="text"
+            placeholder="preset prefix"
+            maxlength="21"
+          />
+          <button type="submit">Apply preset</button>
+        </form>
         <p id="instance-feedback" class="muted">No actions yet.</p>
         <div class="controls">
           <button id="use-external-target" type="button">Use external target</button>
