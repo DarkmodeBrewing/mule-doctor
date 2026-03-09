@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/managed-instance-bulk-stop-restart`
+- `feature/operator-console-cluster-grouping`
 - PR: (pending)
 - Last updated: 2026-03-09
 
 ## Status
 
-- In progress; extending preset-created managed-instance groups with bounded bulk stop/restart flows.
-- PR #39 is merged to `main`.
+- In progress; improving preset-group readability in the operator console.
+- PR #40 is merged to `main`.
 
 ## Completed Work
 
@@ -162,6 +162,11 @@
   - extending the same bounded preset-group model to `stop` and `restart`
   - preserving partial-failure reporting per group action
   - keeping scheduled observer targeting unchanged during preset-group lifecycle operations
+- Operator-console cluster grouping underway:
+  - making preset groups first-class cards in the UI
+  - surfacing planned/running/stopped/failed counts per group
+  - surfacing per-group failure summaries
+  - keeping standalone instances visible separately from preset groups
 
 ## Key Decisions
 
@@ -183,6 +188,7 @@
 - Preset application must not implicitly start instances or retarget the scheduled observer.
 - Bulk preset-group lifecycle should operate on persisted preset membership metadata rather than inferring groups from ad hoc naming alone.
 - Preset-group lifecycle semantics should stay symmetric across `start`, `stop`, and `restart` rather than special-casing `start` only.
+- Operator-console cluster grouping should improve readability without introducing new lifecycle semantics or scheduler coupling.
 
 ## Validation
 
@@ -191,11 +197,10 @@
 
 ## Next Steps
 
-- Finish the preset-group bulk-start slice:
-- Finish the preset-group bulk stop/restart slice:
+- Finish the operator-console cluster grouping slice:
   - review
   - merge
 - After bulk start, add richer cluster ergonomics rather than more scheduler scope:
   - optional preset metadata/help text in the UI
-  - clearer per-cluster grouping in the managed-instance list
+  - group-level compare shortcuts or filtered event views
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.
