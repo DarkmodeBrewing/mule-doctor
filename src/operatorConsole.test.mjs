@@ -1075,6 +1075,15 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(staticUiRes.status, 200);
     assert.equal(staticUiRes.headers.get("content-type"), "application/javascript; charset=utf-8");
 
+    const rootPageRes = await fetch(`${baseUrl}/`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(rootPageRes.status, 200);
+    const rootHtml = await rootPageRes.text();
+    assert.match(rootHtml, /operator-event-group-filter/);
+    assert.match(rootHtml, /operator-event-instance-filter/);
+    assert.match(rootHtml, /operator-event-type-filter/);
+
     const authorizedIndexHtmlRes = await fetch(`${baseUrl}/static/operatorConsole/index.html`, {
       headers: { Cookie: cookie },
     });

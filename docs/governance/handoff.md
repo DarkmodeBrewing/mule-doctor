@@ -2,15 +2,14 @@
 
 ## Branch
 
-- `feature/operator-console-cluster-grouping`
+- `feature/operator-event-filters`
 - PR: (pending)
 - Last updated: 2026-03-09
 
 ## Status
 
-- In progress; improving preset-group readability in the operator console.
-- PR #41 is pending review.
-- PR #40 is merged to `main`.
+- In progress; adding client-side operator timeline filters.
+- PR #42 is merged to `main`.
 
 ## Completed Work
 
@@ -169,6 +168,9 @@
   - surfacing per-group failure summaries
   - keeping standalone instances visible separately from preset groups
   - adding group-level shortcuts into the existing compare view
+- Operator-event filtering underway:
+  - adding client-side filters for preset group, managed instance, and event type
+  - reusing the existing recent operator-events payload rather than adding new API query parameters
 
 ## Key Decisions
 
@@ -192,6 +194,7 @@
 - Preset-group lifecycle semantics should stay symmetric across `start`, `stop`, and `restart` rather than special-casing `start` only.
 - Operator-console cluster grouping should improve readability without introducing new lifecycle semantics or scheduler coupling.
 - Group-level compare shortcuts should reuse the existing compare flow rather than introducing a new comparison backend.
+- Timeline filtering should stay UI-first until there is evidence that the existing event payload size is insufficient.
 
 ## Validation
 
@@ -200,10 +203,10 @@
 
 ## Next Steps
 
-- Finish the operator-console cluster grouping slice:
+- Finish the operator-event filtering slice:
   - review
   - merge
-- After bulk start, add richer cluster ergonomics rather than more scheduler scope:
+- After timeline filtering, add richer cluster ergonomics rather than more scheduler scope:
   - optional preset metadata/help text in the UI
-  - filtered event views by group or instance
+  - richer event summaries or deeper per-group drilldowns
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.

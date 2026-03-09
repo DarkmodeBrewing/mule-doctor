@@ -9,10 +9,19 @@ const INSTANCE_ANALYSIS_PLACEHOLDER =
 const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
 const OBSERVER_TARGET_PLACEHOLDER = "Loading active diagnostic target...";
 const INSTANCE_PRESET_PLACEHOLDER = "Loading instance presets...";
+const OPERATOR_EVENT_TYPE_OPTIONS = [
+  { value: "", label: "All event types" },
+  { value: "diagnostic_target_changed", label: "Target changes" },
+  { value: "observer_run_requested", label: "Run requests" },
+  { value: "observer_cycle_started", label: "Cycle starts" },
+  { value: "observer_cycle_completed", label: "Cycle outcomes" },
+];
 let selectedInstanceId = null;
 let currentObserver = null;
 let currentScheduledTarget = null;
 let currentScheduler = null;
+let currentManagedInstances = [];
+let currentOperatorEvents = [];
 
 async function fetchJson(url) {
   const res = await fetch(url, { credentials: "same-origin" });
@@ -108,6 +117,76 @@ function renderOperatorEvents(events, errorText) {
     item.appendChild(body);
     list.appendChild(item);
   }
+}
+
+function populateSelect(id, options, selectedValue = "") {
+  const select = document.getElementById(id);
+  select.replaceChildren();
+  for (const optionData of options) {
+    const option = document.createElement("option");
+    option.value = optionData.value;
+    option.textContent = optionData.label;
+    select.appendChild(option);
+  }
+  select.value = options.some((option) => option.value === selectedValue) ? selectedValue : "";
+}
+
+function populateOperatorEventFilters() {
+  const { groups, standalone } = partitionInstances(currentManagedInstances);
+  populateSelect(
+    "operator-event-group-filter",
+    [{ value: "", label: "All groups" }].concat(
+      groups.map((group) => ({
+        value: group.prefix,
+        label: `${group.prefix} (${group.presetId})`,
+      })),
+    ),
+    document.getElementById("operator-event-group-filter").value,
+  );
+  populateSelect(
+    "operator-event-instance-filter",
+    [{ value: "", label: "All instances" }].concat(
+      groups
+        .flatMap((group) => group.instances)
+        .concat(standalone)
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map((instance) => ({
+          value: instance.id,
+          label: `${instance.id} (${instance.status})`,
+        })),
+    ),
+    document.getElementById("operator-event-instance-filter").value,
+  );
+  populateSelect(
+    "operator-event-type-filter",
+    OPERATOR_EVENT_TYPE_OPTIONS,
+    document.getElementById("operator-event-type-filter").value,
+  );
+}
+
+function applyOperatorEventFilters() {
+  const groupFilter = document.getElementById("operator-event-group-filter").value;
+  const instanceFilter = document.getElementById("operator-event-instance-filter").value;
+  const typeFilter = document.getElementById("operator-event-type-filter").value;
+  const filtered = currentOperatorEvents.filter((event) => {
+    if (typeFilter && event.type !== typeFilter) {
+      return false;
+    }
+    if (instanceFilter) {
+      if (event.target?.kind !== "managed_instance" || event.target.instanceId !== instanceFilter) {
+        return false;
+      }
+    }
+    if (groupFilter) {
+      const instanceId = event.target?.kind === "managed_instance" ? event.target.instanceId : "";
+      const instance = currentManagedInstances.find((candidate) => candidate.id === instanceId);
+      if (instance?.preset?.prefix !== groupFilter) {
+        return false;
+      }
+    }
+    return true;
+  });
+  renderOperatorEvents(filtered);
 }
 
 function partitionInstances(instances) {
@@ -594,7 +673,8 @@ async function refreshProposalList() {
 async function refreshOperatorEvents() {
   try {
     const data = await fetchJson("/api/operator/events?limit=30");
-    renderOperatorEvents(data.events || []);
+    currentOperatorEvents = data.events || [];
+    applyOperatorEventFilters();
   } catch (err) {
     renderOperatorEvents([], `Failed to load operator events: ${String(err)}`);
   }
@@ -630,8 +710,11 @@ async function postJson(url, payload = {}) {
 async function refreshInstances() {
   try {
     const data = await fetchJson("/api/instances");
+    currentManagedInstances = data.instances;
     renderInstanceList(data.instances);
     renderInstanceGroups(data.instances);
+    populateOperatorEventFilters();
+    applyOperatorEventFilters();
     renderTargetStatusCard();
     if (selectedInstanceId) {
       const exists = data.instances.some((instance) => instance.id === selectedInstanceId);
@@ -644,6 +727,8 @@ async function refreshInstances() {
       }
     }
   } catch (err) {
+    currentManagedInstances = [];
+    populateOperatorEventFilters();
     renderInstanceGroups([]);
     renderInstanceList([]);
     setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
@@ -986,6 +1071,7 @@ setText("instance-compare", "Select two managed instances to compare.");
 renderTargetStatusCard();
 renderSchedulerStatusCard();
 renderOperatorEvents([]);
+populateOperatorEventFilters();
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });
@@ -1031,6 +1117,9 @@ document.getElementById("refresh-instance-compare").onclick = refreshInstanceCom
 document.getElementById("refresh-target-status").onclick = refreshHealth;
 document.getElementById("refresh-scheduler-status").onclick = refreshHealth;
 document.getElementById("refresh-operator-events").onclick = refreshOperatorEvents;
+document.getElementById("operator-event-group-filter").onchange = applyOperatorEventFilters;
+document.getElementById("operator-event-instance-filter").onchange = applyOperatorEventFilters;
+document.getElementById("operator-event-type-filter").onchange = applyOperatorEventFilters;
 document.getElementById("run-instance-compare").onclick = () => {
   void refreshInstanceCompare();
 };
