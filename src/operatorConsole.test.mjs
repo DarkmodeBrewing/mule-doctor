@@ -659,6 +659,7 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
     assert.equal(startPresetPayload.result.prefix, "lab");
     assert.equal(startPresetPayload.result.action, "start");
     assert.equal(startPresetPayload.result.instances.length, 2);
+    assert.equal(startPresetPayload.started.action, "start");
 
     const stopPresetRes = await fetch(`${server.publicAddress()}/api/instance-presets/lab/stop`, {
       method: "POST",

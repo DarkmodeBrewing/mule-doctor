@@ -193,3 +193,6 @@ export interface ManagedInstancePresetActionResult {
     error: string;
   }>;
 }
+
+// Backward-compatible alias for older callers that only knew about start results.
+export type StartedManagedInstancePreset = ManagedInstancePresetActionResult;

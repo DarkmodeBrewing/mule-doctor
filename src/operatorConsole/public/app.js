@@ -803,6 +803,9 @@ async function applyInstancePreset(event) {
 
 async function bulkMutatePreset(prefix, action) {
   try {
+    if (action !== "start" && action !== "stop" && action !== "restart") {
+      throw new Error(`unsupported preset action: ${action}`);
+    }
     const data = await postJson(`/api/instance-presets/${encodeURIComponent(prefix)}/${action}`);
     const changedIds = data.result.instances.map((instance) => instance.id);
     const failureCount = data.result.failures.length;

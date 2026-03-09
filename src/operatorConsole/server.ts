@@ -748,6 +748,10 @@ export class OperatorConsoleServer {
       }
       return this.managedInstancePresets!.restartPreset(prefix);
     });
+    if (action === "start") {
+      sendJson(res, 200, { ok: true, result, started: result });
+      return;
+    }
     sendJson(res, 200, { ok: true, result });
   }
 
