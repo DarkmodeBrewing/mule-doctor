@@ -486,6 +486,17 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
       ["lab-a", "lab-b"],
     );
 
+    const invalidPresetRes = await fetch(`${server.publicAddress()}/api/instance-presets/apply`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ presetId: "missing", prefix: "lab" }),
+    });
+    assert.equal(invalidPresetRes.status, 404);
+
     await server.stop();
   } finally {
     await tmp.cleanup();

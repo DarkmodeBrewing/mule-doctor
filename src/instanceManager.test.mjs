@@ -140,6 +140,24 @@ test("InstanceManager creates planned instances in a batch", async () => {
   }
 });
 
+test("InstanceManager rejects empty planned-instance batches", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+    });
+    await manager.initialize();
+
+    await assert.rejects(
+      manager.createPlannedInstances([]),
+      /At least one managed instance input is required/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("InstanceManager starts a planned instance and persists process state", async () => {
   const tmp = await makeTempDir();
   try {

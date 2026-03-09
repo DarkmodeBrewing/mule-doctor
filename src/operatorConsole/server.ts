@@ -1296,8 +1296,12 @@ async function handleManagedInstanceErrors<T>(op: () => Promise<T>): Promise<T> 
     if (err.message.startsWith("Managed instance not found")) {
       throw new RequestError(404, err.message);
     }
+    if (err.message.startsWith("Managed instance preset not found")) {
+      throw new RequestError(404, err.message);
+    }
     if (
       err.message.startsWith("Invalid managed instance") ||
+      err.message.startsWith("Invalid managed instance preset") ||
       err.message.startsWith("Unsupported diagnostic target kind") ||
       err.message.includes("requires an instanceId") ||
       err.message.includes("already exists") ||

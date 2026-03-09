@@ -522,7 +522,7 @@ binary itself, define each managed instance.
 The `InstanceManager` is responsible for:
 
 - allowed instance definitions
-- built-in or configured cluster preset application
+- integration point for `ManagedInstancePresetService`, which applies built-in or configured cluster presets via planned instance creation
 - runtime directory creation
 - process start/stop/restart
 - port allocation and conflict checks
