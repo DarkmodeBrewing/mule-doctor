@@ -9,6 +9,7 @@ import { InstanceCatalog, type InstanceCatalogConfig } from "./instanceCatalog.j
 import type {
   ManagedInstanceExitState,
   ManagedInstanceRecord,
+  ManagedInstancePresetMembership,
   ManagedInstanceRuntimePaths,
 } from "../types/contracts.js";
 import {
@@ -28,6 +29,7 @@ const DEFAULT_API_PORT_END = 19999;
 export interface CreateManagedInstanceInput {
   id: string;
   apiPort?: number;
+  preset?: ManagedInstancePresetMembership;
 }
 
 export interface InstanceManagerConfig extends InstanceCatalogConfig {
@@ -469,6 +471,7 @@ function planManagedInstanceBatch(
       apiHost,
       apiPort,
       runtime: buildRuntimePaths(instanceRootDir, id),
+      preset: input.preset,
     });
   }
 

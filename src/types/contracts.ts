@@ -116,6 +116,11 @@ export interface ManagedInstanceRuntimePaths {
   metadataPath: string;
 }
 
+export interface ManagedInstancePresetMembership {
+  presetId: string;
+  prefix: string;
+}
+
 export interface ManagedInstanceRecord {
   id: string;
   status: ManagedInstanceStatus;
@@ -124,6 +129,7 @@ export interface ManagedInstanceRecord {
   apiHost: string;
   apiPort: number;
   runtime: ManagedInstanceRuntimePaths;
+  preset?: ManagedInstancePresetMembership;
   currentProcess?: ManagedInstanceProcessState;
   lastExit?: ManagedInstanceExitState;
   lastError?: string;
@@ -173,4 +179,14 @@ export interface AppliedManagedInstancePreset {
   presetId: string;
   prefix: string;
   instances: ManagedInstanceRecord[];
+}
+
+export interface StartedManagedInstancePreset {
+  presetId: string;
+  prefix: string;
+  instances: ManagedInstanceRecord[];
+  failures: Array<{
+    instanceId: string;
+    error: string;
+  }>;
 }

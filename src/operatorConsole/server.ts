@@ -19,6 +19,7 @@ import type {
   ObserverCycleOutcome,
   OperatorEventEntry,
   RuntimeState,
+  StartedManagedInstancePreset,
 } from "../types/contracts.js";
 import { describeDiagnosticTarget } from "../targets/describeTarget.js";
 
@@ -66,6 +67,7 @@ export interface ManagedInstanceDiagnostics {
 export interface ManagedInstancePresets {
   listPresets(): ManagedInstancePresetDefinition[];
   applyPreset(input: ApplyManagedInstancePresetInput): Promise<AppliedManagedInstancePreset>;
+  startPreset(prefix: string): Promise<StartedManagedInstancePreset>;
 }
 
 interface ManagedInstanceComparisonResponse {
@@ -320,6 +322,11 @@ export class OperatorConsoleServer {
 
     if (path === "/api/instance-presets/apply") {
       await this.handleApplyInstancePreset(req, res);
+      return;
+    }
+
+    if (path.startsWith("/api/instance-presets/")) {
+      await this.handleInstancePresetAction(req, res, path);
       return;
     }
 
@@ -693,6 +700,47 @@ export class OperatorConsoleServer {
       }),
     );
     sendJson(res, 201, { ok: true, applied });
+  }
+
+  private async handleInstancePresetAction(
+    req: IncomingMessage,
+    res: ServerResponse,
+    path: string,
+  ): Promise<void> {
+    if (!this.managedInstancePresets) {
+      sendJson(res, 501, { ok: false, error: "managed instance presets unavailable" });
+      return;
+    }
+
+    const suffix = path.slice("/api/instance-presets/".length);
+    const [prefixRaw, action] = suffix.split("/");
+    let prefix = "";
+    try {
+      prefix = decodeURIComponent(prefixRaw ?? "").trim();
+    } catch {
+      sendJson(res, 400, {
+        ok: false,
+        error: "invalid percent-encoding in preset group prefix",
+      });
+      return;
+    }
+    if (!prefix) {
+      sendJson(res, 400, { ok: false, error: "missing preset group prefix" });
+      return;
+    }
+    if (action !== "start") {
+      sendJson(res, 404, { ok: false, error: "preset action not found" });
+      return;
+    }
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+
+    const started = await handleManagedInstanceErrors(() =>
+      this.managedInstancePresets!.startPreset(prefix),
+    );
+    sendJson(res, 200, { ok: true, started });
   }
 
   private async handleInstanceAction(
@@ -1299,11 +1347,15 @@ async function handleManagedInstanceErrors<T>(op: () => Promise<T>): Promise<T> 
     if (err.message.startsWith("Managed instance preset not found")) {
       throw new RequestError(404, err.message);
     }
+    if (err.message.startsWith("Managed instance preset group not found")) {
+      throw new RequestError(404, err.message);
+    }
     if (
       err.message.startsWith("Invalid managed instance") ||
       err.message.startsWith("Invalid managed instance preset") ||
       err.message.startsWith("Unsupported diagnostic target kind") ||
       err.message.includes("requires an instanceId") ||
+      err.message.includes("preset prefix already exists") ||
       err.message.includes("already exists") ||
       err.message.includes("already reserved") ||
       err.message.includes("already in use") ||

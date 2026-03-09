@@ -63,6 +63,13 @@ test("ManagedInstancePresetService applies a preset as planned instances", async
       applied.instances.map((instance) => instance.apiPort),
       [19000, 19001],
     );
+    assert.deepEqual(
+      applied.instances.map((instance) => instance.preset),
+      [
+        { presetId: "pair", prefix: "lab" },
+        { presetId: "pair", prefix: "lab" },
+      ],
+    );
   } finally {
     await tmp.cleanup();
   }
@@ -80,6 +87,71 @@ test("ManagedInstancePresetService rejects invalid prefixes", async () => {
     await assert.rejects(
       service.applyPreset({ presetId: "pair", prefix: "bad prefix" }),
       /Invalid managed instance preset prefix/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("ManagedInstancePresetService rejects reused preset prefixes", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+    });
+    await manager.initialize();
+    const service = new ManagedInstancePresetService(manager);
+    await service.applyPreset({ presetId: "pair", prefix: "lab" });
+
+    await assert.rejects(
+      service.applyPreset({ presetId: "trio", prefix: "lab" }),
+      /Managed instance preset prefix already exists: lab/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("ManagedInstancePresetService starts all instances in a preset group", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+      processLauncher: {
+        async launch({ command, args, cwd }) {
+          return {
+            pid: cwd.endsWith("/lab-a") ? 4101 : 4102,
+            command,
+            args,
+            cwd,
+            logPath: `${cwd}/state/logs/rust-mule.log`,
+            exit: new Promise(() => {}),
+          };
+        },
+        async stop() {},
+        async isRunning() {
+          return true;
+        },
+      },
+    });
+    await manager.initialize();
+    const service = new ManagedInstancePresetService(manager);
+    await service.applyPreset({ presetId: "pair", prefix: "lab" });
+
+    const started = await service.startPreset("lab");
+
+    assert.equal(started.presetId, "pair");
+    assert.equal(started.prefix, "lab");
+    assert.equal(started.failures.length, 0);
+    assert.deepEqual(
+      started.instances.map((instance) => instance.status),
+      ["running", "running"],
     );
   } finally {
     await tmp.cleanup();

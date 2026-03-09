@@ -26,6 +26,10 @@ class StubManagedInstances {
         updatedAt: "2026-03-08T00:00:00.000Z",
         apiHost: "127.0.0.1",
         apiPort: 19000,
+        preset: {
+          presetId: "pair",
+          prefix: "lab",
+        },
         runtime: {
           rootDir: "/data/instances/a",
           configPath: "/data/instances/a/config.toml",
@@ -44,6 +48,10 @@ class StubManagedInstances {
         updatedAt: "2026-03-08T00:10:00.000Z",
         apiHost: "127.0.0.1",
         apiPort: 19001,
+        preset: {
+          presetId: "pair",
+          prefix: "lab",
+        },
         currentProcess: {
           pid: 2222,
           command: ["rust-mule"],
@@ -262,6 +270,11 @@ class ThrowingOperatorEvents {
 }
 
 class StubManagedInstancePresets {
+  constructor() {
+    this.startedPrefixes = [];
+    this.appliedPrefixes = new Set();
+  }
+
   listPresets() {
     return [
       {
@@ -286,6 +299,10 @@ class StubManagedInstancePresets {
     if (!input.prefix) {
       throw new Error("Invalid managed instance preset prefix: ");
     }
+    if (this.appliedPrefixes.has(input.prefix)) {
+      throw new Error(`Managed instance preset prefix already exists: ${input.prefix}`);
+    }
+    this.appliedPrefixes.add(input.prefix);
     const ids =
       input.presetId === "pair"
         ? [`${input.prefix}-a`, `${input.prefix}-b`]
@@ -300,6 +317,10 @@ class StubManagedInstancePresets {
         updatedAt: "2026-03-09T00:00:00.000Z",
         apiHost: "127.0.0.1",
         apiPort: 19100 + index,
+        preset: {
+          presetId: input.presetId,
+          prefix: input.prefix,
+        },
         runtime: {
           rootDir: `/data/instances/${id}`,
           configPath: `/data/instances/${id}/config.toml`,
@@ -311,6 +332,49 @@ class StubManagedInstancePresets {
           metadataPath: `/data/instances/${id}/instance.json`,
         },
       })),
+    };
+  }
+
+  async startPreset(prefix) {
+    if (!prefix) {
+      throw new Error("Invalid managed instance preset prefix: ");
+    }
+    if (prefix !== "lab") {
+      throw new Error(`Managed instance preset group not found: ${prefix}`);
+    }
+    this.startedPrefixes.push(prefix);
+    return {
+      presetId: "pair",
+      prefix,
+      instances: ["lab-a", "lab-b"].map((id, index) => ({
+        id,
+        status: "running",
+        createdAt: "2026-03-09T00:00:00.000Z",
+        updatedAt: "2026-03-09T00:10:00.000Z",
+        apiHost: "127.0.0.1",
+        apiPort: 19100 + index,
+        preset: {
+          presetId: "pair",
+          prefix,
+        },
+        currentProcess: {
+          pid: 5001 + index,
+          command: ["rust-mule"],
+          cwd: `/data/instances/${id}`,
+          startedAt: "2026-03-09T00:10:00.000Z",
+        },
+        runtime: {
+          rootDir: `/data/instances/${id}`,
+          configPath: `/data/instances/${id}/config.toml`,
+          tokenPath: `/data/instances/${id}/state/api.token`,
+          debugTokenPath: `/data/instances/${id}/state/debug.token`,
+          logDir: `/data/instances/${id}/state/logs`,
+          logPath: `/data/instances/${id}/state/logs/rust-mule.log`,
+          stateDir: `/data/instances/${id}/state`,
+          metadataPath: `/data/instances/${id}/instance.json`,
+        },
+      })),
+      failures: [],
     };
   }
 }
@@ -496,6 +560,41 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
       body: JSON.stringify({ presetId: "missing", prefix: "lab" }),
     });
     assert.equal(invalidPresetRes.status, 404);
+
+    const duplicatePrefixRes = await fetch(`${server.publicAddress()}/api/instance-presets/apply`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ presetId: "trio", prefix: "lab" }),
+    });
+    assert.equal(duplicatePrefixRes.status, 400);
+
+    const startPresetRes = await fetch(`${server.publicAddress()}/api/instance-presets/lab/start`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+      },
+    });
+    assert.equal(startPresetRes.status, 200);
+    const startPresetPayload = await startPresetRes.json();
+    assert.equal(startPresetPayload.started.prefix, "lab");
+    assert.equal(startPresetPayload.started.instances.length, 2);
+
+    const malformedPrefixRes = await fetch(
+      `${server.publicAddress()}/api/instance-presets/%E0/start`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          Origin: server.publicAddress(),
+        },
+      },
+    );
+    assert.equal(malformedPrefixRes.status, 400);
 
     await server.stop();
   } finally {
