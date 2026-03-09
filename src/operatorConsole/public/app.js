@@ -9,6 +9,7 @@ const INSTANCE_ANALYSIS_PLACEHOLDER =
 const INSTANCE_LOGS_PLACEHOLDER = "Select an instance to inspect per-instance rust-mule logs.";
 const OBSERVER_TARGET_PLACEHOLDER = "Loading active diagnostic target...";
 const INSTANCE_PRESET_PLACEHOLDER = "Loading instance presets...";
+const INSTANCE_PRESET_HELP_PLACEHOLDER = "Select a preset to inspect its layout and intended use.";
 const OPERATOR_EVENT_TYPE_OPTIONS = [
   { value: "", label: "All event types" },
   { value: "diagnostic_target_changed", label: "Target changes" },
@@ -22,6 +23,7 @@ let currentScheduledTarget = null;
 let currentScheduler = null;
 let currentManagedInstances = [];
 let currentOperatorEvents = [];
+let currentInstancePresets = [];
 
 async function fetchJson(url) {
   const res = await fetch(url, { credentials: "same-origin" });
@@ -213,6 +215,16 @@ function partitionInstances(instances) {
   };
 }
 
+function formatPresetSummary(preset) {
+  const nodeLabels = preset.nodes.map((node) => node.suffix).join(", ");
+  const nodeCount = preset.nodes.length;
+  return `${nodeCount} ${nodeCount === 1 ? "node" : "nodes"} • layout ${nodeLabels}`;
+}
+
+function lookupPresetDefinition(presetId) {
+  return currentInstancePresets.find((candidate) => candidate.id === presetId) || null;
+}
+
 function renderInstanceGroups(instances) {
   const list = document.getElementById("instance-groups");
   list.replaceChildren();
@@ -243,15 +255,18 @@ function renderInstanceGroups(instances) {
     const plannedCount = group.instances.filter((instance) => instance.status === "planned").length;
     const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
     const failedInstances = group.instances.filter((instance) => instance.status === "failed");
+    const preset = lookupPresetDefinition(group.presetId);
 
     wrapper.className = "group-card";
     header.className = "instance-header";
     controls.className = "controls";
     stats.className = "group-stats";
     members.className = "group-members";
-    title.textContent = `${group.prefix} (${group.presetId})`;
+    title.textContent = `${group.prefix} (${preset?.name || group.presetId})`;
     meta.className = "file-meta";
-    meta.textContent = `${group.instances.length} instances`;
+    meta.textContent = preset
+      ? `${formatPresetSummary(preset)} • ${preset.description}`
+      : `${group.instances.length} instances`;
     start.textContent = "Start preset";
     stop.textContent = "Stop preset";
     restart.textContent = "Restart preset";
@@ -539,6 +554,7 @@ function renderComparisonSelectors(instances) {
 
 function renderInstancePresets(presets, errorText) {
   const select = document.getElementById("instance-preset-id");
+  currentInstancePresets = presets.slice();
   select.replaceChildren();
   if (errorText) {
     const option = document.createElement("option");
@@ -546,6 +562,7 @@ function renderInstancePresets(presets, errorText) {
     option.textContent = errorText;
     select.appendChild(option);
     select.disabled = true;
+    renderSelectedPresetHelp();
     return;
   }
   if (!presets.length) {
@@ -554,6 +571,7 @@ function renderInstancePresets(presets, errorText) {
     option.textContent = "No presets available";
     select.appendChild(option);
     select.disabled = true;
+    renderSelectedPresetHelp();
     return;
   }
   select.disabled = false;
@@ -563,6 +581,28 @@ function renderInstancePresets(presets, errorText) {
     option.textContent = `${preset.name} (${preset.nodes.length})`;
     select.appendChild(option);
   }
+  renderSelectedPresetHelp();
+}
+
+function renderSelectedPresetHelp() {
+  const element = document.getElementById("instance-preset-help");
+  const select = document.getElementById("instance-preset-id");
+  const preset = lookupPresetDefinition(select.value);
+  if (!preset) {
+    element.textContent = INSTANCE_PRESET_HELP_PLACEHOLDER;
+    return;
+  }
+
+  const code = document.createElement("div");
+  const title = document.createElement("strong");
+  const summary = document.createElement("div");
+  const description = document.createElement("div");
+  code.className = "preset-help-code";
+  code.textContent = preset.id;
+  title.textContent = preset.name;
+  summary.textContent = formatPresetSummary(preset);
+  description.textContent = preset.description;
+  element.replaceChildren(code, title, summary, description);
 }
 
 function summarizeComparisonSide(side) {
@@ -684,8 +724,10 @@ async function refreshInstancePresets() {
   try {
     const data = await fetchJson("/api/instance-presets");
     renderInstancePresets(data.presets || []);
+    renderInstanceGroups(currentManagedInstances);
   } catch (err) {
     renderInstancePresets([], `presets unavailable: ${String(err)}`);
+    renderInstanceGroups(currentManagedInstances);
   }
 }
 
@@ -1121,6 +1163,7 @@ document.getElementById("refresh-operator-events").onclick = refreshOperatorEven
 document.getElementById("operator-event-group-filter").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-instance-filter").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-type-filter").onchange = applyOperatorEventFilters;
+document.getElementById("instance-preset-id").onchange = renderSelectedPresetHelp;
 document.getElementById("run-instance-compare").onclick = () => {
   void refreshInstanceCompare();
 };

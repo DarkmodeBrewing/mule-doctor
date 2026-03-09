@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/operator-event-filters`
+- `feature/preset-metadata-help`
 - PR: (pending)
 - Last updated: 2026-03-09
 
 ## Status
 
-- In progress; adding client-side operator timeline filters.
-- PR #42 is merged to `main`.
+- In progress; surfacing preset descriptions and layout help in the operator console.
+- PR #43 is merged to `main`.
 
 ## Completed Work
 
@@ -171,6 +171,10 @@
 - Operator-event filtering underway:
   - adding client-side filters for preset group, managed instance, and event type
   - reusing the existing recent operator-events payload rather than adding new API query parameters
+- Preset metadata/help underway:
+  - surfacing preset descriptions and node-layout summaries in the preset apply UI
+  - reusing preset metadata on cluster cards so operators can see intended layout at a glance
+  - keeping this slice UI-only with no lifecycle or scheduler changes
 
 ## Key Decisions
 
@@ -195,6 +199,7 @@
 - Operator-console cluster grouping should improve readability without introducing new lifecycle semantics or scheduler coupling.
 - Group-level compare shortcuts should reuse the existing compare flow rather than introducing a new comparison backend.
 - Timeline filtering should stay UI-first until there is evidence that the existing event payload size is insufficient.
+- Preset definitions should carry enough operator-facing metadata that preset intent is visible in the console without requiring external docs.
 
 ## Validation
 
@@ -203,10 +208,10 @@
 
 ## Next Steps
 
-- Finish the operator-event filtering slice:
+- Finish the preset metadata/help slice:
   - review
   - merge
-- After timeline filtering, add richer cluster ergonomics rather than more scheduler scope:
-  - optional preset metadata/help text in the UI
-  - richer event summaries or deeper per-group drilldowns
+- After that, add richer cluster navigation rather than more scheduler scope:
+  - deeper per-group drilldowns from cluster cards into the timeline
+  - richer event summaries where the current filtered timeline remains too raw
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.

@@ -399,6 +399,12 @@ Initial preset scope should remain intentionally small:
 - `pair`
 - `trio`
 
+Preset definitions should carry concise operator-facing metadata:
+
+- display name
+- short description of intended use
+- node-layout summary derived from suffixes such as `a`, `b`, and `c`
+
 Preset application should:
 
 - create multiple **planned** managed instances in one backend operation
@@ -429,6 +435,9 @@ only as a flat list of instances. Group cards should summarize:
 - recent failure reasons when any member is in a failed state
 
 This improves operator readability without changing the single-target observer model.
+
+The preset-application UI should also surface the selected preset description and layout summary
+before creation so operators do not need to infer what `pair` or `trio` means from ids alone.
 
 The group view may also provide shortcuts into the existing managed-instance comparison surface so
 operators can compare two members of the same preset-created cluster without manually rebuilding the

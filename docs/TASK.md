@@ -374,6 +374,7 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Operator can list available presets in the console.
+- Operator can inspect preset intent in the console before applying it, including a short description and node-layout summary.
 - Operator can apply a preset and get multiple planned instances with stable ids such as `lab-a`, `lab-b`, `lab-c`.
 - Batch preset creation preserves existing `InstanceManager` invariants for ids, ports, runtime paths, and rollback on failure.
 - Operator can trigger bounded bulk start/stop/restart actions for a preset-created group from the console.
@@ -399,4 +400,5 @@ Acceptance criteria:
 - Operators can understand group state without opening raw per-instance detail first.
 - Grouped members remain directly inspectable/selectable from the cluster view.
 - Preset groups provide a quick path into the existing side-by-side compare view.
+- Preset apply controls explain the purpose and layout of the selected preset without requiring operators to read external docs first.
 - Operators can filter the timeline by group, managed instance, and event type.

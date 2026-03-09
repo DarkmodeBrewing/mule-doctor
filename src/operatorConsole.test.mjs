@@ -608,6 +608,11 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
     assert.equal(listRes.status, 200);
     const listPayload = await listRes.json();
     assert.equal(listPayload.presets.length, 2);
+    assert.equal(listPayload.presets[0].description, "Two managed instances");
+    assert.deepEqual(
+      listPayload.presets[0].nodes.map((node) => node.suffix),
+      ["a", "b"],
+    );
 
     const applyRes = await fetch(`${server.publicAddress()}/api/instance-presets/apply`, {
       method: "POST",
@@ -1080,6 +1085,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     });
     assert.equal(rootPageRes.status, 200);
     const rootHtml = await rootPageRes.text();
+    assert.match(rootHtml, /instance-preset-help/);
     assert.match(rootHtml, /operator-event-group-filter/);
     assert.match(rootHtml, /operator-event-instance-filter/);
     assert.match(rootHtml, /operator-event-type-filter/);
