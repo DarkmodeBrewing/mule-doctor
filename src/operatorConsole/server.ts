@@ -14,12 +14,12 @@ import type {
   DiagnosticTargetRef,
   ManagedInstanceAnalysisResult,
   ManagedInstanceDiagnosticSnapshot,
+  ManagedInstancePresetActionResult,
   ManagedInstancePresetDefinition,
   ManagedInstanceRecord,
   ObserverCycleOutcome,
   OperatorEventEntry,
   RuntimeState,
-  StartedManagedInstancePreset,
 } from "../types/contracts.js";
 import { describeDiagnosticTarget } from "../targets/describeTarget.js";
 
@@ -67,7 +67,9 @@ export interface ManagedInstanceDiagnostics {
 export interface ManagedInstancePresets {
   listPresets(): ManagedInstancePresetDefinition[];
   applyPreset(input: ApplyManagedInstancePresetInput): Promise<AppliedManagedInstancePreset>;
-  startPreset(prefix: string): Promise<StartedManagedInstancePreset>;
+  startPreset(prefix: string): Promise<ManagedInstancePresetActionResult>;
+  stopPreset(prefix: string): Promise<ManagedInstancePresetActionResult>;
+  restartPreset(prefix: string): Promise<ManagedInstancePresetActionResult>;
 }
 
 interface ManagedInstanceComparisonResponse {
@@ -728,7 +730,7 @@ export class OperatorConsoleServer {
       sendJson(res, 400, { ok: false, error: "missing preset group prefix" });
       return;
     }
-    if (action !== "start") {
+    if (action !== "start" && action !== "stop" && action !== "restart") {
       sendJson(res, 404, { ok: false, error: "preset action not found" });
       return;
     }
@@ -737,10 +739,16 @@ export class OperatorConsoleServer {
       return;
     }
 
-    const started = await handleManagedInstanceErrors(() =>
-      this.managedInstancePresets!.startPreset(prefix),
-    );
-    sendJson(res, 200, { ok: true, started });
+    const result = await handleManagedInstanceErrors(() => {
+      if (action === "start") {
+        return this.managedInstancePresets!.startPreset(prefix);
+      }
+      if (action === "stop") {
+        return this.managedInstancePresets!.stopPreset(prefix);
+      }
+      return this.managedInstancePresets!.restartPreset(prefix);
+    });
+    sendJson(res, 200, { ok: true, result });
   }
 
   private async handleInstanceAction(

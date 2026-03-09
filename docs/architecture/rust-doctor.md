@@ -415,7 +415,7 @@ Preset application must not:
 The purpose of presets is to shorten repeated local cluster setup, not to widen scheduler scope.
 
 Preset-driven lifecycle actions may later include bounded bulk operations such as
-`start preset group`, but those actions must still:
+`start preset group`, `stop preset group`, and `restart preset group`, but those actions must still:
 
 - run through explicit backend services rather than browser-side loops
 - keep partial instance-start failures local to the group operation

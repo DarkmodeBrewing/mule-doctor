@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/managed-instance-bulk-start`
+- `feature/managed-instance-bulk-stop-restart`
 - PR: (pending)
 - Last updated: 2026-03-09
 
 ## Status
 
-- In progress; adding bounded bulk-start flows for preset-created managed-instance groups.
-- PR #38 is merged to `main`.
+- In progress; extending preset-created managed-instance groups with bounded bulk stop/restart flows.
+- PR #39 is merged to `main`.
 
 ## Completed Work
 
@@ -158,6 +158,10 @@
   - exposing a bounded backend `start preset group` flow
   - surfacing preset groups in the operator console with one-click group start
   - keeping group-start failures local to the operation rather than fatal to mule-doctor
+- Preset-group bulk stop/restart underway:
+  - extending the same bounded preset-group model to `stop` and `restart`
+  - preserving partial-failure reporting per group action
+  - keeping scheduled observer targeting unchanged during preset-group lifecycle operations
 
 ## Key Decisions
 
@@ -178,6 +182,7 @@
 - Cluster presets should create planned instances in one backend operation rather than driving per-instance creation loops from the browser.
 - Preset application must not implicitly start instances or retarget the scheduled observer.
 - Bulk preset-group lifecycle should operate on persisted preset membership metadata rather than inferring groups from ad hoc naming alone.
+- Preset-group lifecycle semantics should stay symmetric across `start`, `stop`, and `restart` rather than special-casing `start` only.
 
 ## Validation
 
@@ -187,10 +192,10 @@
 ## Next Steps
 
 - Finish the preset-group bulk-start slice:
+- Finish the preset-group bulk stop/restart slice:
   - review
   - merge
 - After bulk start, add richer cluster ergonomics rather than more scheduler scope:
   - optional preset metadata/help text in the UI
-  - bulk stop/restart flows for preset-created instances
   - clearer per-cluster grouping in the managed-instance list
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.

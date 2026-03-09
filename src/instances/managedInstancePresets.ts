@@ -1,8 +1,9 @@
 import type {
   AppliedManagedInstancePreset,
   ApplyManagedInstancePresetInput,
+  ManagedInstancePresetAction,
+  ManagedInstancePresetActionResult,
   ManagedInstancePresetDefinition,
-  StartedManagedInstancePreset,
 } from "../types/contracts.js";
 import type { InstanceManager } from "./instanceManager.js";
 
@@ -74,7 +75,22 @@ export class ManagedInstancePresetService {
     };
   }
 
-  async startPreset(prefixRaw: string): Promise<StartedManagedInstancePreset> {
+  async startPreset(prefixRaw: string): Promise<ManagedInstancePresetActionResult> {
+    return this.runPresetAction(prefixRaw, "start");
+  }
+
+  async stopPreset(prefixRaw: string): Promise<ManagedInstancePresetActionResult> {
+    return this.runPresetAction(prefixRaw, "stop");
+  }
+
+  async restartPreset(prefixRaw: string): Promise<ManagedInstancePresetActionResult> {
+    return this.runPresetAction(prefixRaw, "restart");
+  }
+
+  private async runPresetAction(
+    prefixRaw: string,
+    action: ManagedInstancePresetAction,
+  ): Promise<ManagedInstancePresetActionResult> {
     const prefix = normalizePresetPrefix(prefixRaw);
     const instances = (await this.instanceManager.listInstances()).filter(
       (instance) => instance.preset?.prefix === prefix,
@@ -84,12 +100,18 @@ export class ManagedInstancePresetService {
     }
 
     const presetId = instances[0].preset?.presetId ?? "unknown";
-    const failures: StartedManagedInstancePreset["failures"] = [];
-    const started: StartedManagedInstancePreset["instances"] = [];
+    const failures: ManagedInstancePresetActionResult["failures"] = [];
+    const changed: ManagedInstancePresetActionResult["instances"] = [];
 
     for (const instance of instances) {
       try {
-        started.push(await this.instanceManager.startInstance(instance.id));
+        if (action === "start") {
+          changed.push(await this.instanceManager.startInstance(instance.id));
+        } else if (action === "stop") {
+          changed.push(await this.instanceManager.stopInstance(instance.id));
+        } else {
+          changed.push(await this.instanceManager.restartInstance(instance.id));
+        }
       } catch (err) {
         failures.push({
           instanceId: instance.id,
@@ -101,7 +123,8 @@ export class ManagedInstancePresetService {
     return {
       presetId,
       prefix,
-      instances: started,
+      action,
+      instances: changed,
       failures,
     };
   }

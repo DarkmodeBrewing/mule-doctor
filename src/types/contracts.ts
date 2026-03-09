@@ -181,9 +181,12 @@ export interface AppliedManagedInstancePreset {
   instances: ManagedInstanceRecord[];
 }
 
-export interface StartedManagedInstancePreset {
+export type ManagedInstancePresetAction = "start" | "stop" | "restart";
+
+export interface ManagedInstancePresetActionResult {
   presetId: string;
   prefix: string;
+  action: ManagedInstancePresetAction;
   instances: ManagedInstanceRecord[];
   failures: Array<{
     instanceId: string;
