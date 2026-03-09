@@ -9,6 +9,7 @@
 ## Status
 
 - In progress; improving preset-group readability in the operator console.
+- PR #41 is pending review.
 - PR #40 is merged to `main`.
 
 ## Completed Work

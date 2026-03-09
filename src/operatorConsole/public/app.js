@@ -163,7 +163,6 @@ function renderInstanceGroups(instances) {
     const plannedCount = group.instances.filter((instance) => instance.status === "planned").length;
     const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
     const failedInstances = group.instances.filter((instance) => instance.status === "failed");
-    const memberNames = group.instances.map((instance) => instance.id).join(", ");
 
     wrapper.className = "group-card";
     header.className = "instance-header";
@@ -172,7 +171,7 @@ function renderInstanceGroups(instances) {
     members.className = "group-members";
     title.textContent = `${group.prefix} (${group.presetId})`;
     meta.className = "file-meta";
-    meta.textContent = `${group.instances.length} instances • ${memberNames}`;
+    meta.textContent = `${group.instances.length} instances`;
     start.textContent = "Start preset";
     stop.textContent = "Stop preset";
     restart.textContent = "Restart preset";
@@ -256,6 +255,21 @@ function buildGroupMember(instance) {
   }
 
   header.appendChild(title);
+  if (
+    currentScheduledTarget?.kind === "managed_instance" &&
+    currentScheduledTarget.instanceId === instance.id
+  ) {
+    const targetPill = document.createElement("span");
+    targetPill.className = "pill target";
+    targetPill.textContent = "scheduled target";
+    header.appendChild(targetPill);
+  }
+  if (isUnavailableObservedTarget({ kind: "managed_instance", instanceId: instance.id })) {
+    const degradedPill = document.createElement("span");
+    degradedPill.className = "pill degraded";
+    degradedPill.textContent = "unavailable";
+    header.appendChild(degradedPill);
+  }
   controls.appendChild(inspect);
   controls.appendChild(analyze);
   controls.appendChild(useAsTarget);
