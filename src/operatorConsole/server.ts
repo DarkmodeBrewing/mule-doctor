@@ -9,9 +9,12 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Stats } from "node:fs";
 import { redactLine, redactText } from "../logs/redaction.js";
 import type {
+  AppliedManagedInstancePreset,
+  ApplyManagedInstancePresetInput,
   DiagnosticTargetRef,
   ManagedInstanceAnalysisResult,
   ManagedInstanceDiagnosticSnapshot,
+  ManagedInstancePresetDefinition,
   ManagedInstanceRecord,
   ObserverCycleOutcome,
   OperatorEventEntry,
@@ -58,6 +61,11 @@ export interface ManagedInstanceControl {
 
 export interface ManagedInstanceDiagnostics {
   getSnapshot(id: string): Promise<ManagedInstanceDiagnosticSnapshot>;
+}
+
+export interface ManagedInstancePresets {
+  listPresets(): ManagedInstancePresetDefinition[];
+  applyPreset(input: ApplyManagedInstancePresetInput): Promise<AppliedManagedInstancePreset>;
 }
 
 interface ManagedInstanceComparisonResponse {
@@ -109,6 +117,7 @@ export interface OperatorConsoleConfig {
   managedInstances?: ManagedInstanceControl;
   managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
   managedInstanceAnalysis?: ManagedInstanceAnalysis;
+  managedInstancePresets?: ManagedInstancePresets;
   diagnosticTarget?: DiagnosticTargetControl;
   observerControl?: ObserverControl;
   operatorEvents?: {
@@ -137,6 +146,7 @@ export class OperatorConsoleServer {
   private readonly managedInstances: ManagedInstanceControl | undefined;
   private readonly managedInstanceDiagnostics: ManagedInstanceDiagnostics | undefined;
   private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
+  private readonly managedInstancePresets: ManagedInstancePresets | undefined;
   private readonly diagnosticTarget: DiagnosticTargetControl | undefined;
   private readonly observerControl: ObserverControl | undefined;
   private readonly operatorEvents:
@@ -167,6 +177,7 @@ export class OperatorConsoleServer {
     this.managedInstances = config.managedInstances;
     this.managedInstanceDiagnostics = config.managedInstanceDiagnostics;
     this.managedInstanceAnalysis = config.managedInstanceAnalysis;
+    this.managedInstancePresets = config.managedInstancePresets;
     this.diagnosticTarget = config.diagnosticTarget;
     this.observerControl = config.observerControl;
     this.operatorEvents = config.operatorEvents;
@@ -299,6 +310,16 @@ export class OperatorConsoleServer {
 
     if (path === "/api/instances") {
       await this.handleInstancesCollection(req, res);
+      return;
+    }
+
+    if (path === "/api/instance-presets") {
+      await this.handleInstancePresets(req, res);
+      return;
+    }
+
+    if (path === "/api/instance-presets/apply") {
+      await this.handleApplyInstancePreset(req, res);
       return;
     }
 
@@ -632,6 +653,46 @@ export class OperatorConsoleServer {
       this.managedInstances!.createPlannedInstance({ id, apiPort }),
     );
     sendJson(res, 201, { ok: true, instance: created });
+  }
+
+  private async handleInstancePresets(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.managedInstancePresets) {
+      sendJson(res, 501, { ok: false, error: "managed instance presets unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      presets: this.managedInstancePresets.listPresets(),
+    });
+  }
+
+  private async handleApplyInstancePreset(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.managedInstancePresets) {
+      sendJson(res, 501, { ok: false, error: "managed instance presets unavailable" });
+      return;
+    }
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    const applied = await handleManagedInstanceErrors(() =>
+      this.managedInstancePresets!.applyPreset({
+        presetId: typeof payload.presetId === "string" ? payload.presetId : "",
+        prefix: typeof payload.prefix === "string" ? payload.prefix : "",
+      }),
+    );
+    sendJson(res, 201, { ok: true, applied });
   }
 
   private async handleInstanceAction(

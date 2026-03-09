@@ -390,6 +390,32 @@ than introducing concurrent scheduled observation across multiple targets.
 
 ---
 
+# Managed Instance Presets
+
+The operator console may also expose bounded cluster presets for rapid local test setup.
+
+Initial preset scope should remain intentionally small:
+
+- `pair`
+- `trio`
+
+Preset application should:
+
+- create multiple **planned** managed instances in one backend operation
+- require an operator-supplied instance-id prefix such as `lab`
+- produce stable ids such as `lab-a`, `lab-b`, and `lab-c`
+- preserve existing `InstanceManager` invariants for ids, ports, runtime paths, and rollback behavior
+
+Preset application must not:
+
+- start the created instances automatically unless an explicit future control flow adds that behavior
+- change the active scheduled diagnostic target
+- change the single-target observer/reporting model
+
+The purpose of presets is to shorten repeated local cluster setup, not to widen scheduler scope.
+
+---
+
 # LLM Tools
 
 ### getHistory
@@ -496,6 +522,7 @@ binary itself, define each managed instance.
 The `InstanceManager` is responsible for:
 
 - allowed instance definitions
+- built-in or configured cluster preset application
 - runtime directory creation
 - process start/stop/restart
 - port allocation and conflict checks

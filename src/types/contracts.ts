@@ -152,3 +152,25 @@ export interface ManagedInstanceAnalysisResult {
   summary: string;
   snapshot?: ManagedInstanceDiagnosticSnapshot;
 }
+
+export interface ManagedInstancePresetNode {
+  suffix: string;
+}
+
+export interface ManagedInstancePresetDefinition {
+  id: string;
+  name: string;
+  description: string;
+  nodes: ManagedInstancePresetNode[];
+}
+
+export interface ApplyManagedInstancePresetInput {
+  presetId: string;
+  prefix: string;
+}
+
+export interface AppliedManagedInstancePreset {
+  presetId: string;
+  prefix: string;
+  instances: ManagedInstanceRecord[];
+}
