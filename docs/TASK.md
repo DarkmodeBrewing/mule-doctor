@@ -404,3 +404,4 @@ Acceptance criteria:
 - Operators can filter the timeline by group, managed instance, and event type.
 - Cluster cards and grouped members provide direct shortcuts into the existing filtered operator timeline.
 - Filtered operator timeline rows summarize key event types with clearer target and outcome cues instead of relying on raw event text alone.
+- Operator can switch between grouped and raw timeline views, and repeated adjacent events can be expanded without losing chronological detail.

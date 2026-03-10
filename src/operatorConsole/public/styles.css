@@ -108,6 +108,14 @@ label {
   margin-bottom: 12px;
 }
 
+.toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.84rem;
+}
+
 .preset-help {
   margin: -4px 0 12px;
   padding: 10px 12px;
@@ -322,6 +330,28 @@ button:hover,
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.4;
+}
+
+.event-group {
+  display: grid;
+  gap: 8px;
+}
+
+.event-group-detail {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.event-entry {
+  border-top: 1px solid rgba(48, 67, 88, 0.45);
+  padding-top: 8px;
+}
+
+.event-toggle {
+  justify-self: start;
+  padding: 6px 10px;
+  font-size: 0.78rem;
 }
 
 .pill {

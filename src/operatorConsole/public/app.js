@@ -24,6 +24,7 @@ let currentScheduler = null;
 let currentManagedInstances = [];
 let currentOperatorEvents = [];
 let currentInstancePresets = [];
+const expandedOperatorEventGroups = new Set();
 
 async function fetchJson(url) {
   const res = await fetch(url, { credentials: "same-origin" });
@@ -101,44 +102,170 @@ function renderOperatorEvents(events, errorText) {
     return;
   }
 
-  for (const event of events.slice().reverse()) {
-    const item = document.createElement("li");
-    const header = document.createElement("div");
-    const title = document.createElement("strong");
-    const meta = document.createElement("span");
-    const badges = document.createElement("div");
-    const body = document.createElement("div");
-    const detail = document.createElement("div");
+  const groups = shouldGroupOperatorEvents()
+    ? buildOperatorEventGroups(events.slice().reverse())
+    : events.slice().reverse().map((event) => ({ id: buildOperatorEventGroupId([event]), events: [event] }));
+  pruneExpandedOperatorEventGroups(groups);
+
+  for (const group of groups) {
+    if (group.events.length === 1) {
+      list.appendChild(renderOperatorEventItem(group.events[0]));
+      continue;
+    }
+    list.appendChild(renderOperatorEventGroup(group));
+  }
+}
+
+function shouldGroupOperatorEvents() {
+  return document.getElementById("operator-event-grouping-toggle").checked;
+}
+
+function buildOperatorEventGroups(events) {
+  const groups = [];
+  let current = undefined;
+  for (const event of events) {
     const summary = summarizeOperatorEvent(event);
-    header.className = "event-line";
-    badges.className = "event-badges";
-    body.className = "file-meta";
-    detail.className = "event-detail";
-    title.textContent = summary.title;
-    meta.className = "event-meta";
-    meta.textContent = new Date(event.timestamp).toLocaleString();
-    body.textContent = summary.summary;
-    detail.textContent = event.message;
-    header.appendChild(title);
-    if (summary.targetLabel) {
-      badges.appendChild(buildEventBadge(summary.targetLabel, summary.targetTone));
+    if (!current || !sameOperatorEventGroup(current.summary, summary)) {
+      if (current) {
+        groups.push(current);
+      }
+      current = {
+        id: "",
+        summary,
+        events: [event],
+      };
+      continue;
     }
-    if (summary.outcomeLabel) {
-      badges.appendChild(buildEventBadge(summary.outcomeLabel, summary.outcomeTone));
+    current.events.push(event);
+  }
+  if (current) {
+    groups.push(current);
+  }
+  return groups.map((group) => ({
+    ...group,
+    id: buildOperatorEventGroupId(group.events),
+  }));
+}
+
+function sameOperatorEventGroup(left, right) {
+  return (
+    left.title === right.title &&
+    left.summary === right.summary &&
+    left.targetLabel === right.targetLabel &&
+    left.outcomeLabel === right.outcomeLabel &&
+    left.actorLabel === right.actorLabel
+  );
+}
+
+function buildOperatorEventGroupId(events) {
+  const oldest = events[events.length - 1];
+  const summary = summarizeOperatorEvent(oldest);
+  return `${oldest.type}:${oldest.timestamp}:${summary.targetLabel}:${summary.outcomeLabel}:${summary.actorLabel}`;
+}
+
+function pruneExpandedOperatorEventGroups(groups) {
+  const validIds = new Set(groups.map((group) => group.id));
+  for (const id of expandedOperatorEventGroups) {
+    if (!validIds.has(id)) {
+      expandedOperatorEventGroups.delete(id);
     }
-    if (summary.actorLabel) {
-      badges.appendChild(buildEventBadge(summary.actorLabel, "neutral"));
+  }
+}
+
+function renderOperatorEventGroup(group) {
+  const item = document.createElement("li");
+  const header = document.createElement("div");
+  const title = document.createElement("strong");
+  const badges = document.createElement("div");
+  const meta = document.createElement("span");
+  const body = document.createElement("div");
+  const toggle = document.createElement("button");
+  const detail = document.createElement("div");
+  const expanded = expandedOperatorEventGroups.has(group.id);
+  const newest = group.events[0];
+  const oldest = group.events[group.events.length - 1];
+
+  item.className = "event-group";
+  header.className = "event-line";
+  badges.className = "event-badges";
+  body.className = "file-meta";
+  detail.className = "event-group-detail";
+  title.textContent = group.summary.title;
+  meta.className = "event-meta";
+  meta.textContent = `${new Date(oldest.timestamp).toLocaleString()} to ${new Date(newest.timestamp).toLocaleString()}`;
+  body.textContent = `${group.events.length} related events • ${group.summary.summary}`;
+  toggle.className = "event-toggle";
+  toggle.textContent = expanded ? "Collapse" : "Expand";
+  toggle.onclick = () => {
+    if (expandedOperatorEventGroups.has(group.id)) {
+      expandedOperatorEventGroups.delete(group.id);
+    } else {
+      expandedOperatorEventGroups.add(group.id);
     }
-    if (badges.childNodes.length > 0) {
-      header.appendChild(badges);
+    applyOperatorEventFilters();
+  };
+
+  header.appendChild(title);
+  badges.appendChild(buildEventBadge(`${group.events.length}x`, "neutral"));
+  appendOperatorEventBadges(badges, group.summary);
+  header.appendChild(badges);
+  header.appendChild(meta);
+  item.appendChild(header);
+  item.appendChild(body);
+  item.appendChild(toggle);
+  if (expanded) {
+    for (const event of group.events) {
+      detail.appendChild(renderOperatorEventItem(event, true));
     }
-    header.appendChild(meta);
-    item.appendChild(header);
-    item.appendChild(body);
-    if (detail.textContent && detail.textContent !== body.textContent) {
-      item.appendChild(detail);
-    }
-    list.appendChild(item);
+    item.appendChild(detail);
+  }
+  return item;
+}
+
+function renderOperatorEventItem(event, compact = false) {
+  const item = document.createElement(compact ? "div" : "li");
+  const header = document.createElement("div");
+  const title = document.createElement("strong");
+  const meta = document.createElement("span");
+  const badges = document.createElement("div");
+  const body = document.createElement("div");
+  const detail = document.createElement("div");
+  const summary = summarizeOperatorEvent(event);
+  header.className = "event-line";
+  badges.className = "event-badges";
+  body.className = "file-meta";
+  detail.className = "event-detail";
+  if (compact) {
+    item.className = "event-entry";
+  }
+  title.textContent = summary.title;
+  meta.className = "event-meta";
+  meta.textContent = new Date(event.timestamp).toLocaleString();
+  body.textContent = summary.summary;
+  detail.textContent = event.message;
+  header.appendChild(title);
+  appendOperatorEventBadges(badges, summary);
+  if (badges.childNodes.length > 0) {
+    header.appendChild(badges);
+  }
+  header.appendChild(meta);
+  item.appendChild(header);
+  item.appendChild(body);
+  if (detail.textContent && detail.textContent !== body.textContent) {
+    item.appendChild(detail);
+  }
+  return item;
+}
+
+function appendOperatorEventBadges(badges, summary) {
+  if (summary.targetLabel) {
+    badges.appendChild(buildEventBadge(summary.targetLabel, summary.targetTone));
+  }
+  if (summary.outcomeLabel) {
+    badges.appendChild(buildEventBadge(summary.outcomeLabel, summary.outcomeTone));
+  }
+  if (summary.actorLabel) {
+    badges.appendChild(buildEventBadge(summary.actorLabel, "neutral"));
   }
 }
 
@@ -1342,6 +1469,7 @@ document.getElementById("refresh-operator-events").onclick = refreshOperatorEven
 document.getElementById("operator-event-group-filter").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-instance-filter").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-type-filter").onchange = applyOperatorEventFilters;
+document.getElementById("operator-event-grouping-toggle").onchange = applyOperatorEventFilters;
 document.getElementById("instance-preset-id").onchange = renderSelectedPresetHelp;
 document.getElementById("run-instance-compare").onclick = () => {
   void refreshInstanceCompare();
