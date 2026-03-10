@@ -105,6 +105,7 @@ function renderOperatorEvents(events, errorText) {
   const groups = shouldGroupOperatorEvents()
     ? buildOperatorEventGroups(events.slice().reverse())
     : events.slice().reverse().map((event) => ({ id: buildOperatorEventGroupId([event]), events: [event] }));
+  pruneExpandedOperatorEventGroups(groups);
 
   for (const group of groups) {
     if (group.events.length === 1) {
@@ -138,12 +139,11 @@ function buildOperatorEventGroups(events) {
     current.events.push(event);
   }
   if (current) {
-    current.id = buildOperatorEventGroupId(current.events);
     groups.push(current);
   }
   return groups.map((group) => ({
     ...group,
-    id: group.id || buildOperatorEventGroupId(group.events),
+    id: buildOperatorEventGroupId(group.events),
   }));
 }
 
@@ -158,9 +158,18 @@ function sameOperatorEventGroup(left, right) {
 }
 
 function buildOperatorEventGroupId(events) {
-  const newest = events[0];
   const oldest = events[events.length - 1];
-  return `${newest.type}:${newest.timestamp}:${oldest.timestamp}:${events.length}`;
+  const summary = summarizeOperatorEvent(oldest);
+  return `${oldest.type}:${oldest.timestamp}:${summary.targetLabel}:${summary.outcomeLabel}:${summary.actorLabel}`;
+}
+
+function pruneExpandedOperatorEventGroups(groups) {
+  const validIds = new Set(groups.map((group) => group.id));
+  for (const id of expandedOperatorEventGroups) {
+    if (!validIds.has(id)) {
+      expandedOperatorEventGroups.delete(id);
+    }
+  }
 }
 
 function renderOperatorEventGroup(group) {
