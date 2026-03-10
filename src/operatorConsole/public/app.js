@@ -55,6 +55,7 @@ const OPERATOR_EVENT_VIEW_PRESETS = {
     instanceFilter: "",
   },
 };
+const DEFAULT_OPERATOR_EVENT_VIEW = "all";
 let selectedInstanceId = null;
 let currentObserver = null;
 let currentScheduledTarget = null;
@@ -520,17 +521,22 @@ function getSelectedOperatorEventSignals() {
 }
 
 function applyOperatorEventViewPreset(name) {
+  applyOperatorEventViewState(name);
+}
+
+function applyOperatorEventViewState(name, overrides = {}) {
   const preset = OPERATOR_EVENT_VIEW_PRESETS[name];
   if (!preset) {
     return;
   }
-  document.getElementById("operator-event-grouping-toggle").checked = preset.grouping;
-  document.getElementById("operator-event-signal-targets").checked = preset.signalTargets;
-  document.getElementById("operator-event-signal-runs").checked = preset.signalRuns;
-  document.getElementById("operator-event-signal-failures").checked = preset.signalFailures;
-  document.getElementById("operator-event-type-filter").value = preset.eventType;
-  document.getElementById("operator-event-group-filter").value = preset.groupFilter;
-  document.getElementById("operator-event-instance-filter").value = preset.instanceFilter;
+  const state = { ...preset, ...overrides };
+  document.getElementById("operator-event-grouping-toggle").checked = state.grouping;
+  document.getElementById("operator-event-signal-targets").checked = state.signalTargets;
+  document.getElementById("operator-event-signal-runs").checked = state.signalRuns;
+  document.getElementById("operator-event-signal-failures").checked = state.signalFailures;
+  document.getElementById("operator-event-type-filter").value = state.eventType;
+  document.getElementById("operator-event-group-filter").value = state.groupFilter;
+  document.getElementById("operator-event-instance-filter").value = state.instanceFilter;
   applyOperatorEventFilters();
 }
 
@@ -609,6 +615,7 @@ function renderInstanceGroups(instances) {
     const restart = document.createElement("button");
     const compare = document.createElement("button");
     const events = document.createElement("button");
+    const failures = document.createElement("button");
     const runningCount = group.instances.filter((instance) => instance.status === "running").length;
     const plannedCount = group.instances.filter((instance) => instance.status === "planned").length;
     const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
@@ -630,11 +637,13 @@ function renderInstanceGroups(instances) {
     restart.textContent = "Restart preset";
     compare.textContent = "Compare group";
     events.textContent = "View group events";
+    failures.textContent = "View group failures";
     start.onclick = () => bulkMutatePreset(group.prefix, "start");
     stop.onclick = () => bulkMutatePreset(group.prefix, "stop");
     restart.onclick = () => bulkMutatePreset(group.prefix, "restart");
     compare.onclick = () => comparePresetGroup(group.instances);
-    events.onclick = () => focusOperatorTimelineForGroup(group.prefix);
+    events.onclick = () => focusOperatorTimelineForGroup(group.prefix, { view: "all" });
+    failures.onclick = () => focusOperatorTimelineForGroup(group.prefix, { view: "failures" });
     if (runningCount === group.instances.length) {
       start.disabled = true;
     }
@@ -657,6 +666,7 @@ function renderInstanceGroups(instances) {
     controls.appendChild(restart);
     controls.appendChild(compare);
     controls.appendChild(events);
+    controls.appendChild(failures);
     wrapper.appendChild(header);
     wrapper.appendChild(meta);
     wrapper.appendChild(stats);
@@ -712,6 +722,7 @@ function buildGroupMember(instance) {
   const analyze = document.createElement("button");
   const useAsTarget = document.createElement("button");
   const events = document.createElement("button");
+  const failures = document.createElement("button");
 
   wrapper.className = "group-member";
   header.className = "instance-header";
@@ -724,11 +735,13 @@ function buildGroupMember(instance) {
   analyze.textContent = "Analyze";
   useAsTarget.textContent = "Use as target";
   events.textContent = "View events";
+  failures.textContent = "View failures";
   inspect.onclick = () => inspectInstance(instance.id);
   analyze.onclick = () => analyzeInstance(instance.id);
   useAsTarget.onclick = () =>
     updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
-  events.onclick = () => focusOperatorTimelineForInstance(instance.id);
+  events.onclick = () => focusOperatorTimelineForInstance(instance.id, { view: "all" });
+  failures.onclick = () => focusOperatorTimelineForInstance(instance.id, { view: "failures" });
   if (
     currentScheduledTarget?.kind === "managed_instance" &&
     currentScheduledTarget.instanceId === instance.id
@@ -756,6 +769,7 @@ function buildGroupMember(instance) {
   controls.appendChild(analyze);
   controls.appendChild(useAsTarget);
   controls.appendChild(events);
+  controls.appendChild(failures);
   wrapper.appendChild(header);
   wrapper.appendChild(meta);
   wrapper.appendChild(controls);
@@ -769,19 +783,52 @@ function scrollToOperatorTimeline() {
   }
 }
 
-function focusOperatorTimelineForGroup(prefix) {
-  document.getElementById("operator-event-group-filter").value = prefix;
-  document.getElementById("operator-event-instance-filter").value = "";
-  applyOperatorEventFilters();
+function focusOperatorTimeline(config = {}) {
+  const view = config.view || DEFAULT_OPERATOR_EVENT_VIEW;
+  applyOperatorEventViewState(view, {
+    groupFilter: config.groupFilter ?? "",
+    instanceFilter: config.instanceFilter ?? "",
+  });
   scrollToOperatorTimeline();
 }
 
-function focusOperatorTimelineForInstance(instanceId) {
+function focusOperatorTimelineForGroup(prefix, options = {}) {
+  focusOperatorTimeline({
+    view: options.view,
+    groupFilter: prefix,
+    instanceFilter: "",
+  });
+}
+
+function focusOperatorTimelineForInstance(instanceId, options = {}) {
   const instance = currentManagedInstances.find((candidate) => candidate.id === instanceId);
-  document.getElementById("operator-event-instance-filter").value = instanceId;
-  document.getElementById("operator-event-group-filter").value = instance?.preset?.prefix || "";
-  applyOperatorEventFilters();
-  scrollToOperatorTimeline();
+  focusOperatorTimeline({
+    view: options.view,
+    instanceFilter: instanceId,
+    groupFilter: instance?.preset?.prefix || "",
+  });
+}
+
+function focusOperatorTimelineForTarget(target, options = {}) {
+  if (!target || target.kind === "external") {
+    focusOperatorTimeline({
+      view: options.view || "targeting",
+      groupFilter: "",
+      instanceFilter: "",
+    });
+    return;
+  }
+  focusOperatorTimelineForInstance(target.instanceId, {
+    view: options.view || "targeting",
+  });
+}
+
+function renderSelectedInstanceTimelineControls() {
+  const eventsButton = document.getElementById("view-selected-instance-events");
+  const failuresButton = document.getElementById("view-selected-instance-failures");
+  const hasSelectedInstance = typeof selectedInstanceId === "string" && selectedInstanceId.length > 0;
+  eventsButton.disabled = !hasSelectedInstance;
+  failuresButton.disabled = !hasSelectedInstance;
 }
 
 function targetLabel(target) {
@@ -836,6 +883,8 @@ function renderInstanceList(instances) {
     const inspect = document.createElement("button");
     const analyze = document.createElement("button");
     const useAsTarget = document.createElement("button");
+    const events = document.createElement("button");
+    const failures = document.createElement("button");
 
     wrapper.className = "instance-entry";
     header.className = "instance-header";
@@ -847,6 +896,8 @@ function renderInstanceList(instances) {
     inspect.textContent = "Inspect";
     analyze.textContent = "Analyze";
     useAsTarget.textContent = "Use as target";
+    events.textContent = "View events";
+    failures.textContent = "View failures";
     start.textContent = "Start";
     stop.textContent = "Stop";
     restart.textContent = "Restart";
@@ -855,6 +906,8 @@ function renderInstanceList(instances) {
     analyze.onclick = () => analyzeInstance(instance.id);
     useAsTarget.onclick = () =>
       updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
+    events.onclick = () => focusOperatorTimelineForInstance(instance.id, { view: "all" });
+    failures.onclick = () => focusOperatorTimelineForInstance(instance.id, { view: "failures" });
     start.onclick = () => mutateInstance(instance.id, "start");
     stop.onclick = () => mutateInstance(instance.id, "stop");
     restart.onclick = () => mutateInstance(instance.id, "restart");
@@ -890,6 +943,8 @@ function renderInstanceList(instances) {
     controls.appendChild(inspect);
     controls.appendChild(analyze);
     controls.appendChild(useAsTarget);
+    controls.appendChild(events);
+    controls.appendChild(failures);
     controls.appendChild(start);
     controls.appendChild(stop);
     controls.appendChild(restart);
@@ -1153,6 +1208,7 @@ async function refreshInstances() {
       const exists = data.instances.some((instance) => instance.id === selectedInstanceId);
       if (!exists) {
         selectedInstanceId = null;
+        renderSelectedInstanceTimelineControls();
         setText("instance-detail", "Selected instance no longer exists.");
         setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
         setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
@@ -1161,10 +1217,12 @@ async function refreshInstances() {
     }
   } catch (err) {
     currentManagedInstances = [];
+    selectedInstanceId = null;
     populateOperatorEventFilters();
     applyOperatorEventFilters();
     renderInstanceGroups([]);
     renderInstanceList([]);
+    renderSelectedInstanceTimelineControls();
     setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
     renderTargetStatusCard();
   }
@@ -1467,6 +1525,7 @@ async function bulkMutatePreset(prefix, action) {
 
 async function inspectInstance(id) {
   selectedInstanceId = id;
+  renderSelectedInstanceTimelineControls();
   try {
     const [detail, diagnostics, logs] = await Promise.all([
       fetchJson(`/api/instances/${encodeURIComponent(id)}`),
@@ -1485,6 +1544,7 @@ async function inspectInstance(id) {
 
 async function analyzeInstance(id) {
   selectedInstanceId = id;
+  renderSelectedInstanceTimelineControls();
   setText("instance-analysis", "Running analysis...");
   try {
     const result = await postJson(`/api/instances/${encodeURIComponent(id)}/analyze`);
@@ -1506,6 +1566,7 @@ renderTargetStatusCard();
 renderSchedulerStatusCard();
 renderOperatorEvents([]);
 populateOperatorEventFilters();
+renderSelectedInstanceTimelineControls();
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });
@@ -1551,6 +1612,25 @@ document.getElementById("refresh-instance-compare").onclick = refreshInstanceCom
 document.getElementById("refresh-target-status").onclick = refreshHealth;
 document.getElementById("refresh-scheduler-status").onclick = refreshHealth;
 document.getElementById("refresh-operator-events").onclick = refreshOperatorEvents;
+document.getElementById("view-target-events").onclick = () => {
+  focusOperatorTimelineForTarget(currentScheduledTarget, { view: "targeting" });
+};
+document.getElementById("view-scheduler-runs").onclick = () => {
+  focusOperatorTimeline({ view: "runs" });
+};
+document.getElementById("view-scheduler-failures").onclick = () => {
+  focusOperatorTimeline({ view: "failures" });
+};
+document.getElementById("view-selected-instance-events").onclick = () => {
+  if (selectedInstanceId) {
+    focusOperatorTimelineForInstance(selectedInstanceId, { view: "all" });
+  }
+};
+document.getElementById("view-selected-instance-failures").onclick = () => {
+  if (selectedInstanceId) {
+    focusOperatorTimelineForInstance(selectedInstanceId, { view: "failures" });
+  }
+};
 document.getElementById("operator-view-all").onclick = () => applyOperatorEventViewPreset("all");
 document.getElementById("operator-view-failures").onclick = () =>
   applyOperatorEventViewPreset("failures");

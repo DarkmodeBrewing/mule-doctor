@@ -30,6 +30,7 @@
           <h2>Scheduled Target</h2>
           <div class="controls">
             <button id="run-observer-now">Run cycle now</button>
+            <button id="view-target-events" type="button">View target events</button>
             <button id="refresh-target-status">Refresh target</button>
           </div>
         </div>
@@ -41,6 +42,8 @@
         <div class="row">
           <h2>Scheduler</h2>
           <div class="controls">
+            <button id="view-scheduler-runs" type="button">Run activity</button>
+            <button id="view-scheduler-failures" type="button">Failures</button>
             <button id="refresh-scheduler-status">Refresh scheduler</button>
           </div>
         </div>
@@ -142,6 +145,13 @@
             <h3>Standalone Instances</h3>
           </div>
           <ul id="instance-list"></ul>
+        </div>
+        <div class="row">
+          <h3>Selected Instance</h3>
+          <div class="controls">
+            <button id="view-selected-instance-events" type="button">View selected events</button>
+            <button id="view-selected-instance-failures" type="button">View selected failures</button>
+          </div>
         </div>
         <pre id="instance-detail" class="muted"></pre>
         <pre id="instance-diagnostics" class="muted"></pre>
