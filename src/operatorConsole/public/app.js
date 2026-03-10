@@ -17,6 +17,36 @@ const OPERATOR_EVENT_TYPE_OPTIONS = [
   { value: "observer_cycle_started", label: "Cycle starts" },
   { value: "observer_cycle_completed", label: "Cycle outcomes" },
 ];
+const OPERATOR_EVENT_VIEW_PRESETS = {
+  all: {
+    grouping: true,
+    signalTargets: false,
+    signalRuns: false,
+    signalFailures: false,
+    eventType: "",
+  },
+  failures: {
+    grouping: true,
+    signalTargets: false,
+    signalRuns: false,
+    signalFailures: true,
+    eventType: "",
+  },
+  targeting: {
+    grouping: true,
+    signalTargets: true,
+    signalRuns: false,
+    signalFailures: false,
+    eventType: "",
+  },
+  runs: {
+    grouping: false,
+    signalTargets: false,
+    signalRuns: true,
+    signalFailures: false,
+    eventType: "",
+  },
+};
 let selectedInstanceId = null;
 let currentObserver = null;
 let currentScheduledTarget = null;
@@ -479,6 +509,19 @@ function getSelectedOperatorEventSignals() {
     selected.add("failures");
   }
   return selected;
+}
+
+function applyOperatorEventViewPreset(name) {
+  const preset = OPERATOR_EVENT_VIEW_PRESETS[name];
+  if (!preset) {
+    return;
+  }
+  document.getElementById("operator-event-grouping-toggle").checked = preset.grouping;
+  document.getElementById("operator-event-signal-targets").checked = preset.signalTargets;
+  document.getElementById("operator-event-signal-runs").checked = preset.signalRuns;
+  document.getElementById("operator-event-signal-failures").checked = preset.signalFailures;
+  document.getElementById("operator-event-type-filter").value = preset.eventType;
+  applyOperatorEventFilters();
 }
 
 function matchesSelectedOperatorEventSignals(event, selectedSignals) {
@@ -1498,6 +1541,12 @@ document.getElementById("refresh-instance-compare").onclick = refreshInstanceCom
 document.getElementById("refresh-target-status").onclick = refreshHealth;
 document.getElementById("refresh-scheduler-status").onclick = refreshHealth;
 document.getElementById("refresh-operator-events").onclick = refreshOperatorEvents;
+document.getElementById("operator-view-all").onclick = () => applyOperatorEventViewPreset("all");
+document.getElementById("operator-view-failures").onclick = () =>
+  applyOperatorEventViewPreset("failures");
+document.getElementById("operator-view-targeting").onclick = () =>
+  applyOperatorEventViewPreset("targeting");
+document.getElementById("operator-view-runs").onclick = () => applyOperatorEventViewPreset("runs");
 document.getElementById("operator-event-group-filter").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-instance-filter").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-type-filter").onchange = applyOperatorEventFilters;

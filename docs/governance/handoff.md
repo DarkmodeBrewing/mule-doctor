@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/operator-timeline-density-controls`
+- `feature/operator-timeline-saved-views`
 - PR: (pending)
 - Last updated: 2026-03-10
 
 ## Status
 
-- In progress; adding operator timeline density controls in the console.
-- Baseline dependency: PR #47 (merged to `main`).
+- In progress; adding built-in saved views for the operator timeline.
+- Baseline dependency: PR #48 (merged to `main`).
 
 ## Completed Work
 
@@ -187,6 +187,10 @@
   - adding quick toggles for target changes, run requests, and failures
   - layering those toggles on top of the existing timeline filters
   - keeping the slice UI-only with no new API or persistence behavior
+- Operator timeline saved views underway:
+  - adding built-in views such as `All`, `Failures`, `Targeting`, and `Run activity`
+  - applying those views by setting the current client-side controls rather than introducing persistence
+  - keeping the underlying controls editable after a view is applied
 - Cluster-to-timeline shortcuts underway:
   - adding `View group events` and `View events` actions to cluster cards and grouped member cards
   - reusing the existing client-side timeline filters instead of adding new backend APIs
@@ -219,6 +223,7 @@
 - Operator timeline readability should be improved in the browser before considering new event APIs or storage changes.
 - Timeline grouping should remain client-side and optional so operators can still inspect the raw event order when needed.
 - Timeline density controls should bias the current view toward high-signal events without replacing the base filter model.
+- Saved timeline views should remain built-in and ephemeral until there is evidence that operators need persisted custom views.
 - Cluster-event navigation should reuse the existing filtered timeline rather than introducing duplicate event views.
 
 ## Validation
@@ -228,10 +233,10 @@
 
 ## Next Steps
 
-- Finish the operator-timeline-density-controls slice:
+- Finish the operator-timeline-saved-views slice:
   - review
   - merge
 - After that, add richer cluster navigation rather than more scheduler scope:
   - optional instance- or group-scoped deep links from more console surfaces
-  - optional saved timeline views if operators keep repeating the same event-selection patterns
+  - optional event-type pinning defaults or other small console ergonomics if repeated operator patterns emerge
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.
