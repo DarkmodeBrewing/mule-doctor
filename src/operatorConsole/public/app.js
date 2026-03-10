@@ -562,7 +562,7 @@ function renderInstancePresets(presets, errorText) {
     option.textContent = errorText;
     select.appendChild(option);
     select.disabled = true;
-    renderSelectedPresetHelp();
+    renderSelectedPresetHelp(errorText);
     return;
   }
   if (!presets.length) {
@@ -571,7 +571,7 @@ function renderInstancePresets(presets, errorText) {
     option.textContent = "No presets available";
     select.appendChild(option);
     select.disabled = true;
-    renderSelectedPresetHelp();
+    renderSelectedPresetHelp("No presets available.");
     return;
   }
   select.disabled = false;
@@ -584,9 +584,13 @@ function renderInstancePresets(presets, errorText) {
   renderSelectedPresetHelp();
 }
 
-function renderSelectedPresetHelp() {
+function renderSelectedPresetHelp(message = "") {
   const element = document.getElementById("instance-preset-help");
   const select = document.getElementById("instance-preset-id");
+  if (message) {
+    element.textContent = message;
+    return;
+  }
   const preset = lookupPresetDefinition(select.value);
   if (!preset) {
     element.textContent = INSTANCE_PRESET_HELP_PLACEHOLDER;

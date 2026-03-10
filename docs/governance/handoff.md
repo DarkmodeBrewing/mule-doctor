@@ -9,7 +9,8 @@
 ## Status
 
 - In progress; surfacing preset descriptions and layout help in the operator console.
-- PR #43 is merged to `main`.
+- Current branch PR: #44 (pending).
+- Baseline dependency: PR #43 (merged to `main`).
 
 ## Completed Work
 
