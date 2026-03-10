@@ -278,6 +278,61 @@ Acceptance criteria:
 ## Task F: Operator Console Control Plane
 
 1. Extend the operator console from read-only observability to controlled local-instance lifecycle management.
+
+## Task G: Consolidate Tests Under `/tests`
+
+1. Move repository test files out of the source/root layout into a dedicated `/tests` tree.
+2. Update test imports, runtime paths, and any build/test commands that currently assume tests live under `src/` or other existing locations.
+3. Preserve current test coverage and execution behavior while making the test layout easier to navigate and maintain.
+
+Acceptance criteria:
+
+- Automated tests live under `/tests` instead of the current mixed source/root placement.
+- `npm test` and `npm run check` continue to pass using the new test paths.
+- No production import/build paths depend on tests remaining inside `src/`.
+
+## Task H: Break Down `src/operatorConsole/server.ts`
+
+1. Decompose `src/operatorConsole/server.ts` into smaller, easier-to-review units.
+2. Extract operator-console types and interfaces into dedicated files instead of keeping them inline in the server implementation.
+3. Review large class methods and split reusable or high-complexity logic into helper methods and/or focused helper classes where it improves readability and maintenance.
+4. Preserve current API/auth/SSE behavior while reducing file size and responsibility concentration in the main server module.
+
+Acceptance criteria:
+
+- `src/operatorConsole/server.ts` is materially smaller and focused on composition/route wiring rather than every implementation detail.
+- Shared operator-console types/interfaces live in dedicated modules with clear import boundaries.
+- High-complexity server logic is broken into helper methods/classes without changing observable behavior.
+- `npm test` and `npm run check` continue to pass after the refactor.
+
+## Task I: Refactor `src/operatorConsole/public/app.js`
+
+1. Break `src/operatorConsole/public/app.js` into smaller frontend modules and helpers so the operator-console client code is easier to navigate and maintain.
+2. Separate concerns such as timeline state, managed-instance UI actions, compare/navigation actions, and shared DOM helpers where it reduces file size and coupling.
+3. Evaluate whether a lightweight framework such as Alpine.js would materially reduce custom JavaScript and improve maintainability for this UI.
+4. If a framework is not adopted, document why the current modularized vanilla-JS approach is preferable for this console.
+
+Acceptance criteria:
+
+- `src/operatorConsole/public/app.js` is materially smaller or replaced by a clearer modular frontend structure.
+- Frontend responsibilities are split into smaller files/helpers with coherent ownership boundaries.
+- The Alpine.js evaluation is documented with a clear adopt/reject decision and rationale.
+- Operator-console behavior remains unchanged unless explicitly approved as part of the refactor.
+- `npm test` and `npm run check` continue to pass after the refactor.
+
+## Task J: Streamline Implementation and Architecture Alignment
+
+1. Review the current implementation against `docs/architecture/rust-doctor.md` and identify places where the code and architecture have diverged.
+2. Bring the implementation closer to the architecture where the document still reflects the intended design.
+3. Update the architecture document where the implementation has intentionally evolved and the code now reflects the better source of truth.
+4. Remove stale assumptions, outdated backlog references, and duplicate design intent between docs and code where they create confusion.
+
+Acceptance criteria:
+
+- Known implementation-vs-architecture mismatches are identified and resolved or explicitly documented.
+- `docs/architecture/rust-doctor.md` and the live codebase no longer disagree on major runtime behavior, responsibilities, or safety boundaries without explanation.
+- Follow-on backlog items clearly distinguish between implementation work and documentation updates.
+- The resulting architecture document is accurate enough to guide future work without needing constant correction from source code inspection.
 2. Add UI/API flows for:
    - listing managed instances
    - start
