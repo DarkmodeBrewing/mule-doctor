@@ -992,6 +992,16 @@ function renderComparisonSelectors(instances) {
   if (instances.some((instance) => instance.id === previousRight)) {
     right.value = previousRight;
   }
+  renderCompareTimelineControls();
+}
+
+function renderCompareTimelineControls() {
+  const leftId = document.getElementById("compare-left").value;
+  const rightId = document.getElementById("compare-right").value;
+  document.getElementById("view-compare-left-events").disabled = !leftId;
+  document.getElementById("view-compare-right-events").disabled = !rightId;
+  document.getElementById("view-compare-left-failures").disabled = !leftId;
+  document.getElementById("view-compare-right-failures").disabled = !rightId;
 }
 
 function renderInstancePresets(presets, errorText) {
@@ -1567,6 +1577,7 @@ renderSchedulerStatusCard();
 renderOperatorEvents([]);
 populateOperatorEventFilters();
 renderSelectedInstanceTimelineControls();
+renderCompareTimelineControls();
 
 function connectStream(url, targetId, statusId) {
   const stream = new EventSource(url, { withCredentials: true });
@@ -1609,6 +1620,8 @@ document.getElementById("refresh-llm-list").onclick = refreshLlmList;
 document.getElementById("refresh-proposals").onclick = refreshProposalList;
 document.getElementById("refresh-instances").onclick = refreshInstances;
 document.getElementById("refresh-instance-compare").onclick = refreshInstanceCompare;
+document.getElementById("compare-left").onchange = renderCompareTimelineControls;
+document.getElementById("compare-right").onchange = renderCompareTimelineControls;
 document.getElementById("refresh-target-status").onclick = refreshHealth;
 document.getElementById("refresh-scheduler-status").onclick = refreshHealth;
 document.getElementById("refresh-operator-events").onclick = refreshOperatorEvents;
@@ -1629,6 +1642,30 @@ document.getElementById("view-selected-instance-events").onclick = () => {
 document.getElementById("view-selected-instance-failures").onclick = () => {
   if (selectedInstanceId) {
     focusOperatorTimelineForInstance(selectedInstanceId, { view: "failures" });
+  }
+};
+document.getElementById("view-compare-left-events").onclick = () => {
+  const leftId = document.getElementById("compare-left").value;
+  if (leftId) {
+    focusOperatorTimelineForInstance(leftId, { view: "all" });
+  }
+};
+document.getElementById("view-compare-right-events").onclick = () => {
+  const rightId = document.getElementById("compare-right").value;
+  if (rightId) {
+    focusOperatorTimelineForInstance(rightId, { view: "all" });
+  }
+};
+document.getElementById("view-compare-left-failures").onclick = () => {
+  const leftId = document.getElementById("compare-left").value;
+  if (leftId) {
+    focusOperatorTimelineForInstance(leftId, { view: "failures" });
+  }
+};
+document.getElementById("view-compare-right-failures").onclick = () => {
+  const rightId = document.getElementById("compare-right").value;
+  if (rightId) {
+    focusOperatorTimelineForInstance(rightId, { view: "failures" });
   }
 };
 document.getElementById("operator-view-all").onclick = () => applyOperatorEventViewPreset("all");
