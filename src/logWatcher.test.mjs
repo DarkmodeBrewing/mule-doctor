@@ -63,3 +63,23 @@ test("LogWatcher preserves offset when a read fails", async () => {
     await tmp.cleanup();
   }
 });
+
+test("LogWatcher start tolerates log files created after startup", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const logPath = join(tmp.dir, "rust-mule.log");
+    const watcher = new LogWatcher(logPath, 10);
+
+    await watcher.start();
+    assert.deepEqual(watcher.getRecentLines(), []);
+    assert.equal(watcher.getOffset(), 0);
+
+    await writeFile(logPath, "late\n", "utf8");
+    await watcher.tail();
+
+    assert.deepEqual(watcher.getRecentLines(), ["late"]);
+    watcher.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});

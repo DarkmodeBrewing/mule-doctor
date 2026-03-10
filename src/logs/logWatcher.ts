@@ -5,31 +5,36 @@
 
 import { createReadStream, watch, type FSWatcher } from "fs";
 import { stat } from "fs/promises";
+import { dirname } from "path";
 import { createInterface } from "readline";
 
 const DEFAULT_BUFFER_LINES = 200;
 
 export class LogWatcher {
   private readonly filePath: string;
+  private readonly watchPath: string;
   private readonly maxLines: number;
   private buffer: string[] = [];
   private watcher: FSWatcher | undefined;
   private lastSize = 0;
+  private tailQueue: Promise<void> = Promise.resolve();
 
   constructor(filePath: string, maxLines = DEFAULT_BUFFER_LINES) {
     this.filePath = filePath;
+    this.watchPath = dirname(filePath);
     this.maxLines = maxLines;
   }
 
   /** Start watching the log file. Resolves once the initial tail is complete. */
   async start(): Promise<void> {
     await this.tail();
-    this.watcher = watch(this.filePath, { persistent: false }, (event) => {
-      if (event === "change") {
-        this.tail().catch((err) => log("warn", "logWatcher", `Tail error: ${String(err)}`));
+    this.watcher = watch(this.watchPath, { persistent: false }, (_event, filename) => {
+      if (typeof filename === "string" && filename.length > 0 && filename !== fileName(this.filePath)) {
+        return;
       }
+      this.tail().catch((err) => log("warn", "logWatcher", `Tail error: ${String(err)}`));
     });
-    log("info", "logWatcher", `Watching ${this.filePath}`);
+    log("info", "logWatcher", `Watching ${this.filePath} via ${this.watchPath}`);
   }
 
   /** Stop watching the log file. */
@@ -55,6 +60,12 @@ export class LogWatcher {
    * On the first call the last `maxLines` lines are ingested.
    */
   private async tail(): Promise<void> {
+    const run = this.tailQueue.then(() => this.readNewBytes(), () => this.readNewBytes());
+    this.tailQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async readNewBytes(): Promise<void> {
     let fileSize: number;
     try {
       const info = await stat(this.filePath);
@@ -95,4 +106,9 @@ export class LogWatcher {
 
 function log(level: string, module: string, msg: string): void {
   process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
+}
+
+function fileName(path: string): string {
+  const parts = path.split(/[/\\]/);
+  return parts[parts.length - 1] ?? path;
 }
