@@ -458,6 +458,10 @@ To reduce noise during active testing, the browser may also group adjacent repea
 client-side collapse/expand control while still allowing operators to fall back to the raw
 chronological list.
 
+The browser may additionally expose quick density controls for high-signal event classes such as
+target changes, run requests, and failed/unavailable cycles, layered on top of the existing
+timeline filters rather than replacing them.
+
 ---
 
 # LLM Tools
