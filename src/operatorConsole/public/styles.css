@@ -268,10 +268,10 @@ button:hover,
 
 .event-list li {
   list-style: none;
-  border: 1px solid rgba(48, 67, 88, 0.7);
-  border-radius: 14px;
-  padding: 12px;
-  background: rgba(10, 15, 22, 0.72);
+  border: 1px solid rgba(48, 67, 88, 0.8);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #08111a;
 }
 
 .event-badges {
@@ -404,13 +404,6 @@ ul {
   padding: 0;
   display: grid;
   gap: 8px;
-}
-
-.event-list li {
-  border: 1px solid rgba(48, 67, 88, 0.8);
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: #08111a;
 }
 
 .event-line {

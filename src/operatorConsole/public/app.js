@@ -202,7 +202,14 @@ function summarizeOperatorEvent(event) {
 }
 
 function describeEventTarget(target) {
-  if (!target || target.kind === "external") {
+  if (!target) {
+    return {
+      summary: "",
+      badge: "",
+      tone: "neutral",
+    };
+  }
+  if (target.kind === "external") {
     return {
       summary: "external target",
       badge: "external",
