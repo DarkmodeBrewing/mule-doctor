@@ -24,6 +24,8 @@ const OPERATOR_EVENT_VIEW_PRESETS = {
     signalRuns: false,
     signalFailures: false,
     eventType: "",
+    groupFilter: "",
+    instanceFilter: "",
   },
   failures: {
     grouping: true,
@@ -31,6 +33,8 @@ const OPERATOR_EVENT_VIEW_PRESETS = {
     signalRuns: false,
     signalFailures: true,
     eventType: "",
+    groupFilter: "",
+    instanceFilter: "",
   },
   targeting: {
     grouping: true,
@@ -38,6 +42,8 @@ const OPERATOR_EVENT_VIEW_PRESETS = {
     signalRuns: false,
     signalFailures: false,
     eventType: "",
+    groupFilter: "",
+    instanceFilter: "",
   },
   runs: {
     grouping: false,
@@ -45,6 +51,8 @@ const OPERATOR_EVENT_VIEW_PRESETS = {
     signalRuns: true,
     signalFailures: false,
     eventType: "",
+    groupFilter: "",
+    instanceFilter: "",
   },
 };
 let selectedInstanceId = null;
@@ -521,6 +529,8 @@ function applyOperatorEventViewPreset(name) {
   document.getElementById("operator-event-signal-runs").checked = preset.signalRuns;
   document.getElementById("operator-event-signal-failures").checked = preset.signalFailures;
   document.getElementById("operator-event-type-filter").value = preset.eventType;
+  document.getElementById("operator-event-group-filter").value = preset.groupFilter;
+  document.getElementById("operator-event-instance-filter").value = preset.instanceFilter;
   applyOperatorEventFilters();
 }
 
