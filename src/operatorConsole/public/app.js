@@ -56,6 +56,19 @@ const OPERATOR_EVENT_VIEW_PRESETS = {
   },
 };
 const DEFAULT_OPERATOR_EVENT_VIEW = "all";
+const OPERATOR_EVENT_VIEW_LABELS = {
+  all: "All",
+  failures: "Failures",
+  targeting: "Targeting",
+  runs: "Run activity",
+};
+const OPERATOR_EVENT_VIEW_STATE_KEYS = [
+  "grouping",
+  "signalTargets",
+  "signalRuns",
+  "signalFailures",
+  "eventType",
+];
 let selectedInstanceId = null;
 let currentObserver = null;
 let currentScheduledTarget = null;
@@ -503,7 +516,61 @@ function applyOperatorEventFilters() {
     }
     return true;
   });
+  renderOperatorTimelineContext({
+    groupFilter,
+    instanceFilter,
+    typeFilter,
+    signalFilters,
+  });
   renderOperatorEvents(filtered);
+}
+
+function renderOperatorTimelineContext({
+  groupFilter,
+  instanceFilter,
+  typeFilter,
+  signalFilters,
+}) {
+  const element = document.getElementById("operator-timeline-context");
+  const parts = [];
+  const viewLabel = detectOperatorTimelineViewLabel({
+    grouping: document.getElementById("operator-event-grouping-toggle").checked,
+    signalTargets: signalFilters.has("targets"),
+    signalRuns: signalFilters.has("runs"),
+    signalFailures: signalFilters.has("failures"),
+    eventType: typeFilter,
+  });
+
+  parts.push(`View ${viewLabel}`);
+  if (groupFilter) {
+    parts.push(`group ${groupFilter}`);
+  }
+  if (instanceFilter) {
+    parts.push(`instance ${instanceFilter}`);
+  }
+  if (typeFilter) {
+    const option = OPERATOR_EVENT_TYPE_OPTIONS.find((candidate) => candidate.value === typeFilter);
+    parts.push(`type ${option?.label || typeFilter}`);
+  }
+  if (!groupFilter && !instanceFilter && !typeFilter && signalFilters.size === 0) {
+    parts.push("all scopes");
+  }
+
+  element.textContent = `Timeline context: ${parts.join(" • ")}`;
+}
+
+function detectOperatorTimelineViewLabel(state) {
+  for (const [presetKey, label] of Object.entries(OPERATOR_EVENT_VIEW_LABELS)) {
+    const preset = OPERATOR_EVENT_VIEW_PRESETS[presetKey];
+    if (!preset) {
+      continue;
+    }
+    const matches = OPERATOR_EVENT_VIEW_STATE_KEYS.every((key) => state[key] === preset[key]);
+    if (matches) {
+      return label;
+    }
+  }
+  return "Custom";
 }
 
 function getSelectedOperatorEventSignals() {
