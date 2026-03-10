@@ -134,6 +134,13 @@ label {
   font-size: 0.78rem;
 }
 
+.toggle-row input[type="checkbox"],
+.toggle-chip input[type="checkbox"] {
+  margin: 0;
+  padding: 0;
+  width: auto;
+}
+
 .preset-help {
   margin: -4px 0 12px;
   padding: 10px 12px;
