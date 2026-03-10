@@ -106,19 +106,157 @@ function renderOperatorEvents(events, errorText) {
     const header = document.createElement("div");
     const title = document.createElement("strong");
     const meta = document.createElement("span");
+    const badges = document.createElement("div");
     const body = document.createElement("div");
+    const detail = document.createElement("div");
+    const summary = summarizeOperatorEvent(event);
     header.className = "event-line";
+    badges.className = "event-badges";
     body.className = "file-meta";
-    title.textContent = event.type;
+    detail.className = "event-detail";
+    title.textContent = summary.title;
     meta.className = "event-meta";
     meta.textContent = new Date(event.timestamp).toLocaleString();
-    body.textContent = event.message;
+    body.textContent = summary.summary;
+    detail.textContent = event.message;
     header.appendChild(title);
+    if (summary.targetLabel) {
+      badges.appendChild(buildEventBadge(summary.targetLabel, summary.targetTone));
+    }
+    if (summary.outcomeLabel) {
+      badges.appendChild(buildEventBadge(summary.outcomeLabel, summary.outcomeTone));
+    }
+    if (summary.actorLabel) {
+      badges.appendChild(buildEventBadge(summary.actorLabel, "neutral"));
+    }
+    if (badges.childNodes.length > 0) {
+      header.appendChild(badges);
+    }
     header.appendChild(meta);
     item.appendChild(header);
     item.appendChild(body);
+    if (detail.textContent && detail.textContent !== body.textContent) {
+      item.appendChild(detail);
+    }
     list.appendChild(item);
   }
+}
+
+function summarizeOperatorEvent(event) {
+  const target = describeEventTarget(event.target);
+  if (event.type === "diagnostic_target_changed") {
+    return {
+      title: "Target changed",
+      summary: target.summary ? `Active diagnostic target is now ${target.summary}.` : event.message,
+      targetLabel: target.badge,
+      targetTone: target.tone,
+      actorLabel: event.actor === "operator_console" ? "operator" : event.actor || "",
+      outcomeLabel: "",
+      outcomeTone: "neutral",
+    };
+  }
+  if (event.type === "observer_run_requested") {
+    return {
+      title: "Run requested",
+      summary: target.summary
+        ? `Operator requested an immediate observer cycle for ${target.summary}.`
+        : event.message,
+      targetLabel: target.badge,
+      targetTone: target.tone,
+      actorLabel: event.actor === "operator_console" ? "operator" : event.actor || "",
+      outcomeLabel: "",
+      outcomeTone: "neutral",
+    };
+  }
+  if (event.type === "observer_cycle_started") {
+    return {
+      title: "Cycle started",
+      summary: target.summary ? `Observer cycle started for ${target.summary}.` : event.message,
+      targetLabel: target.badge,
+      targetTone: target.tone,
+      actorLabel: "",
+      outcomeLabel: "",
+      outcomeTone: "neutral",
+    };
+  }
+  if (event.type === "observer_cycle_completed") {
+    return {
+      title: cycleOutcomeTitle(event.outcome),
+      summary: cycleOutcomeSummary(event.outcome, target.summary, event.message),
+      targetLabel: target.badge,
+      targetTone: target.tone,
+      actorLabel: "",
+      outcomeLabel: event.outcome || "",
+      outcomeTone: cycleOutcomeTone(event.outcome),
+    };
+  }
+  return {
+    title: event.type,
+    summary: event.message,
+    targetLabel: target.badge,
+    targetTone: target.tone,
+    actorLabel: event.actor || "",
+    outcomeLabel: event.outcome || "",
+    outcomeTone: cycleOutcomeTone(event.outcome),
+  };
+}
+
+function describeEventTarget(target) {
+  if (!target || target.kind === "external") {
+    return {
+      summary: "external target",
+      badge: "external",
+      tone: "external",
+    };
+  }
+  if (target.kind === "managed_instance") {
+    const instance = currentManagedInstances.find((candidate) => candidate.id === target.instanceId);
+    const group = instance?.preset?.prefix;
+    return {
+      summary: group ? `instance ${target.instanceId} in group ${group}` : `instance ${target.instanceId}`,
+      badge: group ? `${group}/${target.instanceId}` : target.instanceId,
+      tone: "instance",
+    };
+  }
+  return {
+    summary: String(target.kind),
+    badge: String(target.kind),
+    tone: "neutral",
+  };
+}
+
+function cycleOutcomeTitle(outcome) {
+  if (outcome === "success") return "Cycle succeeded";
+  if (outcome === "unavailable") return "Target unavailable";
+  if (outcome === "error") return "Cycle failed";
+  return "Cycle completed";
+}
+
+function cycleOutcomeSummary(outcome, targetSummary, fallback) {
+  if (outcome === "success") {
+    return targetSummary ? `Observer cycle completed successfully for ${targetSummary}.` : fallback;
+  }
+  if (outcome === "unavailable") {
+    return targetSummary ? `Observer could not reach ${targetSummary}.` : fallback;
+  }
+  if (outcome === "error") {
+    return targetSummary ? `Observer cycle failed while processing ${targetSummary}.` : fallback;
+  }
+  return fallback;
+}
+
+function cycleOutcomeTone(outcome) {
+  if (outcome === "success") return "success";
+  if (outcome === "unavailable") return "warn";
+  if (outcome === "error") return "error";
+  return "neutral";
+}
+
+function buildEventBadge(text, tone = "neutral") {
+  const badge = document.createElement("span");
+  badge.className = `event-badge ${tone}`;
+  badge.textContent = text;
+  return badge;
 }
 
 function populateSelect(id, options, selectedValue = "") {

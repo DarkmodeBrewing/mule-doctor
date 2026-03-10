@@ -446,6 +446,10 @@ selection each time.
 The operator timeline may be filtered in the browser by preset group, managed instance, and event
 type so operators can understand local control/history flows without scanning the full global event list.
 
+The timeline renderer should also present event-type-specific summaries and badges for target and
+outcome so operators can distinguish target changes, run requests, successes, unavailable targets,
+and failed cycles without mentally parsing raw event text first.
+
 ---
 
 # LLM Tools
