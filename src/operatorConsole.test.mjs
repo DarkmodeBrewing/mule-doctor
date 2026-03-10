@@ -1089,6 +1089,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(rootPageRes.status, 200);
     const rootHtml = await rootPageRes.text();
     assert.match(rootHtml, /instance-preset-help/);
+    assert.match(rootHtml, /operator-timeline-card/);
     assert.match(rootHtml, /operator-event-group-filter/);
     assert.match(rootHtml, /operator-event-instance-filter/);
     assert.match(rootHtml, /operator-event-type-filter/);

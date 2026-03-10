@@ -443,6 +443,10 @@ The group view may also provide shortcuts into the existing managed-instance com
 operators can compare two members of the same preset-created cluster without manually rebuilding the
 selection each time.
 
+Cluster cards and grouped member cards may also provide bounded shortcuts into the existing operator
+timeline by pre-filling the current client-side group and instance filters, rather than introducing
+separate event APIs or timeline storage semantics.
+
 The operator timeline may be filtered in the browser by preset group, managed instance, and event
 type so operators can understand local control/history flows without scanning the full global event list.
 

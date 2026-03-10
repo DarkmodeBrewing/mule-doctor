@@ -396,6 +396,7 @@ function renderInstanceGroups(instances) {
     const stop = document.createElement("button");
     const restart = document.createElement("button");
     const compare = document.createElement("button");
+    const events = document.createElement("button");
     const runningCount = group.instances.filter((instance) => instance.status === "running").length;
     const plannedCount = group.instances.filter((instance) => instance.status === "planned").length;
     const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
@@ -416,10 +417,12 @@ function renderInstanceGroups(instances) {
     stop.textContent = "Stop preset";
     restart.textContent = "Restart preset";
     compare.textContent = "Compare group";
+    events.textContent = "View group events";
     start.onclick = () => bulkMutatePreset(group.prefix, "start");
     stop.onclick = () => bulkMutatePreset(group.prefix, "stop");
     restart.onclick = () => bulkMutatePreset(group.prefix, "restart");
     compare.onclick = () => comparePresetGroup(group.instances);
+    events.onclick = () => focusOperatorTimelineForGroup(group.prefix);
     if (runningCount === group.instances.length) {
       start.disabled = true;
     }
@@ -441,6 +444,7 @@ function renderInstanceGroups(instances) {
     controls.appendChild(stop);
     controls.appendChild(restart);
     controls.appendChild(compare);
+    controls.appendChild(events);
     wrapper.appendChild(header);
     wrapper.appendChild(meta);
     wrapper.appendChild(stats);
@@ -495,6 +499,7 @@ function buildGroupMember(instance) {
   const inspect = document.createElement("button");
   const analyze = document.createElement("button");
   const useAsTarget = document.createElement("button");
+  const events = document.createElement("button");
 
   wrapper.className = "group-member";
   header.className = "instance-header";
@@ -506,10 +511,12 @@ function buildGroupMember(instance) {
   inspect.textContent = "Inspect";
   analyze.textContent = "Analyze";
   useAsTarget.textContent = "Use as target";
+  events.textContent = "View events";
   inspect.onclick = () => inspectInstance(instance.id);
   analyze.onclick = () => analyzeInstance(instance.id);
   useAsTarget.onclick = () =>
     updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
+  events.onclick = () => focusOperatorTimelineForInstance(instance.id);
   if (
     currentScheduledTarget?.kind === "managed_instance" &&
     currentScheduledTarget.instanceId === instance.id
@@ -536,10 +543,33 @@ function buildGroupMember(instance) {
   controls.appendChild(inspect);
   controls.appendChild(analyze);
   controls.appendChild(useAsTarget);
+  controls.appendChild(events);
   wrapper.appendChild(header);
   wrapper.appendChild(meta);
   wrapper.appendChild(controls);
   return wrapper;
+}
+
+function scrollToOperatorTimeline() {
+  const element = document.getElementById("operator-timeline-card");
+  if (element && typeof element.scrollIntoView === "function") {
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function focusOperatorTimelineForGroup(prefix) {
+  document.getElementById("operator-event-group-filter").value = prefix;
+  document.getElementById("operator-event-instance-filter").value = "";
+  applyOperatorEventFilters();
+  scrollToOperatorTimeline();
+}
+
+function focusOperatorTimelineForInstance(instanceId) {
+  const instance = currentManagedInstances.find((candidate) => candidate.id === instanceId);
+  document.getElementById("operator-event-instance-filter").value = instanceId;
+  document.getElementById("operator-event-group-filter").value = instance?.preset?.prefix || "";
+  applyOperatorEventFilters();
+  scrollToOperatorTimeline();
 }
 
 function targetLabel(target) {

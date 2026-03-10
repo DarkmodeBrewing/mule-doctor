@@ -179,6 +179,10 @@
   - adding clearer per-type event titles and summaries in the filtered timeline
   - surfacing target and outcome badges for event rows
   - keeping the slice UI-only on top of the existing `/api/operator/events` payload
+- Cluster-to-timeline shortcuts underway:
+  - adding `View group events` and `View events` actions to cluster cards and grouped member cards
+  - reusing the existing client-side timeline filters instead of adding new backend APIs
+  - scrolling operators directly to the timeline card after applying filters
 
 ## Key Decisions
 
@@ -205,6 +209,7 @@
 - Timeline filtering should stay UI-first until there is evidence that the existing event payload size is insufficient.
 - Preset definitions should carry enough operator-facing metadata that preset intent is visible in the console without requiring external docs.
 - Operator timeline readability should be improved in the browser before considering new event APIs or storage changes.
+- Cluster-event navigation should reuse the existing filtered timeline rather than introducing duplicate event views.
 
 ## Validation
 
