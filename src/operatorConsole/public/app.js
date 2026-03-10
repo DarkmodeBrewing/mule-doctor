@@ -503,7 +503,87 @@ function applyOperatorEventFilters() {
     }
     return true;
   });
+  renderOperatorTimelineContext({
+    groupFilter,
+    instanceFilter,
+    typeFilter,
+    signalFilters,
+  });
   renderOperatorEvents(filtered);
+}
+
+function renderOperatorTimelineContext({
+  groupFilter,
+  instanceFilter,
+  typeFilter,
+  signalFilters,
+}) {
+  const element = document.getElementById("operator-timeline-context");
+  const parts = [];
+  const viewLabel = detectOperatorTimelineViewLabel({
+    grouping: document.getElementById("operator-event-grouping-toggle").checked,
+    signalTargets: signalFilters.has("targets"),
+    signalRuns: signalFilters.has("runs"),
+    signalFailures: signalFilters.has("failures"),
+    eventType: typeFilter,
+  });
+
+  parts.push(`View ${viewLabel}`);
+  if (groupFilter) {
+    parts.push(`group ${groupFilter}`);
+  }
+  if (instanceFilter) {
+    parts.push(`instance ${instanceFilter}`);
+  }
+  if (typeFilter) {
+    const option = OPERATOR_EVENT_TYPE_OPTIONS.find((candidate) => candidate.value === typeFilter);
+    parts.push(`type ${option?.label || typeFilter}`);
+  }
+  if (!groupFilter && !instanceFilter && !typeFilter && signalFilters.size === 0) {
+    parts.push("all scopes");
+  }
+
+  element.textContent = `Timeline context: ${parts.join(" • ")}`;
+}
+
+function detectOperatorTimelineViewLabel(state) {
+  if (
+    state.grouping === OPERATOR_EVENT_VIEW_PRESETS.failures.grouping &&
+    state.signalTargets === OPERATOR_EVENT_VIEW_PRESETS.failures.signalTargets &&
+    state.signalRuns === OPERATOR_EVENT_VIEW_PRESETS.failures.signalRuns &&
+    state.signalFailures === OPERATOR_EVENT_VIEW_PRESETS.failures.signalFailures &&
+    state.eventType === OPERATOR_EVENT_VIEW_PRESETS.failures.eventType
+  ) {
+    return "Failures";
+  }
+  if (
+    state.grouping === OPERATOR_EVENT_VIEW_PRESETS.targeting.grouping &&
+    state.signalTargets === OPERATOR_EVENT_VIEW_PRESETS.targeting.signalTargets &&
+    state.signalRuns === OPERATOR_EVENT_VIEW_PRESETS.targeting.signalRuns &&
+    state.signalFailures === OPERATOR_EVENT_VIEW_PRESETS.targeting.signalFailures &&
+    state.eventType === OPERATOR_EVENT_VIEW_PRESETS.targeting.eventType
+  ) {
+    return "Targeting";
+  }
+  if (
+    state.grouping === OPERATOR_EVENT_VIEW_PRESETS.runs.grouping &&
+    state.signalTargets === OPERATOR_EVENT_VIEW_PRESETS.runs.signalTargets &&
+    state.signalRuns === OPERATOR_EVENT_VIEW_PRESETS.runs.signalRuns &&
+    state.signalFailures === OPERATOR_EVENT_VIEW_PRESETS.runs.signalFailures &&
+    state.eventType === OPERATOR_EVENT_VIEW_PRESETS.runs.eventType
+  ) {
+    return "Run activity";
+  }
+  if (
+    state.grouping === OPERATOR_EVENT_VIEW_PRESETS.all.grouping &&
+    state.signalTargets === OPERATOR_EVENT_VIEW_PRESETS.all.signalTargets &&
+    state.signalRuns === OPERATOR_EVENT_VIEW_PRESETS.all.signalRuns &&
+    state.signalFailures === OPERATOR_EVENT_VIEW_PRESETS.all.signalFailures &&
+    state.eventType === OPERATOR_EVENT_VIEW_PRESETS.all.eventType
+  ) {
+    return "All";
+  }
+  return "Custom";
 }
 
 function getSelectedOperatorEventSignals() {
