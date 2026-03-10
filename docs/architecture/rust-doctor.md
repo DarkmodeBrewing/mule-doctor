@@ -454,6 +454,10 @@ The timeline renderer should also present event-type-specific summaries and badg
 outcome so operators can distinguish target changes, run requests, successes, unavailable targets,
 and failed cycles without mentally parsing raw event text first.
 
+To reduce noise during active testing, the browser may also group adjacent repeated events with a
+client-side collapse/expand control while still allowing operators to fall back to the raw
+chronological list.
+
 ---
 
 # LLM Tools

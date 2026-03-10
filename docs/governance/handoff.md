@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/operator-timeline-readability`
+- `feature/operator-timeline-grouping`
 - PR: (pending)
 - Last updated: 2026-03-10
 
 ## Status
 
-- In progress; improving filtered operator timeline readability in the console.
-- Baseline dependency: PR #45 (merged to `main`).
+- In progress; adding grouped/collapsible operator timeline rendering in the console.
+- Baseline dependency: PR #46 (merged to `main`).
 
 ## Completed Work
 
@@ -179,6 +179,10 @@
   - adding clearer per-type event titles and summaries in the filtered timeline
   - surfacing target and outcome badges for event rows
   - keeping the slice UI-only on top of the existing `/api/operator/events` payload
+- Operator timeline grouping underway:
+  - grouping adjacent repeated events in the browser to reduce timeline noise
+  - adding collapse/expand behavior per grouped event block
+  - preserving a raw ungrouped view via a client-side toggle
 - Cluster-to-timeline shortcuts underway:
   - adding `View group events` and `View events` actions to cluster cards and grouped member cards
   - reusing the existing client-side timeline filters instead of adding new backend APIs
@@ -209,6 +213,7 @@
 - Timeline filtering should stay UI-first until there is evidence that the existing event payload size is insufficient.
 - Preset definitions should carry enough operator-facing metadata that preset intent is visible in the console without requiring external docs.
 - Operator timeline readability should be improved in the browser before considering new event APIs or storage changes.
+- Timeline grouping should remain client-side and optional so operators can still inspect the raw event order when needed.
 - Cluster-event navigation should reuse the existing filtered timeline rather than introducing duplicate event views.
 
 ## Validation
@@ -218,10 +223,10 @@
 
 ## Next Steps
 
-- Finish the operator-timeline-readability slice:
+- Finish the operator-timeline-grouping slice:
   - review
   - merge
 - After that, add richer cluster navigation rather than more scheduler scope:
   - optional instance- or group-scoped deep links from more console surfaces
-  - optional event grouping or collapse behavior if the timeline still feels noisy
+  - optional timeline density controls such as event-type pinning or group-level collapse defaults
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.
