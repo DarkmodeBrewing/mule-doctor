@@ -1079,6 +1079,9 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     });
     assert.equal(staticUiRes.status, 200);
     assert.equal(staticUiRes.headers.get("content-type"), "application/javascript; charset=utf-8");
+    const staticUiScript = await staticUiRes.text();
+    assert.match(staticUiScript, /Cycle succeeded/);
+    assert.match(staticUiScript, /event-badge/);
 
     const rootPageRes = await fetch(`${baseUrl}/`, {
       headers: { Cookie: cookie },

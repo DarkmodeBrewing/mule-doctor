@@ -261,6 +261,69 @@ button:hover,
   box-shadow: 0 0 14px rgba(140, 240, 198, 0.6);
 }
 
+.event-list {
+  display: grid;
+  gap: 10px;
+}
+
+.event-list li {
+  list-style: none;
+  border: 1px solid rgba(48, 67, 88, 0.8);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #08111a;
+}
+
+.event-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.event-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(48, 67, 88, 0.8);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.71rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  background: rgba(12, 17, 24, 0.92);
+}
+
+.event-badge.success {
+  border-color: rgba(140, 240, 198, 0.45);
+  color: var(--accent);
+}
+
+.event-badge.warn {
+  border-color: rgba(251, 191, 36, 0.45);
+  color: var(--warn);
+}
+
+.event-badge.error {
+  border-color: rgba(255, 107, 107, 0.45);
+  color: var(--error);
+}
+
+.event-badge.instance {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: var(--accent-strong);
+}
+
+.event-badge.external {
+  border-color: rgba(146, 169, 191, 0.45);
+}
+
+.event-detail {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -341,13 +404,6 @@ ul {
   padding: 0;
   display: grid;
   gap: 8px;
-}
-
-.event-list li {
-  border: 1px solid rgba(48, 67, 88, 0.8);
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: #08111a;
 }
 
 .event-line {
