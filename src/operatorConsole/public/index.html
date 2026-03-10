@@ -146,17 +146,19 @@
           </div>
           <ul id="instance-list"></ul>
         </div>
-        <div class="row">
-          <h3>Selected Instance</h3>
-          <div class="controls">
-            <button id="view-selected-instance-events" type="button">View selected events</button>
-            <button id="view-selected-instance-failures" type="button">View selected failures</button>
+        <div class="subsection">
+          <div class="row">
+            <h3>Selected Instance</h3>
+            <div class="controls">
+              <button id="view-selected-instance-events" type="button">View selected events</button>
+              <button id="view-selected-instance-failures" type="button">View selected failures</button>
+            </div>
           </div>
+          <pre id="instance-detail" class="muted"></pre>
+          <pre id="instance-diagnostics" class="muted"></pre>
+          <pre id="instance-analysis" class="muted"></pre>
+          <pre id="instance-logs" class="muted"></pre>
         </div>
-        <pre id="instance-detail" class="muted"></pre>
-        <pre id="instance-diagnostics" class="muted"></pre>
-        <pre id="instance-analysis" class="muted"></pre>
-        <pre id="instance-logs" class="muted"></pre>
       </article>
       <article class="card">
         <div class="row">
@@ -173,8 +175,8 @@
         <div class="controls">
           <button id="view-compare-left-events" type="button">View left events</button>
           <button id="view-compare-right-events" type="button">View right events</button>
-          <button id="view-compare-left-failures" type="button">Left failures</button>
-          <button id="view-compare-right-failures" type="button">Right failures</button>
+          <button id="view-compare-left-failures" type="button">View left failures</button>
+          <button id="view-compare-right-failures" type="button">View right failures</button>
         </div>
         <pre id="instance-compare" class="muted">Select two managed instances to compare.</pre>
       </article>

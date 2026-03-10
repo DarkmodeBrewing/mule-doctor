@@ -702,6 +702,7 @@ async function comparePresetGroup(instances) {
   const right = document.getElementById("compare-right");
   left.value = candidates[0];
   right.value = candidates[1];
+  renderCompareTimelineControls();
   await refreshInstanceCompare();
 }
 
@@ -1241,6 +1242,7 @@ async function refreshInstances() {
 async function refreshInstanceCompare() {
   const left = document.getElementById("compare-left").value;
   const right = document.getElementById("compare-right").value;
+  renderCompareTimelineControls();
   if (!left || !right) {
     setText("instance-compare", "Select two managed instances to compare.");
     return;
