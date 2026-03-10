@@ -2,15 +2,14 @@
 
 ## Branch
 
-- `feature/preset-metadata-help`
+- `feature/cluster-timeline-shortcuts`
 - PR: (pending)
 - Last updated: 2026-03-09
 
 ## Status
 
-- In progress; surfacing preset descriptions and layout help in the operator console.
-- Current branch PR: #44 (pending).
-- Baseline dependency: PR #43 (merged to `main`).
+- In progress; adding cluster-to-timeline shortcuts in the operator console.
+- Baseline dependency: PR #44 (merged to `main`).
 
 ## Completed Work
 
@@ -176,6 +175,10 @@
   - surfacing preset descriptions and node-layout summaries in the preset apply UI
   - reusing preset metadata on cluster cards so operators can see intended layout at a glance
   - keeping this slice UI-only with no lifecycle or scheduler changes
+- Cluster-to-timeline shortcuts underway:
+  - adding `View group events` and `View events` actions to cluster cards and grouped member cards
+  - reusing the existing client-side timeline filters instead of adding new backend APIs
+  - scrolling operators directly to the timeline card after applying filters
 
 ## Key Decisions
 
@@ -201,6 +204,7 @@
 - Group-level compare shortcuts should reuse the existing compare flow rather than introducing a new comparison backend.
 - Timeline filtering should stay UI-first until there is evidence that the existing event payload size is insufficient.
 - Preset definitions should carry enough operator-facing metadata that preset intent is visible in the console without requiring external docs.
+- Cluster-event navigation should reuse the existing filtered timeline rather than introducing duplicate event views.
 
 ## Validation
 
@@ -209,10 +213,10 @@
 
 ## Next Steps
 
-- Finish the preset metadata/help slice:
+- Finish the cluster-to-timeline shortcut slice:
   - review
   - merge
 - After that, add richer cluster navigation rather than more scheduler scope:
-  - deeper per-group drilldowns from cluster cards into the timeline
   - richer event summaries where the current filtered timeline remains too raw
+  - optional instance- or group-scoped deep links from more console surfaces
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.
