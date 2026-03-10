@@ -1084,6 +1084,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(staticUiScript, /event-badge/);
     assert.match(staticUiScript, /operator-event-grouping-toggle/);
     assert.match(staticUiScript, /Expand/);
+    assert.match(staticUiScript, /operator-event-signal-failures/);
 
     const rootPageRes = await fetch(`${baseUrl}/`, {
       headers: { Cookie: cookie },
@@ -1095,6 +1096,9 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /operator-event-group-filter/);
     assert.match(rootHtml, /operator-event-instance-filter/);
     assert.match(rootHtml, /operator-event-type-filter/);
+    assert.match(rootHtml, /operator-event-signal-targets/);
+    assert.match(rootHtml, /operator-event-signal-runs/);
+    assert.match(rootHtml, /operator-event-signal-failures/);
     assert.match(rootHtml, /operator-event-grouping-toggle/);
 
     const authorizedIndexHtmlRes = await fetch(`${baseUrl}/static/operatorConsole/index.html`, {

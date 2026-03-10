@@ -442,8 +442,12 @@ function applyOperatorEventFilters() {
   const groupFilter = document.getElementById("operator-event-group-filter").value;
   const instanceFilter = document.getElementById("operator-event-instance-filter").value;
   const typeFilter = document.getElementById("operator-event-type-filter").value;
+  const signalFilters = getSelectedOperatorEventSignals();
   const filtered = currentOperatorEvents.filter((event) => {
     if (typeFilter && event.type !== typeFilter) {
+      return false;
+    }
+    if (signalFilters.size > 0 && !matchesSelectedOperatorEventSignals(event, signalFilters)) {
       return false;
     }
     if (instanceFilter) {
@@ -461,6 +465,34 @@ function applyOperatorEventFilters() {
     return true;
   });
   renderOperatorEvents(filtered);
+}
+
+function getSelectedOperatorEventSignals() {
+  const selected = new Set();
+  if (document.getElementById("operator-event-signal-targets").checked) {
+    selected.add("targets");
+  }
+  if (document.getElementById("operator-event-signal-runs").checked) {
+    selected.add("runs");
+  }
+  if (document.getElementById("operator-event-signal-failures").checked) {
+    selected.add("failures");
+  }
+  return selected;
+}
+
+function matchesSelectedOperatorEventSignals(event, selectedSignals) {
+  const matchesTargets = event.type === "diagnostic_target_changed";
+  const matchesRuns = event.type === "observer_run_requested";
+  const matchesFailures =
+    (event.type === "observer_cycle_completed" &&
+      (event.outcome === "error" || event.outcome === "unavailable")) ||
+    /failed|unavailable/i.test(event.message);
+  return (
+    (selectedSignals.has("targets") && matchesTargets) ||
+    (selectedSignals.has("runs") && matchesRuns) ||
+    (selectedSignals.has("failures") && matchesFailures)
+  );
 }
 
 function partitionInstances(instances) {
@@ -1469,6 +1501,9 @@ document.getElementById("refresh-operator-events").onclick = refreshOperatorEven
 document.getElementById("operator-event-group-filter").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-instance-filter").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-type-filter").onchange = applyOperatorEventFilters;
+document.getElementById("operator-event-signal-targets").onchange = applyOperatorEventFilters;
+document.getElementById("operator-event-signal-runs").onchange = applyOperatorEventFilters;
+document.getElementById("operator-event-signal-failures").onchange = applyOperatorEventFilters;
 document.getElementById("operator-event-grouping-toggle").onchange = applyOperatorEventFilters;
 document.getElementById("instance-preset-id").onchange = renderSelectedPresetHelp;
 document.getElementById("run-instance-compare").onclick = () => {
