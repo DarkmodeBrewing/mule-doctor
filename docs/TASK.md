@@ -406,3 +406,4 @@ Acceptance criteria:
 - Filtered operator timeline rows summarize key event types with clearer target and outcome cues instead of relying on raw event text alone.
 - Operator can switch between grouped and raw timeline views, and repeated adjacent events can be expanded without losing chronological detail.
 - Operator has quick density controls for high-signal event classes such as target changes, run requests, and failures without rebuilding the base filters each time.
+- Operator can apply built-in timeline views such as `All`, `Failures`, `Targeting`, and `Run activity` to quickly reconfigure the current controls.

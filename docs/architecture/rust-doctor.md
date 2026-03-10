@@ -462,6 +462,10 @@ The browser may additionally expose quick density controls for high-signal event
 target changes, run requests, and failed/unavailable cycles, layered on top of the existing
 timeline filters rather than replacing them.
 
+If operators repeatedly use the same combinations, the browser may also expose a small set of
+built-in timeline views that apply those controls in one action while still leaving the underlying
+filters editable.
+
 ---
 
 # LLM Tools
