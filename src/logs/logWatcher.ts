@@ -70,8 +70,13 @@ export class LogWatcher {
     try {
       const info = await stat(this.filePath);
       fileSize = info.size;
-    } catch {
-      log("warn", "logWatcher", `Cannot stat ${this.filePath}`);
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code === "ENOENT") {
+        log("info", "logWatcher", `Log file not created yet: ${this.filePath}`);
+        return;
+      }
+      log("warn", "logWatcher", `Cannot stat ${this.filePath}: ${String(err)}`);
       return;
     }
 
