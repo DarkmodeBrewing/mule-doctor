@@ -56,6 +56,19 @@ const OPERATOR_EVENT_VIEW_PRESETS = {
   },
 };
 const DEFAULT_OPERATOR_EVENT_VIEW = "all";
+const OPERATOR_EVENT_VIEW_LABELS = {
+  all: "All",
+  failures: "Failures",
+  targeting: "Targeting",
+  runs: "Run activity",
+};
+const OPERATOR_EVENT_VIEW_STATE_KEYS = [
+  "grouping",
+  "signalTargets",
+  "signalRuns",
+  "signalFailures",
+  "eventType",
+];
 let selectedInstanceId = null;
 let currentObserver = null;
 let currentScheduledTarget = null;
@@ -547,41 +560,15 @@ function renderOperatorTimelineContext({
 }
 
 function detectOperatorTimelineViewLabel(state) {
-  if (
-    state.grouping === OPERATOR_EVENT_VIEW_PRESETS.failures.grouping &&
-    state.signalTargets === OPERATOR_EVENT_VIEW_PRESETS.failures.signalTargets &&
-    state.signalRuns === OPERATOR_EVENT_VIEW_PRESETS.failures.signalRuns &&
-    state.signalFailures === OPERATOR_EVENT_VIEW_PRESETS.failures.signalFailures &&
-    state.eventType === OPERATOR_EVENT_VIEW_PRESETS.failures.eventType
-  ) {
-    return "Failures";
-  }
-  if (
-    state.grouping === OPERATOR_EVENT_VIEW_PRESETS.targeting.grouping &&
-    state.signalTargets === OPERATOR_EVENT_VIEW_PRESETS.targeting.signalTargets &&
-    state.signalRuns === OPERATOR_EVENT_VIEW_PRESETS.targeting.signalRuns &&
-    state.signalFailures === OPERATOR_EVENT_VIEW_PRESETS.targeting.signalFailures &&
-    state.eventType === OPERATOR_EVENT_VIEW_PRESETS.targeting.eventType
-  ) {
-    return "Targeting";
-  }
-  if (
-    state.grouping === OPERATOR_EVENT_VIEW_PRESETS.runs.grouping &&
-    state.signalTargets === OPERATOR_EVENT_VIEW_PRESETS.runs.signalTargets &&
-    state.signalRuns === OPERATOR_EVENT_VIEW_PRESETS.runs.signalRuns &&
-    state.signalFailures === OPERATOR_EVENT_VIEW_PRESETS.runs.signalFailures &&
-    state.eventType === OPERATOR_EVENT_VIEW_PRESETS.runs.eventType
-  ) {
-    return "Run activity";
-  }
-  if (
-    state.grouping === OPERATOR_EVENT_VIEW_PRESETS.all.grouping &&
-    state.signalTargets === OPERATOR_EVENT_VIEW_PRESETS.all.signalTargets &&
-    state.signalRuns === OPERATOR_EVENT_VIEW_PRESETS.all.signalRuns &&
-    state.signalFailures === OPERATOR_EVENT_VIEW_PRESETS.all.signalFailures &&
-    state.eventType === OPERATOR_EVENT_VIEW_PRESETS.all.eventType
-  ) {
-    return "All";
+  for (const [presetKey, label] of Object.entries(OPERATOR_EVENT_VIEW_LABELS)) {
+    const preset = OPERATOR_EVENT_VIEW_PRESETS[presetKey];
+    if (!preset) {
+      continue;
+    }
+    const matches = OPERATOR_EVENT_VIEW_STATE_KEYS.every((key) => state[key] === preset[key]);
+    if (matches) {
+      return label;
+    }
   }
   return "Custom";
 }
