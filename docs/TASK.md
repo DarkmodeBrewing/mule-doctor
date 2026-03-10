@@ -402,3 +402,4 @@ Acceptance criteria:
 - Preset groups provide a quick path into the existing side-by-side compare view.
 - Preset apply controls explain the purpose and layout of the selected preset without requiring operators to read external docs first.
 - Operators can filter the timeline by group, managed instance, and event type.
+- Cluster cards and grouped members provide direct shortcuts into the existing filtered operator timeline.

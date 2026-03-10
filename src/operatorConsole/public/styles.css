@@ -196,6 +196,12 @@ label {
   font-size: 0.78rem;
 }
 
+.group-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .error-banner {
   border: 1px solid rgba(255, 107, 107, 0.35);
   border-radius: 12px;
