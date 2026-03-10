@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/operator-timeline-saved-views`
+- `feature/fix-managed-instance-client-cache`
 - PR: (pending)
 - Last updated: 2026-03-10
 
 ## Status
 
-- In progress; adding built-in saved views for the operator timeline.
-- Baseline dependency: PR #48 (merged to `main`).
+- In progress; fixing managed-instance diagnostics client invalidation and managed log-source freshness.
+- Baseline dependency: PR #49 (merged to `main`).
 
 ## Completed Work
 
@@ -191,6 +191,10 @@
   - adding built-in views such as `All`, `Failures`, `Targeting`, and `Run activity`
   - applying those views by setting the current client-side controls rather than introducing persistence
   - keeping the underlying controls editable after a view is applied
+- Managed-instance diagnostics/cache hardening underway:
+  - rebuilding cached managed-instance clients when API host/port or token paths change under the same instance id
+  - replacing one-shot managed log snapshots with reusable file-backed recent log sources
+  - adding regression tests for both client invalidation and log-source freshness
 - Cluster-to-timeline shortcuts underway:
   - adding `View group events` and `View events` actions to cluster cards and grouped member cards
   - reusing the existing client-side timeline filters instead of adding new backend APIs
@@ -225,6 +229,8 @@
 - Timeline density controls should bias the current view toward high-signal events without replacing the base filter model.
 - Saved timeline views should remain built-in and ephemeral until there is evidence that operators need persisted custom views.
 - Cluster-event navigation should reuse the existing filtered timeline rather than introducing duplicate event views.
+- Managed-instance diagnostics should not cache RustMuleClient instances across endpoint/token changes under the same instance id.
+- Managed-target analysis should use a reusable recent-log source rather than a one-shot static tail snapshot.
 
 ## Validation
 
@@ -233,7 +239,7 @@
 
 ## Next Steps
 
-- Finish the operator-timeline-saved-views slice:
+- Finish the managed-instance diagnostics/cache hardening slice:
   - review
   - merge
 - After that, add richer cluster navigation rather than more scheduler scope:

@@ -1,12 +1,9 @@
-import { open, stat } from "node:fs/promises";
 import type { RustMuleClient } from "./api/rustMuleClient.js";
 import type { RecentLogSource } from "./tools/toolRegistry.js";
 import type { DiagnosticTargetRef } from "./types/contracts.js";
 import { DiagnosticTargetService } from "./instances/diagnosticTargetService.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
-
-const MAX_LOG_BYTES = 256 * 1024;
-const DEFAULT_LOG_LINES = 200;
+import { RecentFileLogSource } from "./logs/recentFileLogSource.js";
 
 export interface ObserverTargetRuntime {
   target: DiagnosticTargetRef;
@@ -69,7 +66,7 @@ export class ObserverTargetResolver {
       target,
       label: descriptor.label,
       client: this.managedDiagnostics.getClientForInstance(record),
-      logSource: new StaticLogSource(await readTailLines(record.runtime.logPath, DEFAULT_LOG_LINES)),
+      logSource: new RecentFileLogSource(record.runtime.logPath),
     };
   }
 
@@ -82,51 +79,5 @@ export class ObserverTargetResolver {
           ? "external configured rust-mule client"
           : `managed instance ${target.instanceId}`,
     };
-  }
-}
-
-class StaticLogSource {
-  private readonly lines: string[];
-
-  constructor(lines: string[]) {
-    this.lines = lines;
-  }
-
-  getRecentLines(n?: number): string[] {
-    if (n === undefined) {
-      return [...this.lines];
-    }
-    return this.lines.slice(-n);
-  }
-}
-
-async function readTailLines(filePath: string, lineLimit: number): Promise<string[]> {
-  let fileSize: number;
-  try {
-    fileSize = (await stat(filePath)).size;
-  } catch {
-    return [];
-  }
-
-  const readStart = Math.max(0, fileSize - MAX_LOG_BYTES);
-  const file = await open(filePath, "r");
-  try {
-    const bytesToRead = fileSize - readStart;
-    const buffer = Buffer.alloc(bytesToRead);
-    const { bytesRead } = await file.read(buffer, 0, bytesToRead, readStart);
-    let text = buffer.subarray(0, bytesRead).toString("utf8");
-    if (readStart > 0) {
-      const firstNewline = text.indexOf("\n");
-      if (firstNewline >= 0) {
-        text = text.slice(firstNewline + 1);
-      }
-    }
-    return text
-      .split(/\r?\n/)
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0)
-      .slice(-lineLimit);
-  } finally {
-    await file.close();
   }
 }

@@ -8,7 +8,7 @@ import type { InstanceManager } from "./instanceManager.js";
 
 export class ManagedInstanceDiagnosticsService {
   private readonly instanceManager: InstanceManager;
-  private readonly clients = new Map<string, RustMuleClient>();
+  private readonly clients = new Map<string, { cacheKey: string; client: RustMuleClient }>();
   private readonly apiPrefix: string;
   private readonly httpTimeoutMs: number;
 
@@ -68,9 +68,10 @@ export class ManagedInstanceDiagnosticsService {
   }
 
   getClientForInstance(record: ManagedInstanceRecord): RustMuleClient {
+    const cacheKey = buildClientCacheKey(record);
     const existing = this.clients.get(record.id);
-    if (existing) {
-      return existing;
+    if (existing && existing.cacheKey === cacheKey) {
+      return existing.client;
     }
     const client = new RustMuleClient(
       `http://${record.apiHost}:${record.apiPort}`,
@@ -79,9 +80,18 @@ export class ManagedInstanceDiagnosticsService {
       record.runtime.debugTokenPath,
       this.httpTimeoutMs,
     );
-    this.clients.set(record.id, client);
+    this.clients.set(record.id, { cacheKey, client });
     return client;
   }
+}
+
+function buildClientCacheKey(record: ManagedInstanceRecord): string {
+  return [
+    record.apiHost,
+    String(record.apiPort),
+    record.runtime.tokenPath,
+    record.runtime.debugTokenPath,
+  ].join("|");
 }
 
 function unavailableSnapshot(
