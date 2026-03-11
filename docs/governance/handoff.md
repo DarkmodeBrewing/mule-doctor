@@ -2,14 +2,14 @@
 
 ## Branch
 
-- `feature/fix-managed-instance-client-cache`
-- PR: (pending)
-- Last updated: 2026-03-10
+- `main`
+- PR: #57 (merged)
+- Last updated: 2026-03-11
 
 ## Status
 
-- In progress; fixing managed-instance diagnostics client invalidation and managed log-source freshness.
-- Baseline dependency: PR #49 (merged to `main`).
+- Managed-instance diagnostics/cache hardening, operator-console navigation shortcuts, timeline-context feedback, and the first frontend modularization pass are now landed on `main`.
+- Next highest-value operator-console task: break down `src/operatorConsole/server.ts` by extracting types/interfaces and separating oversized route/helper logic into focused modules.
 
 ## Completed Work
 
@@ -192,13 +192,33 @@
   - applying those views by setting the current client-side controls rather than introducing persistence
   - keeping the underlying controls editable after a view is applied
 - Managed-instance diagnostics/cache hardening underway:
-  - rebuilding cached managed-instance clients when API host/port or token paths change under the same instance id
-  - replacing one-shot managed log snapshots with reusable file-backed recent log sources
-  - adding regression tests for both client invalidation and log-source freshness
+  - rebuilt cached managed-instance clients when API host/port or token paths change under the same instance id
+  - replaced one-shot managed log snapshots with reusable file-backed recent log sources
+  - added regression tests for both client invalidation and log-source freshness
 - Cluster-to-timeline shortcuts underway:
-  - adding `View group events` and `View events` actions to cluster cards and grouped member cards
-  - reusing the existing client-side timeline filters instead of adding new backend APIs
-  - scrolling operators directly to the timeline card after applying filters
+  - added `View group events` and `View events` actions to cluster cards and grouped member cards
+  - added failure-focused timeline shortcuts across preset groups, grouped members, standalone instances, the scheduled target card, the scheduler card, and the selected-instance section
+  - reused the existing client-side timeline filters and saved views instead of adding new backend APIs
+  - scrolls operators directly to the timeline card after applying filters
+- Compare-to-timeline shortcuts underway:
+  - added `View left events` / `View right events` and failure-focused compare actions near the compare surface
+  - reused the existing instance-scoped timeline navigation helper instead of adding backend APIs
+  - refreshed compare shortcut enabled state after both manual selector changes and programmatic compare selection updates
+  - aligned compare button wording with the rest of the console and wrapped the selected-instance section in the standard subsection layout after review follow-up
+- Timeline-context feedback completed:
+  - added a live operator-timeline context summary derived from the existing client-side filter/view state
+  - updated that summary when timeline shortcuts and manual filter changes apply new scope/view combinations
+  - kept the slice UI-only with no backend API changes
+- Operator-console frontend modularization completed:
+  - split `src/operatorConsole/public/app.js` into focused browser modules:
+    - `constants.js`
+    - `dom.js`
+    - `api.js`
+    - `statusCards.js`
+    - `timeline.js`
+    - `instances.js`
+  - kept `app.js` as the bootstrap/orchestration entrypoint
+  - updated operator-console tests to validate the new static asset/module layout
 
 ## Key Decisions
 
@@ -231,6 +251,7 @@
 - Cluster-event navigation should reuse the existing filtered timeline rather than introducing duplicate event views.
 - Managed-instance diagnostics should not cache RustMuleClient instances across endpoint/token changes under the same instance id.
 - Managed-target analysis should use a reusable recent-log source rather than a one-shot static tail snapshot.
+- Introduce frontend modularization before reevaluating any lightweight reactive framework so architecture changes are driven by clearer boundaries rather than by the current monolith shape.
 
 ## Validation
 
@@ -239,10 +260,11 @@
 
 ## Next Steps
 
-- Finish the managed-instance diagnostics/cache hardening slice:
-  - review
-  - merge
-- After that, add richer cluster navigation rather than more scheduler scope:
-  - optional instance- or group-scoped deep links from more console surfaces
-  - optional event-type pinning defaults or other small console ergonomics if repeated operator patterns emerge
+- Break down `src/operatorConsole/server.ts`:
+  - extract interfaces/types into dedicated files
+  - separate route handling, static-asset serving, auth/session helpers, and SSE/log streaming helpers where the boundaries are clear
+  - preserve the current API and auth behavior while making the server module smaller and easier to review
+- After that, continue frontend maintainability work only if still needed:
+  - optional further decomposition inside the new browser modules if one module remains disproportionately large
+  - reevaluate Alpine or another lightweight reactive layer only after the modularized frontend boundaries have proven stable
 - Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.
