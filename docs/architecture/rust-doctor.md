@@ -39,7 +39,7 @@ mule-doctor
 ├─ LLM diagnostics
 ├─ history storage
 ├─ Mattermost reporting
-└─ instance manager (future, optional)
+└─ instance manager (managed local test instances)
    │
    ├─ rust-mule instance A
    ├─ rust-mule instance B
@@ -55,8 +55,9 @@ The design intentionally separates:
 This keeps the system deterministic and easier to extend.
 
 The operator console is part of the architecture. It exposes a browser-accessible,
-read-only runtime view today and is expected to evolve into the main control
-surface for managed local test instances.
+token-protected runtime view and already serves as the bounded control surface
+for mule-doctor-managed local test instances, while external rust-mule nodes
+remain strictly observer/advisor scope.
 
 ---
 
@@ -191,10 +192,17 @@ Current phase:
 - token-protected access
 - JSON API for health, logs, and proposal artifacts
 - SSE streams for live app-log and rust-mule-log viewing
+- bounded managed-instance controls for mule-doctor-owned local test instances:
+  - create planned instance
+  - start / stop / restart instance
+  - apply preset
+  - start / stop / restart preset group
+  - inspect diagnostics / analysis / compare views
+  - set active diagnostic target
 
 Implementation note:
 
-- the current prototype may serve UI markup directly from backend code, but the intended steady-state architecture is to serve the operator console frontend as static assets, kept separate from backend auth/API/SSE route logic
+- the operator console frontend is served as static assets, kept separate from backend auth/API/SSE route logic
 
 Primary purpose:
 
@@ -322,22 +330,18 @@ Example state object:
 Example observer code:
 
 ```
-const state = loadState();
+const state = await runtimeStore.loadState();
 
 const health = getNetworkHealth(metrics);
 
-state.history.push({
+await runtimeStore.appendHistory({
   timestamp: new Date().toISOString(),
-  score: health
+  healthScore: health.score,
 });
 
-if (state.history.length > 200) {
-  state.history.shift();
-}
-
-state.lastHealthScore = health;
-
-saveState(state);
+await runtimeStore.updateState({
+  lastHealthScore: health.score,
+});
 ```
 
 ---
@@ -488,7 +492,7 @@ Returns routing table bucket distribution.
 
 ### searchLogs
 
-Searches rust-mule logs using ripgrep.
+Searches recent rust-mule logs using safe bounded substring matching.
 
 ### triggerBootstrap
 
@@ -534,8 +538,9 @@ Structured responses ensure the LLM reasons over machine-readable data instead o
 
 # Managed Instance Architecture
 
-Future versions of mule-doctor should support starting multiple local rust-mule
-instances from the operator console for integration and soak testing.
+Current versions of mule-doctor support bounded lifecycle management for
+multiple mule-doctor-owned local rust-mule instances from the operator console
+for integration and soak testing.
 
 This capability is intended for **mule-doctor-managed local test instances**
 only, not for external production nodes.
@@ -582,8 +587,10 @@ The `InstanceManager` is responsible for:
 - log locations
 - cleanup of mule-doctor-owned test instances
 
-The observer, runtime store, and reporting layers must be extended to support
-per-instance namespacing once this phase begins.
+The observer, runtime store, and reporting layers currently support
+single-target managed-instance observation through an explicit active
+diagnostic target. Broader concurrent per-instance observation/reporting
+namespacing remains deferred.
 
 When managed-instance observation is enabled, mule-doctor must still have a
 single explicit active diagnostic target for the scheduled observer loop. The
