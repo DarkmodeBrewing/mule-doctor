@@ -1,6 +1,6 @@
 # mule-doctor Implementation Task Plan
 
-Source of truth: `docs/architecture/rust-doctor.md`.
+Source of truth: `docs/architecture/mule-doctor.md`.
 
 This document translates the architecture into an implementation backlog.
 Each item is intended to become one or more focused feature branches and PRs.
@@ -322,7 +322,7 @@ Acceptance criteria:
 
 ## Task J: Streamline Implementation and Architecture Alignment
 
-1. Review the current implementation against `docs/architecture/rust-doctor.md` and identify places where the code and architecture have diverged.
+1. Review the current implementation against `docs/architecture/mule-doctor.md` and identify places where the code and architecture have diverged.
 2. Bring the implementation closer to the architecture where the document still reflects the intended design.
 3. Update the architecture document where the implementation has intentionally evolved and the code now reflects the better source of truth.
 4. Remove stale assumptions, outdated backlog references, and duplicate design intent between docs and code where they create confusion.
@@ -330,7 +330,7 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Known implementation-vs-architecture mismatches are identified and resolved or explicitly documented.
-- `docs/architecture/rust-doctor.md` and the live codebase no longer disagree on major runtime behavior, responsibilities, or safety boundaries without explanation.
+- `docs/architecture/mule-doctor.md` and the live codebase no longer disagree on major runtime behavior, responsibilities, or safety boundaries without explanation.
 - Follow-on backlog items clearly distinguish between implementation work and documentation updates.
 - The resulting architecture document is accurate enough to guide future work without needing constant correction from source code inspection.
 2. Add UI/API flows for:
