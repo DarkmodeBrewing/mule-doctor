@@ -238,6 +238,24 @@ label {
   font-size: 0.85rem;
 }
 
+.control-feedback {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.control-feedback.pending {
+  color: var(--warn);
+}
+
+.control-feedback.success {
+  color: var(--accent);
+}
+
+.control-feedback.error {
+  color: var(--error);
+}
+
 .instance-header {
   display: flex;
   align-items: center;
