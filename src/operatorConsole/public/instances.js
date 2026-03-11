@@ -35,8 +35,15 @@ export function createInstancesController({
     views.renderSelectedInstanceTimelineControls();
   }
 
+  function buildControlState(entry) {
+    return {
+      ...entry,
+      updatedAt: entry.updatedAt || new Date().toISOString(),
+    };
+  }
+
   function setControlState(collection, key, entry) {
-    state.instanceControlState[collection][key] = entry;
+    state.instanceControlState[collection][key] = buildControlState(entry);
     renderControlState();
   }
 
@@ -90,6 +97,8 @@ export function createInstancesController({
     setControlState("instances", id, {
       message: "Analysis in progress...",
       tone: "pending",
+      actionLabel: "Analyze",
+      outcome: "pending",
     });
     setText("instance-analysis", "Running analysis...");
     try {
@@ -98,12 +107,16 @@ export function createInstancesController({
       setControlState("instances", id, {
         message: "Analysis completed.",
         tone: "success",
+        actionLabel: "Analyze",
+        outcome: "applied",
       });
       await inspectInstance(id);
     } catch (err) {
       setControlState("instances", id, {
         message: `Analysis failed: ${String(err)}`,
         tone: "error",
+        actionLabel: "Analyze",
+        outcome: "failed",
       });
       setText("instance-analysis", `Failed to analyze instance: ${String(err)}`);
     }
@@ -132,6 +145,8 @@ export function createInstancesController({
         setControlState("instances", id, {
           message: "Restart cancelled.",
           tone: "neutral",
+          actionLabel: "Restart",
+          outcome: "cancelled",
         });
         return;
       }
@@ -141,11 +156,15 @@ export function createInstancesController({
         message: `${pendingVerb} instance...`,
         tone: "pending",
         pendingAction: action,
+        actionLabel: action[0].toUpperCase() + action.slice(1),
+        outcome: "pending",
       });
       const data = await postJson(`/api/instances/${encodeURIComponent(id)}/${action}`);
       setControlState("instances", data.instance.id, {
         message: `${pastTense} successfully.`,
         tone: "success",
+        actionLabel: action[0].toUpperCase() + action.slice(1),
+        outcome: "applied",
       });
       setInstanceFeedback(`${pastTense} instance ${data.instance.id}`);
       await refreshInstances();
@@ -154,6 +173,8 @@ export function createInstancesController({
       setControlState("instances", id, {
         message: `Action failed: ${String(err)}`,
         tone: "error",
+        actionLabel: action[0].toUpperCase() + action.slice(1),
+        outcome: "failed",
       });
       setInstanceFeedback(String(err), true);
     }
@@ -176,6 +197,8 @@ export function createInstancesController({
       setControlState("instances", data.instance.id, {
         message: "Created as planned instance.",
         tone: "success",
+        actionLabel: "Create",
+        outcome: "applied",
       });
       setInstanceFeedback(`created planned instance ${data.instance.id}`);
       await refreshInstances();
@@ -207,6 +230,8 @@ export function createInstancesController({
         setControlState("instances", instance.id, {
           message: `Created from preset ${data.applied.presetId}.`,
           tone: "success",
+          actionLabel: "Create",
+          outcome: "applied",
         });
       }
       setInstanceFeedback(
@@ -260,6 +285,9 @@ export function createInstancesController({
         state.instanceControlState.instances[instance.id] = {
           message: `${pastTense} via preset ${prefix}.`,
           tone: failureCount > 0 ? "error" : "success",
+          actionLabel: action[0].toUpperCase() + action.slice(1),
+          outcome: failureCount > 0 ? "failed" : "applied",
+          updatedAt: new Date().toISOString(),
         };
       }
       setInstanceFeedback(

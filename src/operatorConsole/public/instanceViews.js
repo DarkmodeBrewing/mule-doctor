@@ -53,6 +53,7 @@ export function createInstanceViewsController({
     const eventsButton = document.getElementById("view-selected-instance-events");
     const failuresButton = document.getElementById("view-selected-instance-failures");
     const feedback = document.getElementById("selected-instance-feedback");
+    const actionSummary = document.getElementById("selected-instance-action-summary");
     const hasSelectedInstance =
       typeof state.selectedInstanceId === "string" && state.selectedInstanceId.length > 0;
     const selectedFeedback = hasSelectedInstance
@@ -63,15 +64,28 @@ export function createInstanceViewsController({
     if (!hasSelectedInstance) {
       feedback.textContent = "No instance selected.";
       feedback.className = "muted";
+      actionSummary.textContent = "No control action recorded.";
+      actionSummary.className = "action-summary muted";
       return;
     }
     if (!selectedFeedback?.message) {
       feedback.textContent = `Selected instance: ${state.selectedInstanceId}`;
       feedback.className = "muted";
+      actionSummary.textContent = "No control action recorded for this instance.";
+      actionSummary.className = "action-summary muted";
       return;
     }
     feedback.textContent = `${state.selectedInstanceId}: ${selectedFeedback.message}`;
     feedback.className = getControlFeedbackClass(selectedFeedback);
+    if (!selectedFeedback.actionLabel || !selectedFeedback.outcome || !selectedFeedback.updatedAt) {
+      actionSummary.textContent = "No control action recorded for this instance.";
+      actionSummary.className = "action-summary muted";
+      return;
+    }
+    actionSummary.textContent =
+      `Last action: ${selectedFeedback.actionLabel} ` +
+      `(${selectedFeedback.outcome}) at ${new Date(selectedFeedback.updatedAt).toLocaleString()}`;
+    actionSummary.className = `action-summary ${selectedFeedback.tone || ""}`.trim();
   }
 
   function buildGroupMember(instance) {
