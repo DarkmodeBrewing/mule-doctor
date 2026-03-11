@@ -131,7 +131,7 @@ export function createInstancesController({
       ) {
         setControlState("instances", id, {
           message: "Restart cancelled.",
-          tone: "error",
+          tone: "neutral",
         });
         return;
       }
@@ -235,7 +235,7 @@ export function createInstancesController({
       ) {
         setControlState("presets", prefix, {
           message: `${action === "stop" ? "Stop" : "Restart"} cancelled.`,
-          tone: "error",
+          tone: "neutral",
         });
         return;
       }
