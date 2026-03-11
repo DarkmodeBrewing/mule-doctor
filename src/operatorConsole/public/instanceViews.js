@@ -184,8 +184,7 @@ export function createInstanceViewsController({
       const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
       const failedInstances = group.instances.filter((instance) => instance.status === "failed");
       const preset = instancePresets.lookupPresetDefinition(group.presetId);
-      const confirmText =
-        runningCount > 0 ? `${runningCount} running` : group.instances.length === 1 ? "1 instance" : `${group.instances.length} instances`;
+      const runningScopeText = `${runningCount} running`;
 
       wrapper.className = "group-card";
       header.className = "instance-header";
@@ -254,7 +253,9 @@ export function createInstanceViewsController({
         runningCount === group.instances.length ? "start unavailable: all instances already running" : "",
         runningCount === 0 ? "stop and restart unavailable: no running instances" : "",
         group.instances.length < 2 ? "compare unavailable: need at least two instances" : "",
-        runningCount > 0 ? `stop/restart confirmation covers ${confirmText}` : "",
+        runningCount > 0
+          ? `stop/restart will affect all ${group.instances.length} managed instances (${runningScopeText})`
+          : "",
         pendingAction ? `${pendingAction} in progress` : "",
       ]);
       if (failedInstances.length > 0) {
@@ -340,7 +341,7 @@ export function createInstanceViewsController({
       const isScheduledTarget = statusCards.sameTarget(scheduledTarget, instanceTarget);
       const isUnavailableTarget =
         isScheduledTarget && statusCards.isUnavailableObservedTarget(instanceTarget);
-      const restartRequiresRunning = instance.status !== "running";
+      const restartUnavailable = instance.status !== "running";
 
       if (instance.status === "running") {
         start.disabled = true;
@@ -395,7 +396,7 @@ export function createInstanceViewsController({
         "managed locally",
         instance.status === "running" ? "start unavailable: already running" : "",
         instance.status !== "running" ? "stop unavailable: not running" : "",
-        restartRequiresRunning ? "restart unavailable: instance is not running" : "restart requires confirmation",
+        restartUnavailable ? "restart unavailable: instance is not running" : "restart requires confirmation",
         isScheduledTarget ? "use as target unavailable: already selected" : "",
         pendingAction ? `${pendingAction} in progress` : "",
       ]);
