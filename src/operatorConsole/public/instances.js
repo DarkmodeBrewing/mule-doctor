@@ -1,4 +1,4 @@
-/* global document */
+/* global document, window */
 
 import {
   INSTANCE_ANALYSIS_PLACEHOLDER,
@@ -21,6 +21,13 @@ export function createInstancesController({
 }) {
   const compare = createInstanceCompareController({ fetchJson, setText });
   const presets = createInstancePresetsController({ state });
+
+  function confirmAction(message) {
+    if (typeof window !== "undefined" && typeof window.confirm === "function") {
+      return window.confirm(message);
+    }
+    return true;
+  }
 
   function renderControlState() {
     views.renderInstanceList(state.currentManagedInstances);
@@ -118,6 +125,16 @@ export function createInstancesController({
 
   async function mutateInstance(id, action) {
     try {
+      if (
+        action === "restart" &&
+        !confirmAction(`Restart managed instance ${id}? This will interrupt its current process.`)
+      ) {
+        setControlState("instances", id, {
+          message: "Restart cancelled.",
+          tone: "neutral",
+        });
+        return;
+      }
       const pendingVerb = action === "stop" ? "Stopping" : action === "start" ? "Starting" : "Restarting";
       const pastTense = action === "stop" ? "stopped" : action === "start" ? "started" : "restarted";
       setControlState("instances", id, {
@@ -209,6 +226,18 @@ export function createInstancesController({
     try {
       if (action !== "start" && action !== "stop" && action !== "restart") {
         throw new Error(`unsupported preset action: ${action}`);
+      }
+      if (
+        (action === "stop" || action === "restart") &&
+        !confirmAction(
+          `${action === "stop" ? "Stop" : "Restart"} all managed instances in preset group ${prefix}?`,
+        )
+      ) {
+        setControlState("presets", prefix, {
+          message: `${action === "stop" ? "Stop" : "Restart"} cancelled.`,
+          tone: "neutral",
+        });
+        return;
       }
       const pendingVerb = action === "stop" ? "Stopping" : action === "start" ? "Starting" : "Restarting";
       setControlState("presets", prefix, {
