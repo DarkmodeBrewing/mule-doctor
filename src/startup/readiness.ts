@@ -73,12 +73,20 @@ async function checkWritableDirectory(
   errors: string[],
   createIfMissing: boolean,
 ): Promise<void> {
+  const resolved = resolve(path);
   try {
-    const resolved = resolve(path);
-    if (createIfMissing) {
-      await mkdir(resolved, { recursive: true });
+    let info;
+    try {
+      info = await stat(resolved);
+    } catch (err) {
+      const code = getErrorCode(err);
+      if (code === "ENOENT" && createIfMissing) {
+        await mkdir(resolved, { recursive: true });
+        info = await stat(resolved);
+      } else {
+        throw err;
+      }
     }
-    const info = await stat(resolved);
     if (!info.isDirectory()) {
       errors.push(`${label} is not a directory: ${resolved}`);
       return;
@@ -94,10 +102,33 @@ async function checkWritableFileParent(
   label: string,
   errors: string[],
 ): Promise<void> {
-  const parent = dirname(resolve(path));
-  await checkWritableDirectory(parent, `${label} parent`, errors, true);
+  const resolved = resolve(path);
+  try {
+    const info = await stat(resolved);
+    if (!info.isFile()) {
+      errors.push(`${label} is not a file: ${resolved}`);
+      return;
+    }
+    await access(resolved, constants.W_OK);
+  } catch (err) {
+    const code = getErrorCode(err);
+    if (code === "ENOENT") {
+      const parent = dirname(resolved);
+      await checkWritableDirectory(parent, `${label} parent`, errors, true);
+      return;
+    }
+    errors.push(`${label} is not writable: ${describePathError(path, err)}`);
+  }
 }
 
 function describePathError(path: string, err: unknown): string {
   return `${resolve(path)} (${String(err)})`;
+}
+
+function getErrorCode(err: unknown): string | undefined {
+  if (typeof err !== "object" || err === null) {
+    return undefined;
+  }
+  const code = Reflect.get(err, "code");
+  return typeof code === "string" ? code : undefined;
 }

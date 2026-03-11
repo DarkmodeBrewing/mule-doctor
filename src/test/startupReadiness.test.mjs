@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -112,7 +112,30 @@ test("validateStartupReadiness rejects invalid custom state path parents", async
           statePath: join(tmp.dir, "not-a-dir", "state.json"),
         }),
       ),
-      /MULE_DOCTOR_STATE_PATH parent is not writable/,
+      /MULE_DOCTOR_STATE_PATH is not writable/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("validateStartupReadiness rejects existing read-only state files", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const statePath = join(tmp.dir, "mule-doctor", "state.json");
+    await writeFile(join(tmp.dir, "token"), "secret\n", "utf8");
+    await mkdir(join(tmp.dir, "logs"), { recursive: true });
+    await mkdir(join(tmp.dir, "mule-doctor"), { recursive: true });
+    await writeFile(statePath, "{}\n", "utf8");
+    await chmod(statePath, 0o400);
+
+    await assert.rejects(
+      validateStartupReadiness(
+        makeConfig(tmp, {
+          statePath,
+        }),
+      ),
+      /MULE_DOCTOR_STATE_PATH is not writable/,
     );
   } finally {
     await tmp.cleanup();
