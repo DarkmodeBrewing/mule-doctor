@@ -1167,6 +1167,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /operator-view-targeting/);
     assert.match(rootHtml, /operator-view-runs/);
     assert.match(rootHtml, /selected-instance-feedback/);
+    assert.match(rootHtml, /selected-instance-action-summary/);
 
     const authorizedIndexHtmlRes = await fetch(`${baseUrl}/static/operatorConsole/index.html`, {
       headers: { Cookie: cookie },

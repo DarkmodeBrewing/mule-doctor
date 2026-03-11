@@ -250,6 +250,13 @@ label {
   line-height: 1.5;
 }
 
+.action-summary {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
 .control-feedback.pending {
   color: var(--warn);
 }
