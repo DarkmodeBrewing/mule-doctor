@@ -16,6 +16,16 @@ if [ ! -x "$RUST_MULE_BIN" ]; then
   exit 1
 fi
 
+if [ ! -f "$RUST_MULE_CONFIG" ]; then
+  echo "rust-mule config file not found: $RUST_MULE_CONFIG" >&2
+  exit 1
+fi
+
+if [ ! -r "$RUST_MULE_CONFIG" ]; then
+  echo "rust-mule config file is not readable: $RUST_MULE_CONFIG" >&2
+  exit 1
+fi
+
 echo "Starting rust-mule..."
 if [ -n "$RUST_MULE_EXTRA_ARGS" ]; then
   # shellcheck disable=SC2206

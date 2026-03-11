@@ -22,6 +22,7 @@ import { ManagedInstanceAnalysisService } from "./instances/managedInstanceAnaly
 import { DiagnosticTargetService } from "./instances/diagnosticTargetService.js";
 import { ManagedInstancePresetService } from "./instances/managedInstancePresets.js";
 import { ObserverTargetResolver } from "./observerTargetResolver.js";
+import { validateStartupReadiness } from "./startup/readiness.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -106,6 +107,17 @@ async function main(): Promise<void> {
   const managedInstanceRootDir = optionalEnv("MULE_DOCTOR_MANAGED_INSTANCE_ROOT");
   const managedApiPortStart = parsePositiveIntEnv("MULE_DOCTOR_MANAGED_API_PORT_START");
   const managedApiPortEnd = parsePositiveIntEnv("MULE_DOCTOR_MANAGED_API_PORT_END");
+
+  await validateStartupReadiness({
+    tokenPath,
+    debugTokenPath,
+    logPath,
+    dataDir: resolvedDataDir,
+    statePath,
+    historyPath,
+    llmLogDir: llmLogDir ?? resolvedDataDir,
+    proposalDir,
+  });
 
   // Build components
   const rustMuleClient = new RustMuleClient(apiUrl, tokenPath, apiPrefix, debugTokenPath);
