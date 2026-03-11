@@ -1,10 +1,11 @@
 import type { ManagedInstanceRecord, ObserverCycleOutcome, RuntimeState } from "../types/contracts.js";
 import type { ConsoleManagedInstanceRecord } from "./types.js";
+import { DEFAULT_UI_HOST } from "./constants.js";
 import { RequestError } from "./http.js";
 
 export function sanitizeHost(rawHost: string | undefined): string {
   const host = rawHost?.trim();
-  if (!host) return "127.0.0.1";
+  if (!host) return DEFAULT_UI_HOST;
   return host;
 }
 
