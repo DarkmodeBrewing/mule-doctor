@@ -36,6 +36,7 @@ export interface HistoryEntry {
 
 export type OperatorEventType =
   | "diagnostic_target_changed"
+  | "managed_instance_control_applied"
   | "observer_run_requested"
   | "observer_cycle_started"
   | "observer_cycle_completed";

@@ -13,6 +13,7 @@ export const INSTANCE_PRESET_HELP_PLACEHOLDER =
 export const OPERATOR_EVENT_TYPE_OPTIONS = [
   { value: "", label: "All event types" },
   { value: "diagnostic_target_changed", label: "Target changes" },
+  { value: "managed_instance_control_applied", label: "Managed controls" },
   { value: "observer_run_requested", label: "Run requests" },
   { value: "observer_cycle_started", label: "Cycle starts" },
   { value: "observer_cycle_completed", label: "Cycle outcomes" },

@@ -80,6 +80,13 @@ export interface OperatorEventsStore {
     outcome?: ObserverCycleOutcome;
     actor?: string;
   }): Promise<void>;
+  appendMany?(inputs: {
+    type: OperatorEventEntry["type"];
+    message: string;
+    target?: DiagnosticTargetRef;
+    outcome?: ObserverCycleOutcome;
+    actor?: string;
+  }[]): Promise<void>;
 }
 
 export interface OperatorConsoleConfig {
