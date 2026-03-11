@@ -92,6 +92,17 @@ export function createTimelineEventsController(state, applyOperatorEventFilters)
         outcomeTone: "neutral",
       };
     }
+    if (event.type === "managed_instance_control_applied") {
+      return {
+        title: "Managed control",
+        summary: event.message,
+        targetLabel: target.badge,
+        targetTone: target.tone,
+        actorLabel: event.actor === "operator_console" ? "operator" : event.actor || "",
+        outcomeLabel: "",
+        outcomeTone: "neutral",
+      };
+    }
     if (event.type === "observer_cycle_started") {
       return {
         title: "Cycle started",

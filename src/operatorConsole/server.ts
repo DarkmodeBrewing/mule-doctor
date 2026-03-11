@@ -428,18 +428,12 @@ export class OperatorConsoleServer {
     } catch (err) {
       log("warn", "operatorConsole", `Failed to resolve active target for run-now event: ${String(err)}`);
     }
-    if (this.operatorEvents) {
-      try {
-        await this.operatorEvents.append({
-          type: "observer_run_requested",
-          message: `Operator triggered a scheduled observer cycle for ${describeDiagnosticTarget(target)}`,
-          target,
-          actor: "operator_console",
-        });
-      } catch (err) {
-        log("warn", "operatorConsole", `Failed to append run-now operator event: ${String(err)}`);
-      }
-    }
+    await this.appendOperatorEvent({
+      type: "observer_run_requested",
+      message: `Operator triggered a scheduled observer cycle for ${describeDiagnosticTarget(target)}`,
+      target,
+      actor: "operator_console",
+    });
     sendJson(res, 202, {
       ok: true,
       accepted: true,
@@ -590,6 +584,10 @@ export class OperatorConsoleServer {
     const created = await handleManagedInstanceErrors(() =>
       this.managedInstances!.createPlannedInstance({ id, apiPort }),
     );
+    await this.appendManagedInstanceControlEvent(
+      created,
+      `Operator created planned managed instance ${created.id}.`,
+    );
     sendJson(res, 201, { ok: true, instance: created });
   }
 
@@ -630,6 +628,11 @@ export class OperatorConsoleServer {
         prefix: typeof payload.prefix === "string" ? payload.prefix : "",
       }),
     );
+    await this.appendManagedInstanceControlEvents(
+      applied.instances,
+      (instance) =>
+        `Operator applied preset ${applied.presetId} and created planned managed instance ${instance.id}.`,
+    );
     sendJson(res, 201, { ok: true, applied });
   }
 
@@ -667,6 +670,7 @@ export class OperatorConsoleServer {
       sendJson(res, 405, { ok: false, error: "method not allowed" });
       return;
     }
+    const actionVerb = pastTenseVerb(action);
 
     const result = await handleManagedInstanceErrors(() => {
       if (action === "start") {
@@ -677,6 +681,10 @@ export class OperatorConsoleServer {
       }
       return this.managedInstancePresets!.restartPreset(prefix);
     });
+    await this.appendManagedInstanceControlEvents(
+      result.instances,
+      (instance) => `Operator ${actionVerb} managed instance ${instance.id} from preset group ${prefix}.`,
+    );
     if (action === "start") {
       sendJson(res, 200, { ok: true, result, started: result });
       return;
@@ -788,6 +796,7 @@ export class OperatorConsoleServer {
       sendJson(res, 405, { ok: false, error: "method not allowed" });
       return;
     }
+    const actionVerb = pastTenseVerb(action);
 
     let instance: ManagedInstanceRecord;
     if (action === "start") {
@@ -802,8 +811,49 @@ export class OperatorConsoleServer {
       sendJson(res, 404, { ok: false, error: "not found" });
       return;
     }
+    await this.appendManagedInstanceControlEvent(
+      instance,
+      `Operator ${actionVerb} managed instance ${instance.id}.`,
+    );
 
     sendJson(res, 200, { ok: true, instance });
+  }
+
+  private async appendManagedInstanceControlEvent(
+    instance: ManagedInstanceRecord,
+    message: string,
+  ): Promise<void> {
+    await this.appendOperatorEvent({
+      type: "managed_instance_control_applied",
+      message,
+      target: {
+        kind: "managed_instance",
+        instanceId: instance.id,
+      },
+      actor: "operator_console",
+    });
+  }
+
+  private async appendManagedInstanceControlEvents(
+    instances: ManagedInstanceRecord[],
+    buildMessage: (instance: ManagedInstanceRecord) => string,
+  ): Promise<void> {
+    for (const instance of instances) {
+      await this.appendManagedInstanceControlEvent(instance, buildMessage(instance));
+    }
+  }
+
+  private async appendOperatorEvent(
+    event: Parameters<NonNullable<OperatorConsoleConfig["operatorEvents"]>["append"]>[0],
+  ): Promise<void> {
+    if (!this.operatorEvents) {
+      return;
+    }
+    try {
+      await this.operatorEvents.append(event);
+    } catch (err) {
+      log("warn", "operatorConsole", `Failed to append operator event: ${String(err)}`);
+    }
   }
 
   private isSameOrigin(req: IncomingMessage): boolean {
@@ -981,4 +1031,11 @@ export class OperatorConsoleServer {
     req.on("close", finalize);
     res.on("close", finalize);
   }
+}
+
+function pastTenseVerb(action: string): string {
+  if (action === "start") return "started";
+  if (action === "stop") return "stopped";
+  if (action === "restart") return "restarted";
+  return `${action}ed`;
 }

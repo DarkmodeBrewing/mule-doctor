@@ -587,6 +587,7 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
   try {
     const rustLogPath = join(tmp.dir, "rust-mule.log");
     await writeFile(rustLogPath, "", "utf8");
+    const operatorEvents = new StubOperatorEvents();
 
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
@@ -598,6 +599,7 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
       getAppLogs: () => [],
       subscribeToAppLogs: () => () => {},
       managedInstancePresets: new StubManagedInstancePresets(),
+      operatorEvents,
     });
     await server.start();
 
@@ -629,6 +631,10 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
       applyPayload.applied.instances.map((instance) => instance.id),
       ["lab-a", "lab-b"],
     );
+    assert.equal(operatorEvents.events.length, 3);
+    assert.equal(operatorEvents.events[1].type, "managed_instance_control_applied");
+    assert.match(operatorEvents.events[1].message, /created planned managed instance lab-a/);
+    assert.equal(operatorEvents.events[2].target.instanceId, "lab-b");
 
     const invalidPresetRes = await fetch(`${server.publicAddress()}/api/instance-presets/apply`, {
       method: "POST",
@@ -665,6 +671,9 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
     assert.equal(startPresetPayload.result.action, "start");
     assert.equal(startPresetPayload.result.instances.length, 2);
     assert.equal(startPresetPayload.started.action, "start");
+    assert.equal(operatorEvents.events.length, 5);
+    assert.match(operatorEvents.events[3].message, /started managed instance lab-a/);
+    assert.match(operatorEvents.events[4].message, /started managed instance lab-b/);
 
     const stopPresetRes = await fetch(`${server.publicAddress()}/api/instance-presets/lab/stop`, {
       method: "POST",
@@ -676,6 +685,8 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
     assert.equal(stopPresetRes.status, 200);
     const stopPresetPayload = await stopPresetRes.json();
     assert.equal(stopPresetPayload.result.action, "stop");
+    assert.equal(operatorEvents.events.length, 7);
+    assert.match(operatorEvents.events[5].message, /stopped managed instance lab-a/);
 
     const restartPresetRes = await fetch(
       `${server.publicAddress()}/api/instance-presets/lab/restart`,
@@ -690,6 +701,9 @@ test("OperatorConsoleServer lists and applies managed instance presets", async (
     assert.equal(restartPresetRes.status, 200);
     const restartPresetPayload = await restartPresetRes.json();
     assert.equal(restartPresetPayload.result.action, "restart");
+    assert.equal(operatorEvents.events.length, 9);
+    assert.match(operatorEvents.events[7].message, /restarted managed instance lab-a/);
+    assert.match(operatorEvents.events[8].message, /restarted managed instance lab-b/);
 
     const malformedPrefixRes = await fetch(
       `${server.publicAddress()}/api/instance-presets/%E0/start`,
@@ -969,6 +983,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       "diff --git a/src/a.rs b/src/a.rs\n",
       "utf8",
     );
+    const operatorEventsStore = new StubOperatorEvents();
 
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
@@ -1006,7 +1021,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       managedInstances: new StubManagedInstances(),
       managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
       managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
-      operatorEvents: new StubOperatorEvents(),
+      operatorEvents: operatorEventsStore,
     });
     await server.start();
 
@@ -1219,6 +1234,11 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       body: JSON.stringify({ id: "c", apiPort: 19002 }),
     });
     assert.equal(createRes.status, 201);
+    assert.equal(operatorEventsStore.events.at(-1).type, "managed_instance_control_applied");
+    assert.match(
+      operatorEventsStore.events.at(-1).message,
+      /created planned managed instance c/,
+    );
 
     const startRes = await fetch(`${baseUrl}/api/instances/a/start`, {
       method: "POST",
@@ -1227,12 +1247,14 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(startRes.status, 200);
     const started = await startRes.json();
     assert.equal(started.instance.status, "running");
+    assert.match(operatorEventsStore.events.at(-1).message, /started managed instance a/);
 
     const stopRes = await fetch(`${baseUrl}/api/instances/a/stop`, {
       method: "POST",
       headers: { Cookie: cookie, Origin: baseUrl },
     });
     assert.equal(stopRes.status, 200);
+    assert.match(operatorEventsStore.events.at(-1).message, /stopped managed instance a/);
 
     const crossOriginRes = await fetch(`${baseUrl}/api/instances/a/start`, {
       method: "POST",
