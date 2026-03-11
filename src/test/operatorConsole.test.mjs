@@ -1098,6 +1098,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(staticUiScript, /from "\.\/constants\.js"/);
     assert.match(staticUiScript, /from "\.\/timeline\.js"/);
     assert.match(staticUiScript, /from "\.\/instances\.js"/);
+    assert.match(staticUiScript, /confirm/);
 
     const timelineModuleRes = await fetch(`${baseUrl}/static/operatorConsole/timeline.js`, {
       headers: { Cookie: cookie },
