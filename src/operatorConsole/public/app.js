@@ -28,7 +28,15 @@ const state = {
 
 const statusCards = createStatusCards(state, setText);
 const timeline = createTimelineController(state);
-let instances;
+const instances = createInstancesController({
+  state,
+  timeline,
+  statusCards,
+  setText,
+  fetchJson,
+  postJson,
+  refreshOperatorEvents,
+});
 
 async function refreshHealth() {
   const data = await fetchJson("/api/health");
@@ -72,16 +80,6 @@ async function refreshOperatorEvents() {
     timeline.renderOperatorEvents([], `Failed to load operator events: ${String(err)}`);
   }
 }
-
-instances = createInstancesController({
-  state,
-  timeline,
-  statusCards,
-  setText,
-  fetchJson,
-  postJson,
-  refreshOperatorEvents,
-});
 
 async function runObserverNow() {
   const button = document.getElementById("run-observer-now");

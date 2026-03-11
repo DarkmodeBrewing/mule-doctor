@@ -192,9 +192,7 @@ export function createStatusCards(state, setText) {
     state.currentScheduler = data.scheduler || null;
     if (data.observer) {
       observerLines.push(describeTarget(data.observer.activeDiagnosticTarget));
-      observerLines.push(
-        `Last observed target: ${describeTarget(data.observer.lastObservedTarget).replace("Active diagnostic target: ", "")}`,
-      );
+      observerLines.push(`Last observed target: ${targetLabel(data.observer.lastObservedTarget)}`);
       observerLines.push(`Last run: ${data.observer.lastRun || "unknown"}`);
       observerLines.push(
         `Last health score: ${

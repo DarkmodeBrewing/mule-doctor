@@ -526,9 +526,7 @@ export function createInstancesController({
       state.currentScheduledTarget = data.target;
       setText("observer-target", statusCards.describeTarget(data.target));
       statusCards.renderTargetStatusCard();
-      setInstanceFeedback(
-        `diagnostic target updated to ${statusCards.describeTarget(data.target).replace("Active diagnostic target: ", "")}`,
-      );
+      setInstanceFeedback(`diagnostic target updated to ${statusCards.targetLabel(data.target)}`);
       await refreshInstances();
       await refreshOperatorEvents();
     } catch (err) {
