@@ -52,6 +52,7 @@ Optional:
 - `npm run format` – run Prettier and write formatting changes
 - `npm run format:check` – verify formatting without writing changes
 - `npm test` – build + run basic smoke tests
+- `npm run smoke:docker` – build the Docker stack, wait for rust-mule + mule-doctor readiness, and validate persisted runtime artifacts under a disposable temp `/data`
 - `npm run check` – CI-friendly verification (`typecheck` + `lint` + `test`)
 
 ## Container Runtime
@@ -80,6 +81,20 @@ Entrypoint behavior:
 1. Starts rust-mule (`/opt/rust-mule/target/release/rust-mule --config /data/config.toml`)
 2. Waits for token file at `RUST_MULE_TOKEN_PATH` (`/data/token` by default)
 3. Starts mule-doctor (`node /app/dist/index.js`)
+
+End-to-end smoke harness:
+
+- `npm run smoke:docker` provisions a disposable temp data directory, starts the stack with `docker compose`, waits for:
+  - rust-mule token creation
+  - rust-mule `GET /api/v1/health`
+  - authorized mule-doctor `GET /api/health`
+- it then verifies persisted runtime artifacts under the mounted `/data`, including:
+  - `config.toml`
+  - `logs/rust-mule.log`
+  - `mule-doctor/state.json`
+  - `mule-doctor/history.json`
+  - `mule-doctor/operator-events.json`
+- by default the temp work directory is deleted on success and preserved on failure with captured compose logs for debugging
 
 Required production runtime inputs:
 
