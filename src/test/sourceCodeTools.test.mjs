@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { SourceCodeTools } from "../dist/tools/sourceCodeTools.js";
+import { SourceCodeTools } from "../../dist/tools/sourceCodeTools.js";
 
 async function makeTempSourceDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-source-tools-"));

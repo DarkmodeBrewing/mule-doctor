@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile, appendFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { OperatorConsoleServer } from "../dist/operatorConsole/server.js";
+import { OperatorConsoleServer } from "../../dist/operatorConsole/server.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-console-"));
@@ -1089,11 +1089,29 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     });
     assert.equal(timelineModuleRes.status, 200);
     const timelineModule = await timelineModuleRes.text();
-    assert.match(timelineModule, /Cycle succeeded/);
-    assert.match(timelineModule, /event-badge/);
-    assert.match(timelineModule, /operator-event-grouping-toggle/);
-    assert.match(timelineModule, /Expand/);
-    assert.match(timelineModule, /operator-event-signal-failures/);
+    assert.match(timelineModule, /from "\.\/timelineEvents\.js"/);
+    assert.match(timelineModule, /from "\.\/timelineFilters\.js"/);
+    assert.match(timelineModule, /createTimelineController/);
+
+    const timelineEventsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/timelineEvents.js`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(timelineEventsModuleRes.status, 200);
+    const timelineEventsModule = await timelineEventsModuleRes.text();
+    assert.match(timelineEventsModule, /Cycle succeeded/);
+    assert.match(timelineEventsModule, /event-badge/);
+    assert.match(timelineEventsModule, /Expand/);
+
+    const timelineFiltersModuleRes = await fetch(
+      `${baseUrl}/static/operatorConsole/timelineFilters.js`,
+      {
+        headers: { Cookie: cookie },
+      },
+    );
+    assert.equal(timelineFiltersModuleRes.status, 200);
+    const timelineFiltersModule = await timelineFiltersModuleRes.text();
+    assert.match(timelineFiltersModule, /operator-event-grouping-toggle/);
+    assert.match(timelineFiltersModule, /operator-event-signal-failures/);
 
     const constantsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/constants.js`, {
       headers: { Cookie: cookie },

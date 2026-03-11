@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { MattermostClient } from "../dist/integrations/mattermost.js";
+import { MattermostClient } from "../../dist/integrations/mattermost.js";
 
 const originalFetch = global.fetch;
 

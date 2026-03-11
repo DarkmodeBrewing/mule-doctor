@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { RustMuleClient } from "../dist/api/rustMuleClient.js";
+import { RustMuleClient } from "../../dist/api/rustMuleClient.js";
 
 const originalFetch = global.fetch;
 

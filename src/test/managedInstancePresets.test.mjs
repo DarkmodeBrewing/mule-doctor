@@ -4,8 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { InstanceManager } from "../dist/instances/instanceManager.js";
-import { ManagedInstancePresetService } from "../dist/instances/managedInstancePresets.js";
+import { InstanceManager } from "../../dist/instances/instanceManager.js";
+import { ManagedInstancePresetService } from "../../dist/instances/managedInstancePresets.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-presets-"));

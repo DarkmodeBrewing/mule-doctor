@@ -4,8 +4,8 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { RuntimeStore } from "../dist/storage/runtimeStore.js";
-import { UsageTracker } from "../dist/llm/usageTracker.js";
+import { RuntimeStore } from "../../dist/storage/runtimeStore.js";
+import { UsageTracker } from "../../dist/llm/usageTracker.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-usage-"));

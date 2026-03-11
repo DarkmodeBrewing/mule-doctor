@@ -4,7 +4,7 @@ import { chmod, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { LogWatcher } from "../dist/logs/logWatcher.js";
+import { LogWatcher } from "../../dist/logs/logWatcher.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-logwatcher-"));
