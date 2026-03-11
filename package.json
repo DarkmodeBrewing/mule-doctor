@@ -9,6 +9,7 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test src/test/*.test.mjs",
+    "smoke:docker": "bash scripts/smoke-compose.sh",
     "check": "npm run typecheck && npm run lint && npm test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
