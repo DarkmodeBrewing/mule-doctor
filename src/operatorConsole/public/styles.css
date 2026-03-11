@@ -244,6 +244,12 @@ label {
   color: var(--muted);
 }
 
+.action-context {
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .control-feedback.pending {
   color: var(--warn);
 }

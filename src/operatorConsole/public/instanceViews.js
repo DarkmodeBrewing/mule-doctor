@@ -8,6 +8,17 @@ export function createInstanceViewsController({
   compare,
   actions,
 }) {
+  function appendActionContext(container, lines) {
+    const filtered = lines.filter((line) => typeof line === "string" && line.length > 0);
+    if (!filtered.length) {
+      return;
+    }
+    const detail = document.createElement("div");
+    detail.className = "action-context";
+    detail.textContent = filtered.join(" • ");
+    container.appendChild(detail);
+  }
+
   function getControlFeedbackClass(entry) {
     if (entry?.tone === "error") {
       return "control-feedback error";
@@ -76,6 +87,9 @@ export function createInstanceViewsController({
     const failures = document.createElement("button");
     const controlState = state.instanceControlState.instances[instance.id];
     const pendingAction = controlState?.pendingAction;
+    const isScheduledTarget =
+      state.currentScheduledTarget?.kind === "managed_instance" &&
+      state.currentScheduledTarget.instanceId === instance.id;
 
     wrapper.className = "group-member";
     header.className = "instance-header";
@@ -96,18 +110,12 @@ export function createInstanceViewsController({
     events.onclick = () => timeline.focusOperatorTimelineForInstance(instance.id, { view: "all" });
     failures.onclick = () =>
       timeline.focusOperatorTimelineForInstance(instance.id, { view: "failures" });
-    if (
-      state.currentScheduledTarget?.kind === "managed_instance" &&
-      state.currentScheduledTarget.instanceId === instance.id
-    ) {
+    if (isScheduledTarget) {
       useAsTarget.disabled = true;
     }
 
     header.appendChild(title);
-    if (
-      state.currentScheduledTarget?.kind === "managed_instance" &&
-      state.currentScheduledTarget.instanceId === instance.id
-    ) {
+    if (isScheduledTarget) {
       const targetPill = document.createElement("span");
       targetPill.className = "pill target";
       targetPill.textContent = "scheduled target";
@@ -127,6 +135,11 @@ export function createInstanceViewsController({
     wrapper.appendChild(header);
     wrapper.appendChild(meta);
     wrapper.appendChild(controls);
+    appendActionContext(wrapper, [
+      "managed locally",
+      isScheduledTarget ? "already the scheduled target" : "",
+      pendingAction ? `${pendingAction} in progress` : "",
+    ]);
     appendControlFeedback(wrapper, controlState);
     if (pendingAction) {
       inspect.disabled = true;
@@ -171,6 +184,7 @@ export function createInstanceViewsController({
       const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
       const failedInstances = group.instances.filter((instance) => instance.status === "failed");
       const preset = instancePresets.lookupPresetDefinition(group.presetId);
+      const runningScopeText = `${runningCount} running`;
 
       wrapper.className = "group-card";
       header.className = "instance-header";
@@ -234,6 +248,16 @@ export function createInstanceViewsController({
       wrapper.appendChild(header);
       wrapper.appendChild(meta);
       wrapper.appendChild(stats);
+      appendActionContext(wrapper, [
+        `${group.instances.length} managed instances in scope`,
+        runningCount === group.instances.length ? "start unavailable: all instances already running" : "",
+        runningCount === 0 ? "stop and restart unavailable: no running instances" : "",
+        group.instances.length < 2 ? "compare unavailable: need at least two instances" : "",
+        runningCount > 0
+          ? `stop/restart will affect all ${group.instances.length} managed instances (${runningScopeText})`
+          : "",
+        pendingAction ? `${pendingAction} in progress` : "",
+      ]);
       if (failedInstances.length > 0) {
         const errorBanner = document.createElement("div");
         errorBanner.className = "error-banner";
@@ -317,6 +341,7 @@ export function createInstanceViewsController({
       const isScheduledTarget = statusCards.sameTarget(scheduledTarget, instanceTarget);
       const isUnavailableTarget =
         isScheduledTarget && statusCards.isUnavailableObservedTarget(instanceTarget);
+      const restartUnavailable = instance.status !== "running";
 
       if (instance.status === "running") {
         start.disabled = true;
@@ -367,6 +392,14 @@ export function createInstanceViewsController({
       wrapper.appendChild(header);
       wrapper.appendChild(meta);
       wrapper.appendChild(controls);
+      appendActionContext(wrapper, [
+        "managed locally",
+        instance.status === "running" ? "start unavailable: already running" : "",
+        instance.status !== "running" ? "stop unavailable: not running" : "",
+        restartUnavailable ? "restart unavailable: instance is not running" : "restart requires confirmation",
+        isScheduledTarget ? "use as target unavailable: already selected" : "",
+        pendingAction ? `${pendingAction} in progress` : "",
+      ]);
       appendControlFeedback(wrapper, controlState);
       li.appendChild(wrapper);
       ul.appendChild(li);
