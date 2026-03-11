@@ -62,6 +62,7 @@ import type {
   ManagedInstanceDiagnostics,
   ManagedInstancePresets,
   OperatorConsoleConfig,
+  OperatorEventsStore,
   ObserverControl,
 } from "./types.js";
 
@@ -670,7 +671,8 @@ export class OperatorConsoleServer {
       sendJson(res, 405, { ok: false, error: "method not allowed" });
       return;
     }
-    const actionVerb = pastTenseVerb(action);
+    const lifecycleAction = action;
+    const actionVerb = pastTenseVerb(lifecycleAction);
 
     const result = await handleManagedInstanceErrors(() => {
       if (action === "start") {
@@ -796,20 +798,22 @@ export class OperatorConsoleServer {
       sendJson(res, 405, { ok: false, error: "method not allowed" });
       return;
     }
-    const actionVerb = pastTenseVerb(action);
+    if (action !== "start" && action !== "stop" && action !== "restart") {
+      sendJson(res, 404, { ok: false, error: "not found" });
+      return;
+    }
+    const lifecycleAction = action;
+    const actionVerb = pastTenseVerb(lifecycleAction);
 
     let instance: ManagedInstanceRecord;
-    if (action === "start") {
+    if (lifecycleAction === "start") {
       instance = await handleManagedInstanceErrors(() => this.managedInstances!.startInstance(id));
-    } else if (action === "stop") {
+    } else if (lifecycleAction === "stop") {
       instance = await handleManagedInstanceErrors(() =>
         this.managedInstances!.stopInstance(id, "stopped from operator console"),
       );
-    } else if (action === "restart") {
-      instance = await handleManagedInstanceErrors(() => this.managedInstances!.restartInstance(id));
     } else {
-      sendJson(res, 404, { ok: false, error: "not found" });
-      return;
+      instance = await handleManagedInstanceErrors(() => this.managedInstances!.restartInstance(id));
     }
     await this.appendManagedInstanceControlEvent(
       instance,
@@ -838,19 +842,40 @@ export class OperatorConsoleServer {
     instances: ManagedInstanceRecord[],
     buildMessage: (instance: ManagedInstanceRecord) => string,
   ): Promise<void> {
-    for (const instance of instances) {
-      await this.appendManagedInstanceControlEvent(instance, buildMessage(instance));
+    if (instances.length === 0) {
+      return;
     }
+    await this.appendOperatorEvents(
+      instances.map((instance) => ({
+        type: "managed_instance_control_applied" as const,
+        message: buildMessage(instance),
+        target: {
+          kind: "managed_instance" as const,
+          instanceId: instance.id,
+        },
+        actor: "operator_console",
+      })),
+    );
   }
 
   private async appendOperatorEvent(
-    event: Parameters<NonNullable<OperatorConsoleConfig["operatorEvents"]>["append"]>[0],
+    event: Parameters<NonNullable<OperatorEventsStore["append"]>>[0],
+  ): Promise<void> {
+    await this.appendOperatorEvents([event]);
+  }
+
+  private async appendOperatorEvents(
+    events: Parameters<NonNullable<OperatorEventsStore["append"]>>[0][],
   ): Promise<void> {
     if (!this.operatorEvents) {
       return;
     }
     try {
-      await this.operatorEvents.append(event);
+      if (typeof this.operatorEvents.appendMany === "function") {
+        await this.operatorEvents.appendMany(events);
+      } else {
+        await Promise.all(events.map((event) => this.operatorEvents!.append(event)));
+      }
     } catch (err) {
       log("warn", "operatorConsole", `Failed to append operator event: ${String(err)}`);
     }
@@ -1033,9 +1058,8 @@ export class OperatorConsoleServer {
   }
 }
 
-function pastTenseVerb(action: string): string {
+function pastTenseVerb(action: "start" | "stop" | "restart"): string {
   if (action === "start") return "started";
   if (action === "stop") return "stopped";
-  if (action === "restart") return "restarted";
-  return `${action}ed`;
+  return "restarted";
 }

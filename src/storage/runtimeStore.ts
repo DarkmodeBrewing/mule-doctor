@@ -94,9 +94,16 @@ export class RuntimeStore {
   }
 
   async appendEvent(entry: OperatorEventEntry): Promise<void> {
+    await this.appendEvents([entry]);
+  }
+
+  async appendEvents(entries: OperatorEventEntry[]): Promise<void> {
+    if (entries.length === 0) {
+      return;
+    }
     await this.enqueueMutation(async () => {
       const events = await this.loadEvents();
-      events.push(entry);
+      events.push(...entries);
       if (events.length > this.eventsLimit) {
         events.splice(0, events.length - this.eventsLimit);
       }

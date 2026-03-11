@@ -194,3 +194,41 @@ test("RuntimeStore serializes concurrent operator event appends", async () => {
     await tmp.cleanup();
   }
 });
+
+test("RuntimeStore appends batched operator events in a single mutation", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir, eventsLimit: 5 });
+    await store.initialize();
+
+    await store.appendEvents([
+      {
+        timestamp: "t-1",
+        type: "managed_instance_control_applied",
+        message: "created a",
+        target: { kind: "managed_instance", instanceId: "a" },
+      },
+      {
+        timestamp: "t-2",
+        type: "managed_instance_control_applied",
+        message: "created b",
+        target: { kind: "managed_instance", instanceId: "b" },
+      },
+      {
+        timestamp: "t-3",
+        type: "observer_cycle_started",
+        message: "cycle",
+      },
+    ]);
+
+    const events = await store.loadEvents();
+    assert.equal(events.length, 3);
+    assert.deepEqual(
+      events.map((entry) => entry.message),
+      ["created a", "created b", "cycle"],
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});

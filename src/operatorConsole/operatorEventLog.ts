@@ -17,17 +17,26 @@ export class OperatorEventLog {
   }
 
   async append(input: AppendOperatorEventInput): Promise<void> {
+    await this.appendMany([input]);
+  }
+
+  async appendMany(inputs: AppendOperatorEventInput[]): Promise<void> {
     if (!this.runtimeStore) {
       return;
     }
-    await this.runtimeStore.appendEvent({
-      timestamp: new Date().toISOString(),
-      type: input.type,
-      message: input.message,
-      target: input.target,
-      outcome: input.outcome,
-      actor: input.actor,
-    });
+    if (inputs.length === 0) {
+      return;
+    }
+    await this.runtimeStore.appendEvents(
+      inputs.map((input) => ({
+        timestamp: new Date().toISOString(),
+        type: input.type,
+        message: input.message,
+        target: input.target,
+        outcome: input.outcome,
+        actor: input.actor,
+      })),
+    );
   }
 
   async listRecent(limit = 20): Promise<OperatorEventEntry[]> {
