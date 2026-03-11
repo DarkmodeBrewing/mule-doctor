@@ -4,9 +4,11 @@ import {
   INSTANCE_ANALYSIS_PLACEHOLDER,
   INSTANCE_DIAGNOSTICS_PLACEHOLDER,
   INSTANCE_LOGS_PLACEHOLDER,
-  INSTANCE_PRESET_HELP_PLACEHOLDER,
   LOG_LINE_LIMIT,
 } from "./constants.js";
+import { createInstanceCompareController } from "./instanceCompare.js";
+import { createInstancePresetsController } from "./instancePresets.js";
+import { createInstanceViewsController } from "./instanceViews.js";
 
 export function createInstancesController({
   state,
@@ -17,22 +19,8 @@ export function createInstancesController({
   postJson,
   refreshOperatorEvents,
 }) {
-  function lookupPresetDefinition(presetId) {
-    return state.currentInstancePresets.find((candidate) => candidate.id === presetId) || null;
-  }
-
-  function formatPresetSummary(preset) {
-    const nodeLabels = preset.nodes.map((node) => node.suffix).join(", ");
-    const nodeCount = preset.nodes.length;
-    return `${nodeCount} ${nodeCount === 1 ? "node" : "nodes"} • layout ${nodeLabels}`;
-  }
-
-  function buildGroupStat(label, value) {
-    const chip = document.createElement("span");
-    chip.className = "group-stat";
-    chip.textContent = `${label} ${value}`;
-    return chip;
-  }
+  const compare = createInstanceCompareController({ fetchJson, setText });
+  const presets = createInstancePresetsController({ state });
 
   function setInstanceFeedback(text, isError = false) {
     const element = document.getElementById("instance-feedback");
@@ -40,457 +28,9 @@ export function createInstancesController({
     element.className = isError ? "status" : "muted";
   }
 
-  function renderSelectedInstanceTimelineControls() {
-    const eventsButton = document.getElementById("view-selected-instance-events");
-    const failuresButton = document.getElementById("view-selected-instance-failures");
-    const hasSelectedInstance =
-      typeof state.selectedInstanceId === "string" && state.selectedInstanceId.length > 0;
-    eventsButton.disabled = !hasSelectedInstance;
-    failuresButton.disabled = !hasSelectedInstance;
-  }
-
-  function renderCompareTimelineControls() {
-    const leftId = document.getElementById("compare-left").value;
-    const rightId = document.getElementById("compare-right").value;
-    document.getElementById("view-compare-left-events").disabled = !leftId;
-    document.getElementById("view-compare-right-events").disabled = !rightId;
-    document.getElementById("view-compare-left-failures").disabled = !leftId;
-    document.getElementById("view-compare-right-failures").disabled = !rightId;
-  }
-
-  function buildGroupMember(instance) {
-    const wrapper = document.createElement("div");
-    const header = document.createElement("div");
-    const title = document.createElement("strong");
-    const controls = document.createElement("div");
-    const meta = document.createElement("div");
-    const inspect = document.createElement("button");
-    const analyze = document.createElement("button");
-    const useAsTarget = document.createElement("button");
-    const events = document.createElement("button");
-    const failures = document.createElement("button");
-
-    wrapper.className = "group-member";
-    header.className = "instance-header";
-    controls.className = "controls";
-    meta.className = "group-member-meta";
-    title.textContent = `${instance.id} (${instance.status})`;
-    meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}${instance.lastExit?.reason ? ` • last exit ${instance.lastExit.reason}` : ""}`;
-
-    inspect.textContent = "Inspect";
-    analyze.textContent = "Analyze";
-    useAsTarget.textContent = "Use as target";
-    events.textContent = "View events";
-    failures.textContent = "View failures";
-    inspect.onclick = () => inspectInstance(instance.id);
-    analyze.onclick = () => analyzeInstance(instance.id);
-    useAsTarget.onclick = () =>
-      updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
-    events.onclick = () => timeline.focusOperatorTimelineForInstance(instance.id, { view: "all" });
-    failures.onclick = () =>
-      timeline.focusOperatorTimelineForInstance(instance.id, { view: "failures" });
-    if (
-      state.currentScheduledTarget?.kind === "managed_instance" &&
-      state.currentScheduledTarget.instanceId === instance.id
-    ) {
-      useAsTarget.disabled = true;
-    }
-
-    header.appendChild(title);
-    if (
-      state.currentScheduledTarget?.kind === "managed_instance" &&
-      state.currentScheduledTarget.instanceId === instance.id
-    ) {
-      const targetPill = document.createElement("span");
-      targetPill.className = "pill target";
-      targetPill.textContent = "scheduled target";
-      header.appendChild(targetPill);
-    }
-    if (statusCards.isUnavailableObservedTarget({ kind: "managed_instance", instanceId: instance.id })) {
-      const degradedPill = document.createElement("span");
-      degradedPill.className = "pill degraded";
-      degradedPill.textContent = "unavailable";
-      header.appendChild(degradedPill);
-    }
-    controls.appendChild(inspect);
-    controls.appendChild(analyze);
-    controls.appendChild(useAsTarget);
-    controls.appendChild(events);
-    controls.appendChild(failures);
-    wrapper.appendChild(header);
-    wrapper.appendChild(meta);
-    wrapper.appendChild(controls);
-    return wrapper;
-  }
-
-  function renderInstanceGroups(instances) {
-    const list = document.getElementById("instance-groups");
-    list.replaceChildren();
-    const { groups } = timeline.partitionInstances(instances);
-
-    if (groups.length === 0) {
-      const item = document.createElement("li");
-      item.className = "muted";
-      item.textContent = "No preset groups created yet.";
-      list.appendChild(item);
-      return;
-    }
-
-    for (const group of groups) {
-      const item = document.createElement("li");
-      const wrapper = document.createElement("div");
-      const header = document.createElement("div");
-      const title = document.createElement("strong");
-      const meta = document.createElement("span");
-      const controls = document.createElement("div");
-      const stats = document.createElement("div");
-      const members = document.createElement("div");
-      const start = document.createElement("button");
-      const stop = document.createElement("button");
-      const restart = document.createElement("button");
-      const compare = document.createElement("button");
-      const events = document.createElement("button");
-      const failures = document.createElement("button");
-      const runningCount = group.instances.filter((instance) => instance.status === "running").length;
-      const plannedCount = group.instances.filter((instance) => instance.status === "planned").length;
-      const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
-      const failedInstances = group.instances.filter((instance) => instance.status === "failed");
-      const preset = lookupPresetDefinition(group.presetId);
-
-      wrapper.className = "group-card";
-      header.className = "instance-header";
-      controls.className = "controls";
-      stats.className = "group-stats";
-      members.className = "group-members";
-      title.textContent = `${group.prefix} (${preset?.name || group.presetId})`;
-      meta.className = "file-meta";
-      meta.textContent = preset
-        ? `${formatPresetSummary(preset)} • ${preset.description}`
-        : `${group.instances.length} instances`;
-      start.textContent = "Start preset";
-      stop.textContent = "Stop preset";
-      restart.textContent = "Restart preset";
-      compare.textContent = "Compare group";
-      events.textContent = "View group events";
-      failures.textContent = "View group failures";
-      start.onclick = () => bulkMutatePreset(group.prefix, "start");
-      stop.onclick = () => bulkMutatePreset(group.prefix, "stop");
-      restart.onclick = () => bulkMutatePreset(group.prefix, "restart");
-      compare.onclick = () => comparePresetGroup(group.instances);
-      events.onclick = () => timeline.focusOperatorTimelineForGroup(group.prefix, { view: "all" });
-      failures.onclick = () =>
-        timeline.focusOperatorTimelineForGroup(group.prefix, { view: "failures" });
-      if (runningCount === group.instances.length) {
-        start.disabled = true;
-      }
-      if (runningCount === 0) {
-        stop.disabled = true;
-        restart.disabled = true;
-      }
-      if (group.instances.length < 2) {
-        compare.disabled = true;
-      }
-
-      stats.appendChild(buildGroupStat("running", runningCount));
-      stats.appendChild(buildGroupStat("planned", plannedCount));
-      stats.appendChild(buildGroupStat("stopped", stoppedCount));
-      stats.appendChild(buildGroupStat("failed", failedInstances.length));
-
-      header.appendChild(title);
-      controls.appendChild(start);
-      controls.appendChild(stop);
-      controls.appendChild(restart);
-      controls.appendChild(compare);
-      controls.appendChild(events);
-      controls.appendChild(failures);
-      wrapper.appendChild(header);
-      wrapper.appendChild(meta);
-      wrapper.appendChild(stats);
-      if (failedInstances.length > 0) {
-        const errorBanner = document.createElement("div");
-        errorBanner.className = "error-banner";
-        errorBanner.textContent = failedInstances
-          .map((instance) => `${instance.id}: ${instance.lastError || "failed"}`)
-          .join(" | ");
-        wrapper.appendChild(errorBanner);
-      }
-      for (const instance of group.instances) {
-        members.appendChild(buildGroupMember(instance));
-      }
-      wrapper.appendChild(members);
-      wrapper.appendChild(controls);
-      item.appendChild(wrapper);
-      list.appendChild(item);
-    }
-  }
-
-  async function comparePresetGroup(instances) {
-    const candidates = instances
-      .map((instance) => instance.id)
-      .filter(Boolean)
-      .sort((left, right) => left.localeCompare(right));
-    if (candidates.length < 2) {
-      setText("instance-compare", "Need at least two instances in the preset group to compare.");
-      return;
-    }
-
-    const left = document.getElementById("compare-left");
-    const right = document.getElementById("compare-right");
-    left.value = candidates[0];
-    right.value = candidates[1];
-    renderCompareTimelineControls();
-    await refreshInstanceCompare();
-  }
-
-  function renderInstanceList(instances) {
-    renderComparisonSelectors(instances);
-    const ul = document.getElementById("instance-list");
-    ul.replaceChildren();
-    const { standalone } = timeline.partitionInstances(instances);
-    if (!standalone.length) {
-      const li = document.createElement("li");
-      li.textContent = "No standalone managed instances.";
-      li.className = "muted";
-      ul.appendChild(li);
-      return;
-    }
-
-    for (const instance of standalone) {
-      const li = document.createElement("li");
-      const wrapper = document.createElement("div");
-      const header = document.createElement("div");
-      const title = document.createElement("strong");
-      const meta = document.createElement("span");
-      const controls = document.createElement("div");
-      const start = document.createElement("button");
-      const stop = document.createElement("button");
-      const restart = document.createElement("button");
-      const inspect = document.createElement("button");
-      const analyze = document.createElement("button");
-      const useAsTarget = document.createElement("button");
-      const events = document.createElement("button");
-      const failures = document.createElement("button");
-
-      wrapper.className = "instance-entry";
-      header.className = "instance-header";
-      controls.className = "controls";
-      title.textContent = `${instance.id} (${instance.status})`;
-      meta.className = "file-meta";
-      meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}${instance.preset ? ` • preset ${instance.preset.prefix}/${instance.preset.presetId}` : ""}`;
-
-      inspect.textContent = "Inspect";
-      analyze.textContent = "Analyze";
-      useAsTarget.textContent = "Use as target";
-      events.textContent = "View events";
-      failures.textContent = "View failures";
-      start.textContent = "Start";
-      stop.textContent = "Stop";
-      restart.textContent = "Restart";
-
-      inspect.onclick = () => inspectInstance(instance.id);
-      analyze.onclick = () => analyzeInstance(instance.id);
-      useAsTarget.onclick = () =>
-        updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
-      events.onclick = () => timeline.focusOperatorTimelineForInstance(instance.id, { view: "all" });
-      failures.onclick = () =>
-        timeline.focusOperatorTimelineForInstance(instance.id, { view: "failures" });
-      start.onclick = () => mutateInstance(instance.id, "start");
-      stop.onclick = () => mutateInstance(instance.id, "stop");
-      restart.onclick = () => mutateInstance(instance.id, "restart");
-
-      const scheduledTarget =
-        state.currentScheduledTarget?.kind === "managed_instance" ? state.currentScheduledTarget : undefined;
-      const instanceTarget = { kind: "managed_instance", instanceId: instance.id };
-      const isScheduledTarget = statusCards.sameTarget(scheduledTarget, instanceTarget);
-      const isUnavailableTarget =
-        isScheduledTarget && statusCards.isUnavailableObservedTarget(instanceTarget);
-
-      if (instance.status === "running") {
-        start.disabled = true;
-      } else {
-        stop.disabled = true;
-      }
-      if (isScheduledTarget) {
-        useAsTarget.disabled = true;
-      }
-
-      header.appendChild(title);
-      if (isScheduledTarget) {
-        const targetPill = document.createElement("span");
-        targetPill.className = "pill target";
-        targetPill.textContent = "scheduled target";
-        header.appendChild(targetPill);
-      }
-      if (isUnavailableTarget) {
-        const degradedPill = document.createElement("span");
-        degradedPill.className = "pill degraded";
-        degradedPill.textContent = "unavailable";
-        header.appendChild(degradedPill);
-      }
-      controls.appendChild(inspect);
-      controls.appendChild(analyze);
-      controls.appendChild(useAsTarget);
-      controls.appendChild(events);
-      controls.appendChild(failures);
-      controls.appendChild(start);
-      controls.appendChild(stop);
-      controls.appendChild(restart);
-      wrapper.appendChild(header);
-      wrapper.appendChild(meta);
-      wrapper.appendChild(controls);
-      li.appendChild(wrapper);
-      ul.appendChild(li);
-    }
-  }
-
-  function renderComparisonSelectors(instances) {
-    const left = document.getElementById("compare-left");
-    const right = document.getElementById("compare-right");
-    const previousLeft = left.value;
-    const previousRight = right.value;
-    left.replaceChildren();
-    right.replaceChildren();
-
-    const placeholderLeft = document.createElement("option");
-    placeholderLeft.value = "";
-    placeholderLeft.textContent = "Select left instance";
-    left.appendChild(placeholderLeft);
-
-    const placeholderRight = document.createElement("option");
-    placeholderRight.value = "";
-    placeholderRight.textContent = "Select right instance";
-    right.appendChild(placeholderRight);
-
-    for (const instance of instances) {
-      const optionLeft = document.createElement("option");
-      optionLeft.value = instance.id;
-      optionLeft.textContent = `${instance.id} (${instance.status})`;
-      left.appendChild(optionLeft);
-
-      const optionRight = document.createElement("option");
-      optionRight.value = instance.id;
-      optionRight.textContent = `${instance.id} (${instance.status})`;
-      right.appendChild(optionRight);
-    }
-
-    if (instances.some((instance) => instance.id === previousLeft)) {
-      left.value = previousLeft;
-    }
-    if (instances.some((instance) => instance.id === previousRight)) {
-      right.value = previousRight;
-    }
-    renderCompareTimelineControls();
-  }
-
-  function renderInstancePresets(presets, errorText) {
-    const select = document.getElementById("instance-preset-id");
-    state.currentInstancePresets = presets.slice();
-    select.replaceChildren();
-    if (errorText) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = errorText;
-      select.appendChild(option);
-      select.disabled = true;
-      renderSelectedPresetHelp(errorText);
-      return;
-    }
-    if (!presets.length) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "No presets available";
-      select.appendChild(option);
-      select.disabled = true;
-      renderSelectedPresetHelp("No presets available.");
-      return;
-    }
-    select.disabled = false;
-    for (const preset of presets) {
-      const option = document.createElement("option");
-      option.value = preset.id;
-      option.textContent = `${preset.name} (${preset.nodes.length})`;
-      select.appendChild(option);
-    }
-    renderSelectedPresetHelp();
-  }
-
-  function renderSelectedPresetHelp(message = "") {
-    const element = document.getElementById("instance-preset-help");
-    const select = document.getElementById("instance-preset-id");
-    if (message) {
-      element.textContent = message;
-      return;
-    }
-    const preset = lookupPresetDefinition(select.value);
-    if (!preset) {
-      element.textContent = INSTANCE_PRESET_HELP_PLACEHOLDER;
-      return;
-    }
-
-    const code = document.createElement("div");
-    const title = document.createElement("strong");
-    const summary = document.createElement("div");
-    const description = document.createElement("div");
-    code.className = "preset-help-code";
-    code.textContent = preset.id;
-    title.textContent = preset.name;
-    summary.textContent = formatPresetSummary(preset);
-    description.textContent = preset.description;
-    element.replaceChildren(code, title, summary, description);
-  }
-
-  function summarizeComparisonSide(side) {
-    const snapshot = side.snapshot;
-    const instance = side.instance;
-    return {
-      id: instance.id,
-      status: instance.status,
-      api: `${instance.apiHost}:${instance.apiPort}`,
-      pid: instance.currentProcess?.pid ?? null,
-      available: snapshot.available,
-      reason: snapshot.reason || null,
-      observedAt: snapshot.observedAt,
-      peerCount: snapshot.peerCount ?? null,
-      routingBucketCount: snapshot.routingBucketCount ?? null,
-      healthScore: snapshot.networkHealth?.score ?? null,
-      lookup: snapshot.lookupStats || null,
-      lastError: instance.lastError || null,
-      lastExit: instance.lastExit || null,
-    };
-  }
-
-  async function refreshInstanceCompare() {
-    const left = document.getElementById("compare-left").value;
-    const right = document.getElementById("compare-right").value;
-    renderCompareTimelineControls();
-    if (!left || !right) {
-      setText("instance-compare", "Select two managed instances to compare.");
-      return;
-    }
-    try {
-      const data = await fetchJson(
-        `/api/instances/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`,
-      );
-      setText(
-        "instance-compare",
-        JSON.stringify(
-          {
-            comparedAt: new Date().toISOString(),
-            left: summarizeComparisonSide(data.comparison.left),
-            right: summarizeComparisonSide(data.comparison.right),
-          },
-          null,
-          2,
-        ),
-      );
-    } catch (err) {
-      setText("instance-compare", `Failed to compare instances: ${String(err)}`);
-    }
-  }
-
   async function inspectInstance(id) {
     state.selectedInstanceId = id;
-    renderSelectedInstanceTimelineControls();
+    views.renderSelectedInstanceTimelineControls();
     try {
       const [detail, diagnostics, logs] = await Promise.all([
         fetchJson(`/api/instances/${encodeURIComponent(id)}`),
@@ -509,7 +49,7 @@ export function createInstancesController({
 
   async function analyzeInstance(id) {
     state.selectedInstanceId = id;
-    renderSelectedInstanceTimelineControls();
+    views.renderSelectedInstanceTimelineControls();
     setText("instance-analysis", "Running analysis...");
     try {
       const result = await postJson(`/api/instances/${encodeURIComponent(id)}/analyze`);
@@ -607,14 +147,29 @@ export function createInstancesController({
     }
   }
 
+  const views = createInstanceViewsController({
+    state,
+    timeline,
+    statusCards,
+    instancePresets: presets,
+    compare,
+    actions: {
+      analyzeInstance,
+      bulkMutatePreset,
+      inspectInstance,
+      mutateInstance,
+      updateObserverTarget,
+    },
+  });
+
   async function refreshInstancePresets() {
     try {
       const data = await fetchJson("/api/instance-presets");
-      renderInstancePresets(data.presets || []);
-      renderInstanceGroups(state.currentManagedInstances);
+      presets.renderInstancePresets(data.presets || []);
+      views.renderInstanceGroups(state.currentManagedInstances);
     } catch (err) {
-      renderInstancePresets([], `presets unavailable: ${String(err)}`);
-      renderInstanceGroups(state.currentManagedInstances);
+      presets.renderInstancePresets([], `presets unavailable: ${String(err)}`);
+      views.renderInstanceGroups(state.currentManagedInstances);
     }
   }
 
@@ -622,8 +177,8 @@ export function createInstancesController({
     try {
       const data = await fetchJson("/api/instances");
       state.currentManagedInstances = data.instances;
-      renderInstanceList(data.instances);
-      renderInstanceGroups(data.instances);
+      views.renderInstanceList(data.instances);
+      views.renderInstanceGroups(data.instances);
       timeline.populateOperatorEventFilters();
       timeline.applyOperatorEventFilters();
       statusCards.renderTargetStatusCard();
@@ -631,7 +186,7 @@ export function createInstancesController({
         const exists = data.instances.some((instance) => instance.id === state.selectedInstanceId);
         if (!exists) {
           state.selectedInstanceId = null;
-          renderSelectedInstanceTimelineControls();
+          views.renderSelectedInstanceTimelineControls();
           setText("instance-detail", "Selected instance no longer exists.");
           setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
           setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
@@ -643,9 +198,9 @@ export function createInstancesController({
       state.selectedInstanceId = null;
       timeline.populateOperatorEventFilters();
       timeline.applyOperatorEventFilters();
-      renderInstanceGroups([]);
-      renderInstanceList([]);
-      renderSelectedInstanceTimelineControls();
+      views.renderInstanceGroups([]);
+      views.renderInstanceList([]);
+      views.renderSelectedInstanceTimelineControls();
       setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
       statusCards.renderTargetStatusCard();
     }
@@ -656,13 +211,13 @@ export function createInstancesController({
     applyInstancePreset,
     createInstance,
     inspectInstance,
-    refreshInstanceCompare,
+    refreshInstanceCompare: compare.refreshInstanceCompare,
     refreshInstancePresets,
     refreshInstances,
-    renderCompareTimelineControls,
-    renderInstancePresets,
-    renderSelectedInstanceTimelineControls,
-    renderSelectedPresetHelp,
+    renderCompareTimelineControls: compare.renderCompareTimelineControls,
+    renderInstancePresets: presets.renderInstancePresets,
+    renderSelectedInstanceTimelineControls: views.renderSelectedInstanceTimelineControls,
+    renderSelectedPresetHelp: presets.renderSelectedPresetHelp,
     setInstanceFeedback,
     updateObserverTarget,
   };
