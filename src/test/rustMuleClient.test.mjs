@@ -259,9 +259,13 @@ test("RustMuleClient traceLookup posts and returns normalized hops", async () =>
 
 test("RustMuleClient triggerBootstrap surfaces 403 for invalid debug token", async () => {
   const debugToken = await writeTempFile("debug.token", "debug-secret\n");
+  const calls = [];
 
   try {
-    global.fetch = async () => makeJsonResponse({ code: 403 }, 403);
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url, init });
+      return makeJsonResponse({ code: 403 }, 403);
+    };
 
     const client = new RustMuleClient(
       "http://127.0.0.1:17835",
@@ -275,6 +279,10 @@ test("RustMuleClient triggerBootstrap surfaces 403 for invalid debug token", asy
       () => client.triggerBootstrap({ pollIntervalMs: 1, maxWaitMs: 100 }),
       /failed with status 403/,
     );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "http://127.0.0.1:17835/api/v1/debug/bootstrap/restart");
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(calls[0].init.headers["X-Debug-Token"], "debug-secret");
   } finally {
     await debugToken.cleanup();
   }
@@ -282,9 +290,13 @@ test("RustMuleClient triggerBootstrap surfaces 403 for invalid debug token", asy
 
 test("RustMuleClient triggerBootstrap surfaces 404 when debug endpoints are disabled", async () => {
   const debugToken = await writeTempFile("debug.token", "debug-secret\n");
+  const calls = [];
 
   try {
-    global.fetch = async () => makeJsonResponse({ code: 404 }, 404);
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url, init });
+      return makeJsonResponse({ code: 404 }, 404);
+    };
 
     const client = new RustMuleClient(
       "http://127.0.0.1:17835",
@@ -298,6 +310,10 @@ test("RustMuleClient triggerBootstrap surfaces 404 when debug endpoints are disa
       () => client.triggerBootstrap({ pollIntervalMs: 1, maxWaitMs: 100 }),
       /failed with status 404/,
     );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "http://127.0.0.1:17835/api/v1/debug/bootstrap/restart");
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(calls[0].init.headers["X-Debug-Token"], "debug-secret");
   } finally {
     await debugToken.cleanup();
   }
@@ -305,9 +321,13 @@ test("RustMuleClient triggerBootstrap surfaces 404 when debug endpoints are disa
 
 test("RustMuleClient traceLookup surfaces 403 for invalid debug token", async () => {
   const debugToken = await writeTempFile("debug.token", "debug-secret\n");
+  const calls = [];
 
   try {
-    global.fetch = async () => makeJsonResponse({ code: 403 }, 403);
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url, init });
+      return makeJsonResponse({ code: 403 }, 403);
+    };
 
     const client = new RustMuleClient(
       "http://127.0.0.1:17835",
@@ -321,6 +341,10 @@ test("RustMuleClient traceLookup surfaces 403 for invalid debug token", async ()
       () => client.traceLookup("abcd", { pollIntervalMs: 1, maxWaitMs: 100 }),
       /failed with status 403/,
     );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "http://127.0.0.1:17835/api/v1/debug/trace_lookup");
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(calls[0].init.headers["X-Debug-Token"], "debug-secret");
   } finally {
     await debugToken.cleanup();
   }
@@ -328,9 +352,13 @@ test("RustMuleClient traceLookup surfaces 403 for invalid debug token", async ()
 
 test("RustMuleClient traceLookup surfaces 404 when debug endpoints are disabled", async () => {
   const debugToken = await writeTempFile("debug.token", "debug-secret\n");
+  const calls = [];
 
   try {
-    global.fetch = async () => makeJsonResponse({ code: 404 }, 404);
+    global.fetch = async (url, init = {}) => {
+      calls.push({ url, init });
+      return makeJsonResponse({ code: 404 }, 404);
+    };
 
     const client = new RustMuleClient(
       "http://127.0.0.1:17835",
@@ -344,6 +372,10 @@ test("RustMuleClient traceLookup surfaces 404 when debug endpoints are disabled"
       () => client.traceLookup("abcd", { pollIntervalMs: 1, maxWaitMs: 100 }),
       /failed with status 404/,
     );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "http://127.0.0.1:17835/api/v1/debug/trace_lookup");
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(calls[0].init.headers["X-Debug-Token"], "debug-secret");
   } finally {
     await debugToken.cleanup();
   }
