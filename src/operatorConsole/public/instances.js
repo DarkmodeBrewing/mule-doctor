@@ -176,27 +176,31 @@ export function createInstancesController({
     const prefix = String(formData.get("prefix") || "").trim();
 
     try {
-      state.instanceControlState.presets[prefix] = {
+      setControlState("presets", prefix, {
         message: `Applying preset ${presetId}...`,
         tone: "pending",
         pendingAction: "apply",
-      };
+      });
       const data = await postJson("/api/instance-presets/apply", { presetId, prefix });
-      state.instanceControlState.presets[prefix] = {
+      setControlState("presets", prefix, {
         message: `Preset ${data.applied.presetId} applied.`,
         tone: "success",
-      };
+      });
       for (const instance of data.applied.instances) {
-        state.instanceControlState.instances[instance.id] = {
+        setControlState("instances", instance.id, {
           message: `Created from preset ${data.applied.presetId}.`,
           tone: "success",
-        };
+        });
       }
       setInstanceFeedback(
         `applied preset ${data.applied.presetId}: ${data.applied.instances.map((instance) => instance.id).join(", ")}`,
       );
       await refreshInstances();
     } catch (err) {
+      setControlState("presets", prefix, {
+        message: `Apply failed: ${String(err)}`,
+        tone: "error",
+      });
       setInstanceFeedback(String(err), true);
     }
   }
