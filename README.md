@@ -87,6 +87,16 @@ Required production runtime inputs:
 - `OPENAI_API_KEY`
 - `MATTERMOST_WEBHOOK_URL`
 
+Runtime readiness validation:
+
+- mule-doctor validates required env-driven startup prerequisites before the observer loop starts
+- startup fails fast if:
+  - `RUST_MULE_TOKEN_PATH` is missing or unreadable
+  - `RUST_MULE_DEBUG_TOKEN_FILE` is configured but unreadable
+  - the parent directory of `RUST_MULE_LOG_PATH` does not exist or is inaccessible
+  - persistence/log/proposal directories under `MULE_DOCTOR_DATA_DIR`, `MULE_DOCTOR_LLM_LOG_DIR`, `MULE_DOCTOR_STATE_PATH`, or `MULE_DOCTOR_HISTORY_PATH` cannot be created/written
+- the container entrypoint separately validates that `/data/config.toml` exists and is readable before starting rust-mule
+
 Operator console (optional):
 
 - `GET /` serves a read-only UI for operator inspection.
