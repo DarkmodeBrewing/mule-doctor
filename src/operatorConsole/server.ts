@@ -4,137 +4,66 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { open, readFile, readdir, stat } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
-import type { Stats } from "node:fs";
 import { redactLine, redactText } from "../logs/redaction.js";
 import type {
-  AppliedManagedInstancePreset,
-  ApplyManagedInstancePresetInput,
   DiagnosticTargetRef,
-  ManagedInstanceAnalysisResult,
-  ManagedInstanceDiagnosticSnapshot,
-  ManagedInstancePresetActionResult,
-  ManagedInstancePresetDefinition,
   ManagedInstanceRecord,
-  ObserverCycleOutcome,
-  OperatorEventEntry,
   RuntimeState,
 } from "../types/contracts.js";
 import { describeDiagnosticTarget } from "../targets/describeTarget.js";
-
-const AUTH_COOKIE_NAME = "mule_doctor_ui_token";
-const DEFAULT_UI_HOST = "127.0.0.1";
-const DEFAULT_UI_PORT = 18080;
-const DEFAULT_LOG_LINES = 200;
-const DEFAULT_STREAM_LINES = 50;
-const DEFAULT_STREAM_POLL_MS = 1000;
-const DEFAULT_STREAM_HEARTBEAT_MS = 15000;
-const MAX_LOG_LINES = 2000;
-const MAX_STREAM_LINES = 500;
-const MAX_FILE_BYTES = 512 * 1024;
-const PUBLIC_UNAUTHENTICATED_ASSETS = new Set(["login.js", "styles.css"]);
-const STATIC_DIR = resolve(__dirname, "public");
-
-interface ListedFile {
-  name: string;
-  sizeBytes: number;
-  updatedAt: string;
-}
-
-interface AuthState {
-  ok: boolean;
-}
-
-interface StreamChunk {
-  nextOffset: number;
-  lines: string[];
-  partial: string;
-}
-
-export interface ManagedInstanceControl {
-  listInstances(): Promise<ManagedInstanceRecord[]>;
-  createPlannedInstance(input: { id: string; apiPort?: number }): Promise<ManagedInstanceRecord>;
-  startInstance(id: string): Promise<ManagedInstanceRecord>;
-  stopInstance(id: string, reason?: string): Promise<ManagedInstanceRecord>;
-  restartInstance(id: string): Promise<ManagedInstanceRecord>;
-}
-
-export interface ManagedInstanceDiagnostics {
-  getSnapshot(id: string): Promise<ManagedInstanceDiagnosticSnapshot>;
-}
-
-export interface ManagedInstancePresets {
-  listPresets(): ManagedInstancePresetDefinition[];
-  applyPreset(input: ApplyManagedInstancePresetInput): Promise<AppliedManagedInstancePreset>;
-  startPreset(prefix: string): Promise<ManagedInstancePresetActionResult>;
-  stopPreset(prefix: string): Promise<ManagedInstancePresetActionResult>;
-  restartPreset(prefix: string): Promise<ManagedInstancePresetActionResult>;
-}
-
-interface ManagedInstanceComparisonResponse {
-  left: {
-    instance: ConsoleManagedInstanceRecord;
-    snapshot: ManagedInstanceDiagnosticSnapshot;
-  };
-  right: {
-    instance: ConsoleManagedInstanceRecord;
-    snapshot: ManagedInstanceDiagnosticSnapshot;
-  };
-}
-
-type ConsoleManagedInstanceRecord = Omit<ManagedInstanceRecord, "runtime"> & {
-  runtime: Omit<ManagedInstanceRecord["runtime"], "logPath">;
-};
-
-export interface ManagedInstanceAnalysis {
-  analyze(id: string): Promise<ManagedInstanceAnalysisResult>;
-}
-
-export interface DiagnosticTargetControl {
-  getActiveTarget(): Promise<DiagnosticTargetRef>;
-  setActiveTarget(target: DiagnosticTargetRef): Promise<DiagnosticTargetRef>;
-}
-
-export interface ObserverControl {
-  getStatus(): {
-    started: boolean;
-    cycleInFlight: boolean;
-    intervalMs: number;
-    currentCycleStartedAt?: string;
-    currentCycleTarget?: DiagnosticTargetRef;
-  };
-  triggerRunNow(): { accepted: boolean; reason?: string };
-}
-
-export interface OperatorConsoleConfig {
-  authToken?: string;
-  host?: string;
-  port?: number;
-  rustMuleLogPath: string;
-  llmLogDir: string;
-  proposalDir: string;
-  getAppLogs: (n?: number) => string[];
-  getRuntimeState?: () => Promise<RuntimeState>;
-  subscribeToAppLogs?: (listener: (line: string) => void) => () => void;
-  rustMuleStreamPollMs?: number;
-  managedInstances?: ManagedInstanceControl;
-  managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
-  managedInstanceAnalysis?: ManagedInstanceAnalysis;
-  managedInstancePresets?: ManagedInstancePresets;
-  diagnosticTarget?: DiagnosticTargetControl;
-  observerControl?: ObserverControl;
-  operatorEvents?: {
-    listRecent(limit?: number): Promise<OperatorEventEntry[]>;
-    append(input: {
-      type: OperatorEventEntry["type"];
-      message: string;
-      target?: DiagnosticTargetRef;
-      outcome?: ObserverCycleOutcome;
-      actor?: string;
-    }): Promise<void>;
-  };
-}
+import {
+  AUTH_COOKIE_NAME,
+  DEFAULT_LOG_LINES,
+  DEFAULT_STREAM_HEARTBEAT_MS,
+  DEFAULT_STREAM_LINES,
+  DEFAULT_STREAM_POLL_MS,
+  DEFAULT_UI_PORT,
+  MAX_FILE_BYTES,
+  MAX_LOG_LINES,
+  MAX_STREAM_LINES,
+  PUBLIC_UNAUTHENTICATED_ASSETS,
+} from "./constants.js";
+import {
+  applySecurityHeaders,
+  getBearerToken,
+  getCookie,
+  getHeaderValue,
+  readFormBody,
+  readJsonBody,
+  redirect,
+  RequestError,
+  sendJson,
+  sendSseHeaders,
+  writeSseEvent,
+} from "./http.js";
+import {
+  getFileSize,
+  listFiles,
+  readFromAllowedDir,
+  readStreamChunk,
+  readTailLines,
+  sendStaticAsset,
+  sendStaticHtml,
+} from "./files.js";
+import {
+  clampInt,
+  handleManagedInstanceErrors,
+  log,
+  redactInstanceForConsole,
+  sanitizeCycleOutcome,
+  sanitizeHost,
+} from "./serverUtils.js";
+import type {
+  AuthState,
+  DiagnosticTargetControl,
+  ManagedInstanceAnalysis,
+  ManagedInstanceComparisonResponse,
+  ManagedInstanceControl,
+  ManagedInstanceDiagnostics,
+  ManagedInstancePresets,
+  OperatorConsoleConfig,
+  ObserverControl,
+} from "./types.js";
 
 export class OperatorConsoleServer {
   private readonly authToken: string | undefined;
@@ -1052,424 +981,4 @@ export class OperatorConsoleServer {
     req.on("close", finalize);
     res.on("close", finalize);
   }
-}
-
-function sanitizeCycleOutcome(value: RuntimeState["lastCycleOutcome"]): ObserverCycleOutcome | undefined {
-  return value === "success" || value === "unavailable" || value === "error" ? value : undefined;
-}
-
-function redactInstanceForConsole(instance: ManagedInstanceRecord): ConsoleManagedInstanceRecord {
-  return {
-    ...instance,
-    runtime: omitLogPath(instance.runtime),
-  };
-}
-
-function omitLogPath(
-  runtime: ManagedInstanceRecord["runtime"],
-): Omit<ManagedInstanceRecord["runtime"], "logPath"> {
-  const { logPath, ...rest } = runtime;
-  void logPath;
-  return rest;
-}
-
-function log(level: string, module: string, msg: string): void {
-  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
-}
-
-async function listFiles(
-  dirPath: string,
-  include: (fileName: string) => boolean,
-): Promise<ListedFile[]> {
-  try {
-    const entries = await readdir(dirPath, { withFileTypes: true });
-    const output: ListedFile[] = [];
-
-    for (const entry of entries) {
-      if (!entry.isFile()) continue;
-      if (!include(entry.name)) continue;
-
-      const absPath = resolve(dirPath, entry.name);
-      const fileStat = await stat(absPath);
-      output.push({
-        name: entry.name,
-        sizeBytes: fileStat.size,
-        updatedAt: fileStat.mtime.toISOString(),
-      });
-    }
-
-    output.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return output;
-  } catch (err) {
-    if (isNotFound(err)) return [];
-    throw err;
-  }
-}
-
-async function readTailLines(
-  filePath: string,
-  lineLimit: number,
-  maxBytes: number,
-): Promise<string[]> {
-  let fileStat: Stats;
-  try {
-    fileStat = await stat(filePath);
-  } catch (err) {
-    if (isNotFound(err)) return [];
-    throw err;
-  }
-
-  const readStart = Math.max(0, fileStat.size - maxBytes);
-  const file = await open(filePath, "r");
-  try {
-    const bytesToRead = fileStat.size - readStart;
-    const buffer = Buffer.alloc(bytesToRead);
-    const { bytesRead } = await file.read(buffer, 0, bytesToRead, readStart);
-    let text = buffer.subarray(0, bytesRead).toString("utf8");
-    if (readStart > 0) {
-      const firstNewline = text.indexOf("\n");
-      if (firstNewline >= 0) {
-        text = text.slice(firstNewline + 1);
-      }
-    }
-    return text
-      .split(/\r?\n/)
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0)
-      .slice(-lineLimit);
-  } finally {
-    await file.close();
-  }
-}
-
-async function readStreamChunk(
-  filePath: string,
-  offset: number,
-  priorPartial: string,
-  maxBytes: number,
-): Promise<StreamChunk> {
-  let fileStat: Stats;
-  try {
-    fileStat = await stat(filePath);
-  } catch (err) {
-    if (isNotFound(err)) {
-      return { nextOffset: 0, lines: [], partial: "" };
-    }
-    throw err;
-  }
-
-  let start = offset;
-  let partial = priorPartial;
-  if (fileStat.size < offset) {
-    start = 0;
-    partial = "";
-  }
-  if (fileStat.size === start) {
-    return { nextOffset: fileStat.size, lines: [], partial };
-  }
-
-  const desiredBytes = fileStat.size - start;
-  if (desiredBytes > maxBytes) {
-    start = fileStat.size - maxBytes;
-    partial = "";
-  }
-
-  const file = await open(filePath, "r");
-  try {
-    const buffer = Buffer.alloc(fileStat.size - start > maxBytes ? maxBytes : fileStat.size - start);
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, start);
-    const combined = partial + buffer.subarray(0, bytesRead).toString("utf8");
-    const rawLines = combined.split(/\r?\n/);
-    const nextPartial = combined.endsWith("\n") ? "" : rawLines.pop() ?? "";
-    return {
-      nextOffset: start + bytesRead,
-      lines: rawLines.map((line) => line.trimEnd()).filter((line) => line.length > 0),
-      partial: nextPartial,
-    };
-  } finally {
-    await file.close();
-  }
-}
-
-interface SafeReadResult {
-  name: string;
-  sizeBytes: number;
-  truncated: boolean;
-  content: string;
-}
-
-class RequestError extends Error {
-  readonly statusCode: number;
-
-  constructor(statusCode: number, message: string) {
-    super(message);
-    this.statusCode = statusCode;
-    this.name = "RequestError";
-  }
-}
-
-async function readFromAllowedDir(
-  baseDir: string,
-  fileNameRaw: string,
-  maxBytes: number,
-): Promise<SafeReadResult> {
-  const fileName = fileNameRaw.trim();
-  if (!fileName || !/^[a-zA-Z0-9._-]+$/.test(fileName)) {
-    throw new RequestError(400, `invalid file name: ${fileNameRaw}`);
-  }
-
-  const base = resolve(baseDir);
-  const target = resolve(baseDir, fileName);
-  const rel = relative(base, target);
-  if (rel.startsWith("..") || isAbsolute(rel) || (!target.startsWith(base + sep) && target !== base)) {
-    throw new RequestError(400, "path escapes allowed directory");
-  }
-
-  let fileStat: Stats;
-  try {
-    fileStat = await stat(target);
-  } catch (err) {
-    if (isNotFound(err)) {
-      throw new RequestError(404, `file not found: ${fileName}`);
-    }
-    throw err;
-  }
-  if (!fileStat.isFile()) {
-    throw new RequestError(404, `not a regular file: ${fileName}`);
-  }
-
-  const file = await open(target, "r");
-  try {
-    const bytes = Math.min(fileStat.size, maxBytes);
-    const buffer = Buffer.alloc(bytes);
-    const { bytesRead } = await file.read(buffer, 0, bytes, 0);
-    return {
-      name: fileName,
-      sizeBytes: fileStat.size,
-      truncated: fileStat.size > maxBytes,
-      content: buffer.subarray(0, bytesRead).toString("utf8"),
-    };
-  } finally {
-    await file.close();
-  }
-}
-
-function sanitizeHost(rawHost: string | undefined): string {
-  const host = rawHost?.trim();
-  if (!host) return DEFAULT_UI_HOST;
-  return host;
-}
-
-function clampInt(value: number | undefined, fallback: number, min: number, max: number): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
-  return Math.min(max, Math.max(min, value));
-}
-
-function isNotFound(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    typeof err["code"] === "string" &&
-    err["code"] === "ENOENT"
-  );
-}
-
-async function getFileSize(filePath: string): Promise<number> {
-  try {
-    const fileStat = await stat(filePath);
-    return fileStat.size;
-  } catch (err) {
-    if (isNotFound(err)) return 0;
-    throw err;
-  }
-}
-
-
-function getCookie(rawCookieHeader: string | undefined, cookieName: string): string | undefined {
-  if (!rawCookieHeader) return undefined;
-  const cookies = rawCookieHeader.split(";");
-  for (const cookie of cookies) {
-    const [name, ...valueParts] = cookie.trim().split("=");
-    if (name !== cookieName) continue;
-    try {
-      return decodeURIComponent(valueParts.join("="));
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
-}
-
-function getBearerToken(rawHeader: string | undefined): string | undefined {
-  if (!rawHeader) return undefined;
-  const trimmed = rawHeader.trim();
-  if (trimmed.length < 8) return undefined;
-  const prefix = trimmed.slice(0, 7);
-  if (prefix.toLowerCase() !== "bearer ") return undefined;
-  const token = trimmed.slice(7).trim();
-  return token.length > 0 ? token : undefined;
-}
-
-function getHeaderValue(
-  headers: IncomingMessage["headers"],
-  name: string,
-): string | undefined {
-  const rawValue = headers[name];
-  if (typeof rawValue === "string") return rawValue;
-  return Array.isArray(rawValue) ? rawValue[0] : undefined;
-}
-
-async function readFormBody(req: IncomingMessage): Promise<URLSearchParams> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
-  }
-  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
-}
-
-async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
-  }
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("JSON body must be an object");
-    }
-    return parsed as Record<string, unknown>;
-  } catch (err) {
-    throw new RequestError(400, `invalid JSON body: ${String(err)}`);
-  }
-}
-
-async function handleManagedInstanceErrors<T>(op: () => Promise<T>): Promise<T> {
-  try {
-    return await op();
-  } catch (err) {
-    if (!(err instanceof Error)) {
-      throw err;
-    }
-    if (err.message.startsWith("Managed instance not found")) {
-      throw new RequestError(404, err.message);
-    }
-    if (err.message.startsWith("Managed instance preset not found")) {
-      throw new RequestError(404, err.message);
-    }
-    if (err.message.startsWith("Managed instance preset group not found")) {
-      throw new RequestError(404, err.message);
-    }
-    if (
-      err.message.startsWith("Invalid managed instance") ||
-      err.message.startsWith("Invalid managed instance preset") ||
-      err.message.startsWith("Unsupported diagnostic target kind") ||
-      err.message.includes("requires an instanceId") ||
-      err.message.includes("preset prefix already exists") ||
-      err.message.includes("already exists") ||
-      err.message.includes("already reserved") ||
-      err.message.includes("already in use") ||
-      err.message.includes("Invalid port") ||
-      err.message.includes("outside the allowed range")
-    ) {
-      throw new RequestError(400, err.message);
-    }
-    if (err.message.includes("targeting is unavailable")) {
-      throw new RequestError(501, err.message);
-    }
-    throw err;
-  }
-}
-
-function applySecurityHeaders(res: ServerResponse): void {
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Referrer-Policy", "no-referrer");
-}
-
-function sendJson(res: ServerResponse, statusCode: number, payload: unknown): void {
-  res.statusCode = statusCode;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  applySecurityHeaders(res);
-  res.end(JSON.stringify(payload));
-}
-
-async function sendStaticHtml(res: ServerResponse, fileName: string): Promise<void> {
-  const content = await readStaticAsset(fileName);
-  res.statusCode = 200;
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  applySecurityHeaders(res);
-  res.end(content);
-}
-
-async function sendStaticAsset(res: ServerResponse, fileNameRaw: string): Promise<void> {
-  const fileName = fileNameRaw.trim();
-  if (!/^[a-zA-Z0-9._-]+$/.test(fileName) || fileName.startsWith(".")) {
-    throw new RequestError(404, "not found");
-  }
-  if (fileName.toLowerCase().endsWith(".html")) {
-    throw new RequestError(404, "not found");
-  }
-  const content = await readStaticAsset(fileName);
-  res.statusCode = 200;
-  res.setHeader("Content-Type", contentTypeForStaticAsset(fileName));
-  applySecurityHeaders(res);
-  res.end(content);
-}
-
-function redirect(res: ServerResponse, location: string): void {
-  res.statusCode = 303;
-  applySecurityHeaders(res);
-  res.setHeader("Location", location);
-  res.end();
-}
-
-function sendSseHeaders(res: ServerResponse): void {
-  res.statusCode = 200;
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Connection", "keep-alive");
-  applySecurityHeaders(res);
-  res.flushHeaders?.();
-}
-
-function writeSseEvent(res: ServerResponse, event: string, payload: unknown): void {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(payload)}\n\n`);
-}
-
-async function readStaticAsset(fileName: string): Promise<Buffer> {
-  const filePath = resolve(STATIC_DIR, fileName);
-  const rel = relative(STATIC_DIR, filePath);
-  if (
-    rel.startsWith("..") ||
-    isAbsolute(rel) ||
-    (!filePath.startsWith(STATIC_DIR + sep) && filePath !== STATIC_DIR)
-  ) {
-    throw new RequestError(404, "not found");
-  }
-  try {
-    const fileStat = await stat(filePath);
-    if (!fileStat.isFile()) {
-      throw new RequestError(404, "not found");
-    }
-    return await readFile(filePath);
-  } catch (err) {
-    if (err instanceof RequestError) {
-      throw err;
-    }
-    if (isNotFound(err)) {
-      throw new RequestError(404, "not found");
-    }
-    throw err;
-  }
-}
-
-function contentTypeForStaticAsset(fileName: string): string {
-  if (fileName.endsWith(".css")) return "text/css; charset=utf-8";
-  if (fileName.endsWith(".js")) return "application/javascript; charset=utf-8";
-  if (fileName.endsWith(".html")) return "text/html; charset=utf-8";
-  return "application/octet-stream";
 }
