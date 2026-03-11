@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { installStdoutLogBuffer } from "../dist/operatorConsole/logBuffer.js";
+import { installStdoutLogBuffer } from "../../dist/operatorConsole/logBuffer.js";
 
 test("installStdoutLogBuffer captures chunked writes and restores stdout", async () => {
   const originalWrite = process.stdout.write;

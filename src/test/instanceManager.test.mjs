@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { InstanceManager, buildRuntimePaths } from "../dist/instances/instanceManager.js";
+import { InstanceManager, buildRuntimePaths } from "../../dist/instances/instanceManager.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-instance-manager-"));

@@ -4,7 +4,7 @@ import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { RecentFileLogSource } from "../dist/logs/recentFileLogSource.js";
+import { RecentFileLogSource } from "../../dist/logs/recentFileLogSource.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-recent-file-log-source-"));

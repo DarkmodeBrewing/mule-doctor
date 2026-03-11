@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { getNetworkHealth } from "../dist/health/healthScore.js";
+import { getNetworkHealth } from "../../dist/health/healthScore.js";
 
 test("getNetworkHealth returns high score for healthy network signals", () => {
   const result = getNetworkHealth({

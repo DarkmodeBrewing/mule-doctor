@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ManagedInstanceDiagnosticsService } from "../dist/instances/managedInstanceDiagnostics.js";
+import { ManagedInstanceDiagnosticsService } from "../../dist/instances/managedInstanceDiagnostics.js";
 
 class StubInstanceManager {
   constructor(record) {

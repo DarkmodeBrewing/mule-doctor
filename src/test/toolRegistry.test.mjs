@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ToolRegistry } from "../dist/tools/toolRegistry.js";
+import { ToolRegistry } from "../../dist/tools/toolRegistry.js";
 
 class StubClient {
   async getNodeInfo() {

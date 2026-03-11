@@ -4,9 +4,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { RuntimeStore } from "../dist/storage/runtimeStore.js";
-import { DiagnosticTargetService } from "../dist/instances/diagnosticTargetService.js";
-import { OperatorEventLog } from "../dist/operatorConsole/operatorEventLog.js";
+import { RuntimeStore } from "../../dist/storage/runtimeStore.js";
+import { DiagnosticTargetService } from "../../dist/instances/diagnosticTargetService.js";
+import { OperatorEventLog } from "../../dist/operatorConsole/operatorEventLog.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-target-"));
