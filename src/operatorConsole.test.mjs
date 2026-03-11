@@ -1080,12 +1080,27 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(staticUiRes.status, 200);
     assert.equal(staticUiRes.headers.get("content-type"), "application/javascript; charset=utf-8");
     const staticUiScript = await staticUiRes.text();
-    assert.match(staticUiScript, /Cycle succeeded/);
-    assert.match(staticUiScript, /event-badge/);
-    assert.match(staticUiScript, /operator-event-grouping-toggle/);
-    assert.match(staticUiScript, /Expand/);
-    assert.match(staticUiScript, /operator-event-signal-failures/);
-    assert.match(staticUiScript, /OPERATOR_EVENT_VIEW_PRESETS/);
+    assert.match(staticUiScript, /from "\.\/constants\.js"/);
+    assert.match(staticUiScript, /from "\.\/timeline\.js"/);
+    assert.match(staticUiScript, /from "\.\/instances\.js"/);
+
+    const timelineModuleRes = await fetch(`${baseUrl}/static/operatorConsole/timeline.js`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(timelineModuleRes.status, 200);
+    const timelineModule = await timelineModuleRes.text();
+    assert.match(timelineModule, /Cycle succeeded/);
+    assert.match(timelineModule, /event-badge/);
+    assert.match(timelineModule, /operator-event-grouping-toggle/);
+    assert.match(timelineModule, /Expand/);
+    assert.match(timelineModule, /operator-event-signal-failures/);
+
+    const constantsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/constants.js`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(constantsModuleRes.status, 200);
+    const constantsModule = await constantsModuleRes.text();
+    assert.match(constantsModule, /OPERATOR_EVENT_VIEW_PRESETS/);
 
     const rootPageRes = await fetch(`${baseUrl}/`, {
       headers: { Cookie: cookie },
