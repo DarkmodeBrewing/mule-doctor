@@ -22,6 +22,36 @@ export function createInstancesController({
   const compare = createInstanceCompareController({ fetchJson, setText });
   const presets = createInstancePresetsController({ state });
 
+  function renderControlState() {
+    views.renderInstanceList(state.currentManagedInstances);
+    views.renderInstanceGroups(state.currentManagedInstances);
+    views.renderSelectedInstanceTimelineControls();
+  }
+
+  function setControlState(collection, key, entry) {
+    state.instanceControlState[collection][key] = entry;
+    renderControlState();
+  }
+
+  function clearStaleControlState(instances) {
+    const validIds = new Set(instances.map((instance) => instance.id));
+    for (const id of Object.keys(state.instanceControlState.instances)) {
+      if (!validIds.has(id)) {
+        delete state.instanceControlState.instances[id];
+      }
+    }
+    const validPrefixes = new Set(
+      instances
+        .map((instance) => instance.preset?.prefix)
+        .filter((prefix) => typeof prefix === "string" && prefix.length > 0),
+    );
+    for (const prefix of Object.keys(state.instanceControlState.presets)) {
+      if (!validPrefixes.has(prefix)) {
+        delete state.instanceControlState.presets[prefix];
+      }
+    }
+  }
+
   function setInstanceFeedback(text, isError = false) {
     const element = document.getElementById("instance-feedback");
     element.textContent = text;
@@ -50,12 +80,24 @@ export function createInstancesController({
   async function analyzeInstance(id) {
     state.selectedInstanceId = id;
     views.renderSelectedInstanceTimelineControls();
+    setControlState("instances", id, {
+      message: "Analysis in progress...",
+      tone: "pending",
+    });
     setText("instance-analysis", "Running analysis...");
     try {
       const result = await postJson(`/api/instances/${encodeURIComponent(id)}/analyze`);
       setText("instance-analysis", result.analysis.summary || "(no analysis summary)");
+      setControlState("instances", id, {
+        message: "Analysis completed.",
+        tone: "success",
+      });
       await inspectInstance(id);
     } catch (err) {
+      setControlState("instances", id, {
+        message: `Analysis failed: ${String(err)}`,
+        tone: "error",
+      });
       setText("instance-analysis", `Failed to analyze instance: ${String(err)}`);
     }
   }
@@ -76,11 +118,26 @@ export function createInstancesController({
 
   async function mutateInstance(id, action) {
     try {
+      const pendingVerb = action === "stop" ? "Stopping" : action === "start" ? "Starting" : "Restarting";
+      const pastTense = action === "stop" ? "stopped" : action === "start" ? "started" : "restarted";
+      setControlState("instances", id, {
+        message: `${pendingVerb} instance...`,
+        tone: "pending",
+        pendingAction: action,
+      });
       const data = await postJson(`/api/instances/${encodeURIComponent(id)}/${action}`);
-      setInstanceFeedback(`${action} succeeded for ${data.instance.id}`);
+      setControlState("instances", data.instance.id, {
+        message: `${pastTense} successfully.`,
+        tone: "success",
+      });
+      setInstanceFeedback(`${pastTense} instance ${data.instance.id}`);
       await refreshInstances();
       await inspectInstance(data.instance.id);
     } catch (err) {
+      setControlState("instances", id, {
+        message: `Action failed: ${String(err)}`,
+        tone: "error",
+      });
       setInstanceFeedback(String(err), true);
     }
   }
@@ -99,6 +156,10 @@ export function createInstancesController({
     try {
       const data = await postJson("/api/instances", payload);
       form.reset();
+      setControlState("instances", data.instance.id, {
+        message: "Created as planned instance.",
+        tone: "success",
+      });
       setInstanceFeedback(`created planned instance ${data.instance.id}`);
       await refreshInstances();
       await inspectInstance(data.instance.id);
@@ -115,12 +176,31 @@ export function createInstancesController({
     const prefix = String(formData.get("prefix") || "").trim();
 
     try {
+      setControlState("presets", prefix, {
+        message: `Applying preset ${presetId}...`,
+        tone: "pending",
+        pendingAction: "apply",
+      });
       const data = await postJson("/api/instance-presets/apply", { presetId, prefix });
+      setControlState("presets", prefix, {
+        message: `Preset ${data.applied.presetId} applied.`,
+        tone: "success",
+      });
+      for (const instance of data.applied.instances) {
+        setControlState("instances", instance.id, {
+          message: `Created from preset ${data.applied.presetId}.`,
+          tone: "success",
+        });
+      }
       setInstanceFeedback(
         `applied preset ${data.applied.presetId}: ${data.applied.instances.map((instance) => instance.id).join(", ")}`,
       );
       await refreshInstances();
     } catch (err) {
+      setControlState("presets", prefix, {
+        message: `Apply failed: ${String(err)}`,
+        tone: "error",
+      });
       setInstanceFeedback(String(err), true);
     }
   }
@@ -130,10 +210,29 @@ export function createInstancesController({
       if (action !== "start" && action !== "stop" && action !== "restart") {
         throw new Error(`unsupported preset action: ${action}`);
       }
+      const pendingVerb = action === "stop" ? "Stopping" : action === "start" ? "Starting" : "Restarting";
+      setControlState("presets", prefix, {
+        message: `${pendingVerb} preset...`,
+        tone: "pending",
+        pendingAction: action,
+      });
       const data = await postJson(`/api/instance-presets/${encodeURIComponent(prefix)}/${action}`);
       const changedIds = data.result.instances.map((instance) => instance.id);
       const failureCount = data.result.failures.length;
       const pastTense = action === "stop" ? "stopped" : action === "start" ? "started" : "restarted";
+      setControlState("presets", prefix, {
+        message:
+          failureCount > 0
+            ? `${pastTense} ${changedIds.length} instances with ${failureCount} failures.`
+            : `${pastTense} ${changedIds.length} instances successfully.`,
+        tone: failureCount > 0 ? "error" : "success",
+      });
+      for (const instance of data.result.instances) {
+        state.instanceControlState.instances[instance.id] = {
+          message: `${pastTense} via preset ${prefix}.`,
+          tone: failureCount > 0 ? "error" : "success",
+        };
+      }
       setInstanceFeedback(
         failureCount > 0
           ? `${pastTense} preset ${prefix}: ${changedIds.join(", ")} (${failureCount} failures)`
@@ -143,6 +242,10 @@ export function createInstancesController({
       await refreshInstances();
       await refreshOperatorEvents();
     } catch (err) {
+      setControlState("presets", prefix, {
+        message: `Action failed: ${String(err)}`,
+        tone: "error",
+      });
       setInstanceFeedback(String(err), true);
     }
   }
@@ -177,6 +280,7 @@ export function createInstancesController({
     try {
       const data = await fetchJson("/api/instances");
       state.currentManagedInstances = data.instances;
+      clearStaleControlState(data.instances);
       views.renderInstanceList(data.instances);
       views.renderInstanceGroups(data.instances);
       timeline.populateOperatorEventFilters();
@@ -196,6 +300,8 @@ export function createInstancesController({
     } catch (err) {
       state.currentManagedInstances = [];
       state.selectedInstanceId = null;
+      state.instanceControlState.instances = {};
+      state.instanceControlState.presets = {};
       timeline.populateOperatorEventFilters();
       timeline.applyOperatorEventFilters();
       views.renderInstanceGroups([]);

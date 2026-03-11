@@ -23,6 +23,10 @@ const state = {
   currentManagedInstances: [],
   currentOperatorEvents: [],
   currentInstancePresets: [],
+  instanceControlState: {
+    instances: {},
+    presets: {},
+  },
   expandedOperatorEventGroups: new Set(),
 };
 

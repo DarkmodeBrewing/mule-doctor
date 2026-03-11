@@ -8,6 +8,29 @@ export function createInstanceViewsController({
   compare,
   actions,
 }) {
+  function getControlFeedbackClass(entry) {
+    if (entry?.tone === "error") {
+      return "control-feedback error";
+    }
+    if (entry?.tone === "success") {
+      return "control-feedback success";
+    }
+    if (entry?.tone === "pending") {
+      return "control-feedback pending";
+    }
+    return "control-feedback";
+  }
+
+  function appendControlFeedback(container, entry) {
+    if (!entry?.message) {
+      return;
+    }
+    const feedback = document.createElement("div");
+    feedback.className = getControlFeedbackClass(entry);
+    feedback.textContent = entry.message;
+    container.appendChild(feedback);
+  }
+
   function buildGroupStat(label, value) {
     const chip = document.createElement("span");
     chip.className = "group-stat";
@@ -18,10 +41,26 @@ export function createInstanceViewsController({
   function renderSelectedInstanceTimelineControls() {
     const eventsButton = document.getElementById("view-selected-instance-events");
     const failuresButton = document.getElementById("view-selected-instance-failures");
+    const feedback = document.getElementById("selected-instance-feedback");
     const hasSelectedInstance =
       typeof state.selectedInstanceId === "string" && state.selectedInstanceId.length > 0;
+    const selectedFeedback = hasSelectedInstance
+      ? state.instanceControlState.instances[state.selectedInstanceId]
+      : null;
     eventsButton.disabled = !hasSelectedInstance;
     failuresButton.disabled = !hasSelectedInstance;
+    if (!hasSelectedInstance) {
+      feedback.textContent = "No instance selected.";
+      feedback.className = "muted";
+      return;
+    }
+    if (!selectedFeedback?.message) {
+      feedback.textContent = `Selected instance: ${state.selectedInstanceId}`;
+      feedback.className = "muted";
+      return;
+    }
+    feedback.textContent = `${state.selectedInstanceId}: ${selectedFeedback.message}`;
+    feedback.className = getControlFeedbackClass(selectedFeedback);
   }
 
   function buildGroupMember(instance) {
@@ -35,6 +74,8 @@ export function createInstanceViewsController({
     const useAsTarget = document.createElement("button");
     const events = document.createElement("button");
     const failures = document.createElement("button");
+    const controlState = state.instanceControlState.instances[instance.id];
+    const pendingAction = controlState?.pendingAction;
 
     wrapper.className = "group-member";
     header.className = "instance-header";
@@ -86,6 +127,12 @@ export function createInstanceViewsController({
     wrapper.appendChild(header);
     wrapper.appendChild(meta);
     wrapper.appendChild(controls);
+    appendControlFeedback(wrapper, controlState);
+    if (pendingAction) {
+      inspect.disabled = true;
+      analyze.disabled = true;
+      useAsTarget.disabled = true;
+    }
     return wrapper;
   }
 
@@ -117,6 +164,8 @@ export function createInstanceViewsController({
       const compareButton = document.createElement("button");
       const events = document.createElement("button");
       const failures = document.createElement("button");
+      const controlState = state.instanceControlState.presets[group.prefix];
+      const pendingAction = controlState?.pendingAction;
       const runningCount = group.instances.filter((instance) => instance.status === "running").length;
       const plannedCount = group.instances.filter((instance) => instance.status === "planned").length;
       const stoppedCount = group.instances.filter((instance) => instance.status === "stopped").length;
@@ -156,6 +205,19 @@ export function createInstanceViewsController({
       if (group.instances.length < 2) {
         compareButton.disabled = true;
       }
+      if (pendingAction) {
+        start.disabled = true;
+        stop.disabled = true;
+        restart.disabled = true;
+        compareButton.disabled = true;
+      }
+      if (pendingAction === "start") {
+        start.textContent = "Starting...";
+      } else if (pendingAction === "stop") {
+        stop.textContent = "Stopping...";
+      } else if (pendingAction === "restart") {
+        restart.textContent = "Restarting...";
+      }
 
       stats.appendChild(buildGroupStat("running", runningCount));
       stats.appendChild(buildGroupStat("planned", plannedCount));
@@ -185,6 +247,7 @@ export function createInstanceViewsController({
       }
       wrapper.appendChild(members);
       wrapper.appendChild(controls);
+      appendControlFeedback(wrapper, controlState);
       item.appendChild(wrapper);
       list.appendChild(item);
     }
@@ -218,6 +281,8 @@ export function createInstanceViewsController({
       const useAsTarget = document.createElement("button");
       const events = document.createElement("button");
       const failures = document.createElement("button");
+      const controlState = state.instanceControlState.instances[instance.id];
+      const pendingAction = controlState?.pendingAction;
 
       wrapper.className = "instance-entry";
       header.className = "instance-header";
@@ -257,9 +322,25 @@ export function createInstanceViewsController({
         start.disabled = true;
       } else {
         stop.disabled = true;
+        restart.disabled = true;
       }
       if (isScheduledTarget) {
         useAsTarget.disabled = true;
+      }
+      if (pendingAction) {
+        start.disabled = true;
+        stop.disabled = true;
+        restart.disabled = true;
+        inspect.disabled = true;
+        analyze.disabled = true;
+        useAsTarget.disabled = true;
+      }
+      if (pendingAction === "start") {
+        start.textContent = "Starting...";
+      } else if (pendingAction === "stop") {
+        stop.textContent = "Stopping...";
+      } else if (pendingAction === "restart") {
+        restart.textContent = "Restarting...";
       }
 
       header.appendChild(title);
@@ -286,6 +367,7 @@ export function createInstanceViewsController({
       wrapper.appendChild(header);
       wrapper.appendChild(meta);
       wrapper.appendChild(controls);
+      appendControlFeedback(wrapper, controlState);
       li.appendChild(wrapper);
       ul.appendChild(li);
     }
