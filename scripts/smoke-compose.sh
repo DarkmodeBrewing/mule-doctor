@@ -114,6 +114,113 @@ wait_for_http_ok() {
   done
 }
 
+wait_for_http_ok_with_header() {
+  local url="$1"
+  local header_name="$2"
+  local header_value="$3"
+  local timeout="$4"
+  local label="$5"
+  local start now elapsed code
+  start="$(date +%s)"
+  while true; do
+    now="$(date +%s)"
+    elapsed="$((now - start))"
+    if (( elapsed > timeout )); then
+      fail "timed out waiting for $label at $url"
+    fi
+    code="$(
+      curl -s \
+        --connect-timeout 5 \
+        --max-time 10 \
+        --retry 0 \
+        -H "$header_name: $header_value" \
+        -o /dev/null \
+        -w '%{http_code}' \
+        "$url" ||
+        true
+    )"
+    if [[ "$code" == "200" ]]; then
+      log "$label ready at $url"
+      return 0
+    fi
+    sleep "$POLL_SECS"
+  done
+}
+
+wait_for_json_true() {
+  local url="$1"
+  local field_path="$2"
+  local timeout="$3"
+  local label="$4"
+  local start now elapsed payload
+  start="$(date +%s)"
+  while true; do
+    now="$(date +%s)"
+    elapsed="$((now - start))"
+    if (( elapsed > timeout )); then
+      fail "timed out waiting for $label at $url"
+    fi
+
+    payload="$(
+      curl -fsS --connect-timeout 5 --max-time 10 --retry 0 "$url" 2>/dev/null ||
+        true
+    )"
+    if [[ -n "$payload" ]] && json_field_is_true "$payload" "$field_path"; then
+      log "$label ready at $url ($field_path=true)"
+      return 0
+    fi
+    sleep "$POLL_SECS"
+  done
+}
+
+wait_for_json_true_with_header() {
+  local url="$1"
+  local header_name="$2"
+  local header_value="$3"
+  local field_path="$4"
+  local timeout="$5"
+  local label="$6"
+  local start now elapsed payload
+  start="$(date +%s)"
+  while true; do
+    now="$(date +%s)"
+    elapsed="$((now - start))"
+    if (( elapsed > timeout )); then
+      fail "timed out waiting for $label at $url"
+    fi
+
+    payload="$(
+      curl -fsS \
+        --connect-timeout 5 \
+        --max-time 10 \
+        --retry 0 \
+        -H "$header_name: $header_value" \
+        "$url" 2>/dev/null ||
+        true
+    )"
+    if [[ -n "$payload" ]] && json_field_is_true "$payload" "$field_path"; then
+      log "$label ready at $url ($field_path=true)"
+      return 0
+    fi
+    sleep "$POLL_SECS"
+  done
+}
+
+json_field_is_true() {
+  local payload="$1"
+  local field_path="$2"
+  printf '%s' "$payload" | node -e '
+    const fieldPath = process.argv[1];
+    const input = require("node:fs").readFileSync(0, "utf8");
+    const data = JSON.parse(input);
+    const value = fieldPath.split(".").reduce((current, key) => {
+      if (current === null || current === undefined) return undefined;
+      return current[key];
+    }, data);
+    process.exit(value === true ? 0 : 1);
+  ' "$field_path"
+}
+
 wait_for_nonempty_file() {
   local path="$1"
   local timeout="$2"
@@ -284,10 +391,33 @@ main() {
 
   wait_for_nonempty_file "$rust_token_host_path" "$TIMEOUT_SECS" "rust-mule api token"
   wait_for_http_ok "http://127.0.0.1:$RUST_MULE_PORT/api/v1/health" "$TIMEOUT_SECS" "rust-mule health"
+  wait_for_http_ok "http://127.0.0.1:$RUST_MULE_PORT/api/v1/status" "$TIMEOUT_SECS" "rust-mule status"
+  wait_for_json_true "http://127.0.0.1:$RUST_MULE_PORT/api/v1/status" "ready" "$TIMEOUT_SECS" "rust-mule status readiness"
+  wait_for_json_true "http://127.0.0.1:$RUST_MULE_PORT/api/v1/searches" "ready" "$TIMEOUT_SECS" "rust-mule searches readiness"
 
   local rust_token
   rust_token="$(tr -d '\r\n' <"$rust_token_host_path")"
   [[ -n "$rust_token" ]] || fail "rust-mule api token file is empty"
+  wait_for_http_ok_with_header \
+    "http://127.0.0.1:$RUST_MULE_PORT/api/v1/status" \
+    "Authorization" \
+    "Bearer $rust_token" \
+    "$TIMEOUT_SECS" \
+    "rust-mule status"
+  wait_for_json_true_with_header \
+    "http://127.0.0.1:$RUST_MULE_PORT/api/v1/status" \
+    "Authorization" \
+    "Bearer $rust_token" \
+    "ready" \
+    "$TIMEOUT_SECS" \
+    "rust-mule status readiness"
+  wait_for_json_true_with_header \
+    "http://127.0.0.1:$RUST_MULE_PORT/api/v1/searches" \
+    "Authorization" \
+    "Bearer $rust_token" \
+    "ready" \
+    "$TIMEOUT_SECS" \
+    "rust-mule searches readiness"
   local rust_status
   rust_status="$(
     curl -fsS \

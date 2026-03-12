@@ -191,6 +191,14 @@ export class Observer {
         await this.handleUnavailableTarget(targetDescriptor, err, cycleStartedAt);
         return;
       }
+      if (target) {
+        try {
+          await this.ensureTargetReady(target);
+        } catch (err) {
+          await this.handleUnavailableTarget(targetDescriptor, err, cycleStartedAt);
+          return;
+        }
+      }
 
       const context = await this.collectAndPersistContext(target);
       const prompt = this.buildPrompt(context);
@@ -324,6 +332,25 @@ export class Observer {
       logSource: this.logWatcher,
       logOffset: this.logWatcher.getOffset(),
     };
+  }
+
+  private async ensureTargetReady(target: ObserverTargetRuntime): Promise<void> {
+    const readiness = await target.client.getReadiness();
+    if (readiness.ready) {
+      return;
+    }
+
+    const reasons: string[] = [];
+    if (!readiness.statusReady) {
+      reasons.push("/api/v1/status.ready=false");
+    }
+    if (!readiness.searchesReady) {
+      reasons.push("/api/v1/searches.ready=false");
+    }
+
+    throw new Error(
+      `rust-mule target not ready (${reasons.join(", ") || "readiness checks incomplete"})`,
+    );
   }
 
   private async describeTarget(): Promise<ObserverTargetDescriptor> {

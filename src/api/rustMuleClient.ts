@@ -38,6 +38,38 @@ export interface LookupStats {
   [key: string]: unknown;
 }
 
+export interface RustMuleStatus {
+  ready: boolean;
+  [key: string]: unknown;
+}
+
+export interface RustMuleKeywordSearchInfo {
+  search_id_hex?: string;
+  keyword_id_hex?: string;
+  keyword_label?: string;
+  state?: string;
+  created_secs_ago?: number;
+  hits?: number;
+  want_search?: boolean;
+  publish_enabled?: boolean;
+  got_publish_ack?: boolean;
+  [key: string]: unknown;
+}
+
+export interface RustMuleSearchesResponse {
+  ready: boolean;
+  searches: RustMuleKeywordSearchInfo[];
+  [key: string]: unknown;
+}
+
+export interface RustMuleReadiness {
+  statusReady: boolean;
+  searchesReady: boolean;
+  ready: boolean;
+  status: RustMuleStatus;
+  searches: RustMuleSearchesResponse;
+}
+
 export interface BootstrapJobResult {
   jobId: string;
   status: string;
@@ -214,7 +246,7 @@ export class RustMuleClient {
 
   async getNodeInfo(): Promise<NodeInfo> {
     try {
-      const status = await this.get<Record<string, unknown>>("/status");
+      const status = await this.getStatus();
       return {
         ...status,
         nodeId: typeof status["node_id_hex"] === "string" ? status["node_id_hex"] : "unknown",
@@ -232,6 +264,36 @@ export class RustMuleClient {
         uptime: 0,
       };
     }
+  }
+
+  async getStatus(): Promise<RustMuleStatus> {
+    const status = await this.get<Record<string, unknown>>("/status");
+    return {
+      ...status,
+      ready: status["ready"] === true,
+    };
+  }
+
+  async getSearches(): Promise<RustMuleSearchesResponse> {
+    const payload = await this.get<Record<string, unknown>>("/searches");
+    return {
+      ...payload,
+      ready: payload["ready"] === true,
+      searches: Array.isArray(payload["searches"]) ? (payload["searches"] as RustMuleKeywordSearchInfo[]) : [],
+    };
+  }
+
+  async getReadiness(): Promise<RustMuleReadiness> {
+    const [status, searches] = await Promise.all([this.getStatus(), this.getSearches()]);
+    const statusReady = status.ready === true;
+    const searchesReady = searches.ready === true;
+    return {
+      statusReady,
+      searchesReady,
+      ready: statusReady && searchesReady,
+      status,
+      searches,
+    };
   }
 
   async getPeers(): Promise<Peer[]> {
