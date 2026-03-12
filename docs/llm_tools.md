@@ -94,6 +94,29 @@ Notes:
 - default `50`
 - bounded to `1..1000`
 
+### `getDiscoverabilityResults`
+
+Purpose:
+
+- returns recent persisted controlled discoverability checks recorded by mule-doctor
+
+Arguments:
+
+```json
+{
+  "n": 10
+}
+```
+
+Notes:
+
+- only available when a runtime store is configured
+- `n` is optional
+- default `10`
+- bounded to `1..100`
+- returns sanitized persisted summaries, not the full live check payload
+- fixture records omit sensitive fields like absolute paths and fixture tokens
+
 ### `searchLogs`
 
 Purpose:
@@ -459,6 +482,7 @@ Always registered:
 Conditionally registered:
 
 - `getHistory`
+- `getDiscoverabilityResults`
   - only when mule-doctor has a runtime store
 - `search_code`
 - `read_file`

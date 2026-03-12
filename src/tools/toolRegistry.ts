@@ -15,7 +15,7 @@ import type {
   TraceLookupResult,
 } from "../api/rustMuleClient.js";
 import type { RuntimeStore } from "../storage/runtimeStore.js";
-import type { HistoryEntry, ToolResult } from "../types/contracts.js";
+import type { HistoryEntry, ManagedDiscoverabilityRecord, ToolResult } from "../types/contracts.js";
 import { SourceCodeTools } from "./sourceCodeTools.js";
 
 /** Shape expected by the OpenAI tools array. */
@@ -162,6 +162,32 @@ export class ToolRegistry {
         async (args): Promise<HistoryEntry[]> => {
           const n = clampInt(args["n"], 50, 1, 1000);
           return runtimeStore.getRecentHistory(n);
+        },
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "getDiscoverabilityResults",
+            description:
+              "Returns recent persisted controlled discoverability checks recorded by mule-doctor.",
+            parameters: {
+              type: "object",
+              properties: {
+                n: {
+                  type: "number",
+                  description:
+                    "Number of recent discoverability records to return (default 10).",
+                },
+              },
+              required: [],
+            },
+          },
+        },
+        async (args): Promise<ManagedDiscoverabilityRecord[]> => {
+          const n = clampInt(args["n"], 10, 1, 100);
+          return runtimeStore.getRecentDiscoverabilityResults(n);
         },
       );
     }

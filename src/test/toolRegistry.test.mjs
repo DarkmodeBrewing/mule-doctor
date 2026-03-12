@@ -87,6 +87,31 @@ class StubRuntimeStore {
   async getRecentHistory(n) {
     return Array.from({ length: Math.min(2, n) }, (_, i) => ({ timestamp: `t-${i + 1}` }));
   }
+
+  async getRecentDiscoverabilityResults(n) {
+    return Array.from({ length: Math.min(2, n) }, (_, i) => ({
+      recordedAt: `2026-03-12T10:0${i}:00.000Z`,
+      result: {
+        publisherInstanceId: "publisher",
+        searcherInstanceId: "searcher",
+        fixture: {
+          fixtureId: `fixture-${i + 1}`,
+          fileName: `fixture-${i + 1}.txt`,
+          relativePath: `fixture-${i + 1}.txt`,
+          sizeBytes: 16,
+        },
+        query: `fixture-${i + 1}`,
+        dispatchedAt: `2026-03-12T10:0${i}:00.000Z`,
+        searchId: `search-${i + 1}`,
+        readinessAtDispatch: { publisherReady: true, searcherReady: true },
+        peerCountAtDispatch: { publisher: 1, searcher: 2 },
+        states: [],
+        resultCount: i + 1,
+        outcome: "found",
+        finalState: "completed",
+      },
+    }));
+  }
 }
 
 async function makeTempSourceDir() {
@@ -130,18 +155,41 @@ test("ToolRegistry getHistory reads from runtime store", async () => {
   assert.deepEqual(result.data, [{ timestamp: "t-1" }, { timestamp: "t-2" }]);
 });
 
+test("ToolRegistry getDiscoverabilityResults reads sanitized records from runtime store", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore());
+
+  const result = await registry.invoke("getDiscoverabilityResults", { n: 10 });
+
+  assert.equal(result.success, true);
+  assert.equal(result.data.length, 2);
+  assert.equal(result.data[0].result.searchId, "search-1");
+  assert.equal("token" in result.data[0].result.fixture, false);
+  assert.equal("absolutePath" in result.data[0].result.fixture, false);
+});
+
 test("ToolRegistry does not expose getHistory when runtime store is unavailable", async () => {
   const registry = new ToolRegistry(new StubClient(), new StubLogWatcher());
 
   const defs = registry.getDefinitions();
   const hasGetHistory = defs.some((def) => def.function.name === "getHistory");
+  const hasDiscoverability = defs.some(
+    (def) => def.function.name === "getDiscoverabilityResults",
+  );
   assert.equal(hasGetHistory, false);
+  assert.equal(hasDiscoverability, false);
 
   const result = await registry.invoke("getHistory", { n: 5 });
   assert.deepEqual(result, {
     tool: "getHistory",
     success: false,
     error: "Unknown tool: getHistory",
+  });
+
+  const discoverability = await registry.invoke("getDiscoverabilityResults", { n: 5 });
+  assert.deepEqual(discoverability, {
+    tool: "getDiscoverabilityResults",
+    success: false,
+    error: "Unknown tool: getDiscoverabilityResults",
   });
 });
 
