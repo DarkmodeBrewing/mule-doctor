@@ -176,7 +176,28 @@ Acceptance criteria:
 - search checks do not dispatch before the upstream readiness contract is satisfied.
 - the first-class search health path is based on known shared content, not opportunistic public-network results.
 
-## Task I: Track Full Search Lifecycle and Search Health Signals
+## Task I: Add Managed Shared-Content Orchestration Primitives
+
+1. Add the missing mule-doctor primitives needed to drive controlled share/publish flows for managed rust-mule instances.
+2. Extend managed-instance config generation so mule-doctor can assign per-instance `sharing.share_roots`.
+3. Define how mule-doctor owns and lays out controlled shared-content fixture directories per instance.
+4. Add rust-mule client/helpers for the upstream surfaces needed by share/publish orchestration and diagnostics:
+   - `GET /api/v1/shared`
+   - `GET /api/v1/shared/actions`
+   - `POST /api/v1/shared/actions/reindex`
+   - `POST /api/v1/shared/actions/republish_sources`
+   - `POST /api/v1/shared/actions/republish_keywords`
+   - `GET /api/v1/searches/{search_id}`
+   - `GET /api/v1/downloads`
+5. Keep this slice focused on the orchestration plumbing, not on the higher-level controlled search policy itself.
+
+Acceptance criteria:
+
+- mule-doctor can configure managed instances with dedicated shared roots before launch.
+- mule-doctor can trigger the current rust-mule shared-content reindex/republish flows through explicit code paths.
+- the codebase has the basic building blocks required for controlled discoverability checks, publish diagnostics, and download diagnostics.
+
+## Task J: Track Full Search Lifecycle and Search Health Signals
 
 1. Add explicit search-lifecycle tracking around rust-mule keyword searches, including:
    - query text
@@ -197,7 +218,7 @@ Acceptance criteria:
 - search attempts have enough structured context to compare propagation behavior over time.
 - search health becomes a first-class diagnostic signal rather than an ad hoc log observation.
 
-## Task J: Expose Keyword Search and Publish Status as First-Class Diagnostics
+## Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
 
 1. Use the current rust-mule endpoints as the basis for publish/search observability:
    - `GET /api/v1/searches`
@@ -221,7 +242,7 @@ Acceptance criteria:
 - operators and future LLM diagnostics can tell which information comes from active searches, shared-file publish state, shared-action jobs, and download state.
 - the lack of a first-class upstream keyword-publish job endpoint is documented as a real dependency/gap.
 
-## Task K: Add LLM Investigation Tools for Downloads, Searches, and Keyword Publish State
+## Task L: Add LLM Investigation Tools for Downloads, Searches, and Keyword Publish State
 
 1. Extend the LLM tool surface with bounded investigation tools for rust-mule search/download workflows.
 2. Start with explicit tools for the currently known upstream surfaces:
@@ -248,7 +269,7 @@ Acceptance criteria:
 - tool outputs are normalized enough for reliable diagnostics without requiring the model to reverse-engineer raw rust-mule payloads each time.
 - the new tools are documented alongside the existing LLM tool surface.
 
-## Task L: Formalize Managed rust-mule config.toml Template Ownership
+## Task M: Formalize Managed rust-mule config.toml Template Ownership
 
 1. Turn the current managed-instance config generation into an explicit ownership model for per-instance `config.toml` files.
 2. Preserve the existing split of responsibility:
@@ -273,11 +294,12 @@ Acceptance criteria:
 ## Recommended Next Order
 
 1. Task G: Align rust-mule Readiness Handling with the New 200/ready Contract
-2. Task H: Add Controlled Search Discoverability Checks for Managed Instances
-3. Task I: Track Full Search Lifecycle and Search Health Signals
-4. Task J: Expose Keyword Search and Publish Status as First-Class Diagnostics
-5. Task K: Add LLM Investigation Tools for Downloads, Searches, and Keyword Publish State
-6. Task L: Formalize Managed rust-mule config.toml Template Ownership
-7. Task D: Operator Console Control Plane Completion
-8. Task E: Runtime and Container Hardening
-9. Task F: Release and CI Hardening
+2. Task I: Add Managed Shared-Content Orchestration Primitives
+3. Task H: Add Controlled Search Discoverability Checks for Managed Instances
+4. Task J: Track Full Search Lifecycle and Search Health Signals
+5. Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
+6. Task L: Add LLM Investigation Tools for Downloads, Searches, and Keyword Publish State
+7. Task M: Formalize Managed rust-mule config.toml Template Ownership
+8. Task D: Operator Console Control Plane Completion
+9. Task E: Runtime and Container Hardening
+10. Task F: Release and CI Hardening

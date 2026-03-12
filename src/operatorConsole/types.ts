@@ -1,4 +1,4 @@
-import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput } from "../types/contracts.js";
+import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult } from "../types/contracts.js";
 
 export interface ListedFile {
   name: string;
@@ -55,6 +55,27 @@ export interface ManagedInstanceAnalysis {
   analyze(id: string): Promise<ManagedInstanceAnalysisResult>;
 }
 
+export interface ManagedInstanceSharing {
+  getOverview(id: string): Promise<ManagedInstanceSharedOverview>;
+  ensureFixture(
+    id: string,
+    input?: { fixtureId?: string },
+  ): Promise<ManagedSharedFixture>;
+  reindex(id: string): Promise<ManagedInstanceSharedOverview>;
+  republishSources(id: string): Promise<ManagedInstanceSharedOverview>;
+  republishKeywords(id: string): Promise<ManagedInstanceSharedOverview>;
+}
+
+export interface ManagedInstanceDiscoverability {
+  runControlledCheck(input: {
+    publisherInstanceId: string;
+    searcherInstanceId: string;
+    fixtureId?: string;
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+  }): Promise<ManagedDiscoverabilityCheckResult>;
+}
+
 export interface DiagnosticTargetControl {
   getActiveTarget(): Promise<DiagnosticTargetRef>;
   setActiveTarget(target: DiagnosticTargetRef): Promise<DiagnosticTargetRef>;
@@ -103,6 +124,8 @@ export interface OperatorConsoleConfig {
   managedInstances?: ManagedInstanceControl;
   managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
   managedInstanceAnalysis?: ManagedInstanceAnalysis;
+  managedInstanceSharing?: ManagedInstanceSharing;
+  managedInstanceDiscoverability?: ManagedInstanceDiscoverability;
   managedInstancePresets?: ManagedInstancePresets;
   diagnosticTarget?: DiagnosticTargetControl;
   observerControl?: ObserverControl;

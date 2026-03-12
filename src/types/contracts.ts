@@ -114,6 +114,7 @@ export interface ManagedInstanceRuntimePaths {
   logDir: string;
   logPath: string;
   stateDir: string;
+  sharedDir: string;
   metadataPath: string;
 }
 
@@ -158,6 +159,60 @@ export interface ManagedInstanceAnalysisResult {
   reason?: string;
   summary: string;
   snapshot?: ManagedInstanceDiagnosticSnapshot;
+}
+
+export interface ManagedSharedFixture {
+  fixtureId: string;
+  token: string;
+  fileName: string;
+  relativePath: string;
+  absolutePath: string;
+  sizeBytes: number;
+}
+
+export interface ManagedInstanceSharedOverview {
+  instanceId: string;
+  sharedDir: string;
+  files: Record<string, unknown>[];
+  actions: Record<string, unknown>[];
+  downloads: Record<string, unknown>[];
+}
+
+export interface ManagedSharedFixtureSnapshot {
+  file?: Record<string, unknown>;
+  actions: Record<string, unknown>[];
+  downloads: Record<string, unknown>[];
+}
+
+export type ManagedDiscoverabilityOutcome = "found" | "completed_empty" | "timed_out";
+
+export interface ManagedDiscoverabilityStateSample {
+  observedAt: string;
+  state: string;
+  hits: number;
+}
+
+export interface ManagedDiscoverabilityCheckResult {
+  publisherInstanceId: string;
+  searcherInstanceId: string;
+  fixture: ManagedSharedFixture;
+  query: string;
+  dispatchedAt: string;
+  searchId: string;
+  readinessAtDispatch: {
+    publisherReady: boolean;
+    searcherReady: boolean;
+  };
+  peerCountAtDispatch: {
+    publisher: number;
+    searcher: number;
+  };
+  publisherSharedBefore: ManagedSharedFixtureSnapshot;
+  publisherSharedAfter: ManagedSharedFixtureSnapshot;
+  states: ManagedDiscoverabilityStateSample[];
+  resultCount: number;
+  outcome: ManagedDiscoverabilityOutcome;
+  finalState: string;
 }
 
 export interface ManagedInstancePresetNode {

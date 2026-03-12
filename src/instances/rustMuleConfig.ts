@@ -15,6 +15,7 @@ export interface ManagedRustMuleConfigTemplate {
   apiEnableDebugEndpoints?: boolean;
   apiAuthMode?: "local_ui" | "headless_remote";
   sessionNamePrefix?: string;
+  sharingShareRoots?: string[];
 }
 
 export interface RenderManagedRustMuleConfigInput {
@@ -58,8 +59,26 @@ export function renderManagedRustMuleConfig(
   appendMaybeBoolean(lines, "enable_debug_endpoints", template.apiEnableDebugEndpoints);
   appendMaybeString(lines, "auth_mode", template.apiAuthMode);
 
+  lines.push("", "[sharing]");
+  lines.push(
+    `share_roots = ${tomlStringArray(buildShareRoots(input.runtime.sharedDir, template.sharingShareRoots))}`,
+  );
+
   lines.push("");
   return lines.join("\n");
+}
+
+function buildShareRoots(sharedDir: string, extraShareRoots: string[] | undefined): string[] {
+  const roots = [sharedDir];
+  if (Array.isArray(extraShareRoots)) {
+    for (const root of extraShareRoots) {
+      if (typeof root !== "string") continue;
+      const trimmed = root.trim();
+      if (!trimmed || roots.includes(trimmed)) continue;
+      roots.push(trimmed);
+    }
+  }
+  return roots;
 }
 
 function appendMaybeString(lines: string[], key: string, value: string | undefined): void {
@@ -82,4 +101,8 @@ function appendMaybeBoolean(lines: string[], key: string, value: boolean | undef
 
 function tomlString(value: string): string {
   return JSON.stringify(value);
+}
+
+function tomlStringArray(values: string[]): string {
+  return `[${values.map((value) => tomlString(value)).join(", ")}]`;
 }
