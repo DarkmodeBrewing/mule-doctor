@@ -87,6 +87,146 @@ test("RustMuleClient exposes search readiness explicitly", async () => {
   assert.equal(searches.searches[0].search_id_hex, "01");
 });
 
+test("RustMuleClient reads search detail from /api/v1/searches/{id}", async () => {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return makeJsonResponse({
+      search: {
+        search_id_hex: "search-01",
+        keyword_label: "fixture-token",
+        state: "running",
+      },
+      hits: [
+        {
+          file_id_hex: "file-01",
+          filename: "fixture-token.txt",
+          file_size: 128,
+        },
+      ],
+    });
+  };
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const detail = await client.getSearchDetail("search-01");
+
+  assert.equal(calls[0], "http://127.0.0.1:17835/api/v1/searches/search-01");
+  assert.equal(detail.search.search_id_hex, "search-01");
+  assert.equal(detail.hits.length, 1);
+  assert.equal(detail.hits[0].filename, "fixture-token.txt");
+});
+
+test("RustMuleClient reads shared files from /api/v1/shared", async () => {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return makeJsonResponse({
+      files: [
+        {
+          identity: {
+            file_name: "fixture-token.txt",
+            relative_path: "fixture-token.txt",
+          },
+          keyword_publish_queued: true,
+        },
+      ],
+    });
+  };
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const shared = await client.getSharedFiles();
+
+  assert.equal(calls[0], "http://127.0.0.1:17835/api/v1/shared");
+  assert.equal(shared.files.length, 1);
+  assert.equal(shared.files[0].identity.file_name, "fixture-token.txt");
+  assert.equal(shared.files[0].keyword_publish_queued, true);
+});
+
+test("RustMuleClient reads shared actions from /api/v1/shared/actions", async () => {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return makeJsonResponse({
+      actions: [
+        {
+          kind: "republish_keywords",
+          state: "running",
+        },
+      ],
+    });
+  };
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const actions = await client.getSharedActions();
+
+  assert.equal(calls[0], "http://127.0.0.1:17835/api/v1/shared/actions");
+  assert.equal(actions.actions.length, 1);
+  assert.equal(actions.actions[0].kind, "republish_keywords");
+});
+
+test("RustMuleClient posts shared maintenance actions to rust-mule", async () => {
+  const calls = [];
+  global.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    const kind = String(url).split("/").pop();
+    return makeJsonResponse({
+      actions: [
+        {
+          kind,
+          state: "queued",
+        },
+      ],
+    });
+  };
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const reindex = await client.reindexShared();
+  const republishSources = await client.republishSources();
+  const republishKeywords = await client.republishKeywords();
+
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    [
+      "http://127.0.0.1:17835/api/v1/shared/actions/reindex",
+      "http://127.0.0.1:17835/api/v1/shared/actions/republish_sources",
+      "http://127.0.0.1:17835/api/v1/shared/actions/republish_keywords",
+    ],
+  );
+  for (const call of calls) {
+    assert.equal(call.init.method, "POST");
+    assert.equal(call.init.headers["Content-Type"], "application/json");
+    assert.equal(call.init.body, "{}");
+  }
+  assert.equal(reindex.actions[0].kind, "reindex");
+  assert.equal(republishSources.actions[0].kind, "republish_sources");
+  assert.equal(republishKeywords.actions[0].kind, "republish_keywords");
+});
+
+test("RustMuleClient reads downloads from /api/v1/downloads", async () => {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return makeJsonResponse({
+      queue_len: 1,
+      downloads: [
+        {
+          file_name: "fixture-token.txt",
+          state: "downloading",
+          progress_pct: 33.3,
+        },
+      ],
+    });
+  };
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const downloads = await client.getDownloads();
+
+  assert.equal(calls[0], "http://127.0.0.1:17835/api/v1/downloads");
+  assert.equal(downloads.queue_len, 1);
+  assert.equal(downloads.downloads.length, 1);
+  assert.equal(downloads.downloads[0].file_name, "fixture-token.txt");
+});
+
 test("RustMuleClient combines status and search readiness", async () => {
   const calls = [];
   global.fetch = async (url) => {

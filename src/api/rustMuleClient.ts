@@ -62,6 +62,50 @@ export interface RustMuleSearchesResponse {
   [key: string]: unknown;
 }
 
+export interface RustMuleKeywordHit {
+  file_id_hex?: string;
+  filename?: string;
+  file_size?: number;
+  file_type?: string;
+  publish_info?: Record<string, unknown>;
+  origin?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface RustMuleSearchDetailResponse {
+  search: RustMuleKeywordSearchInfo;
+  hits: RustMuleKeywordHit[];
+  [key: string]: unknown;
+}
+
+export interface RustMuleSharedFileEntry {
+  identity?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface RustMuleSharedFilesResponse {
+  files: RustMuleSharedFileEntry[];
+  [key: string]: unknown;
+}
+
+export interface RustMuleSharedActionStatus {
+  [key: string]: unknown;
+}
+
+export interface RustMuleSharedActionsResponse {
+  actions: RustMuleSharedActionStatus[];
+  [key: string]: unknown;
+}
+
+export interface RustMuleDownloadEntry {
+  [key: string]: unknown;
+}
+
+export interface RustMuleDownloadsResponse {
+  downloads: RustMuleDownloadEntry[];
+  [key: string]: unknown;
+}
+
 export interface RustMuleReadiness {
   statusReady: boolean;
   searchesReady: boolean;
@@ -283,6 +327,61 @@ export class RustMuleClient {
     };
   }
 
+  async getSearchDetail(searchId: string): Promise<RustMuleSearchDetailResponse> {
+    const payload = await this.get<Record<string, unknown>>(
+      `/searches/${encodeURIComponent(searchId)}`,
+    );
+    const search =
+      typeof payload["search"] === "object" && payload["search"] !== null
+        ? (payload["search"] as RustMuleKeywordSearchInfo)
+        : {};
+    return {
+      ...payload,
+      search,
+      hits: Array.isArray(payload["hits"]) ? (payload["hits"] as RustMuleKeywordHit[]) : [],
+    };
+  }
+
+  async getSharedFiles(): Promise<RustMuleSharedFilesResponse> {
+    const payload = await this.get<Record<string, unknown>>("/shared");
+    return {
+      ...payload,
+      files: Array.isArray(payload["files"]) ? (payload["files"] as RustMuleSharedFileEntry[]) : [],
+    };
+  }
+
+  async getSharedActions(): Promise<RustMuleSharedActionsResponse> {
+    const payload = await this.get<Record<string, unknown>>("/shared/actions");
+    return {
+      ...payload,
+      actions: Array.isArray(payload["actions"])
+        ? (payload["actions"] as RustMuleSharedActionStatus[])
+        : [],
+    };
+  }
+
+  async reindexShared(): Promise<RustMuleSharedActionsResponse> {
+    return this.postSharedAction("/shared/actions/reindex");
+  }
+
+  async republishSources(): Promise<RustMuleSharedActionsResponse> {
+    return this.postSharedAction("/shared/actions/republish_sources");
+  }
+
+  async republishKeywords(): Promise<RustMuleSharedActionsResponse> {
+    return this.postSharedAction("/shared/actions/republish_keywords");
+  }
+
+  async getDownloads(): Promise<RustMuleDownloadsResponse> {
+    const payload = await this.get<Record<string, unknown>>("/downloads");
+    return {
+      ...payload,
+      downloads: Array.isArray(payload["downloads"])
+        ? (payload["downloads"] as RustMuleDownloadEntry[])
+        : [],
+    };
+  }
+
   async getReadiness(): Promise<RustMuleReadiness> {
     const [status, searches] = await Promise.all([this.getStatus(), this.getSearches()]);
     const statusReady = status.ready === true;
@@ -484,6 +583,16 @@ export class RustMuleClient {
       }
       await sleep(pollIntervalMs);
     }
+  }
+
+  private async postSharedAction(path: string): Promise<RustMuleSharedActionsResponse> {
+    const payload = await this.post<Record<string, unknown>>(path);
+    return {
+      ...payload,
+      actions: Array.isArray(payload["actions"])
+        ? (payload["actions"] as RustMuleSharedActionStatus[])
+        : [],
+    };
   }
 }
 
