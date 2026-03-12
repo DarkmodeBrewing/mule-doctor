@@ -29,6 +29,7 @@ function buildRecord(overrides = {}) {
       logDir: "/data/instances/a/state/logs",
       logPath: "/data/instances/a/state/logs/rust-mule.log",
       stateDir: "/data/instances/a/state",
+      sharedDir: "/data/instances/a/shared",
       metadataPath: "/data/instances/a/instance.json",
     },
     ...overrides,

@@ -398,6 +398,7 @@ export function buildRuntimePaths(
   const rootDir = resolve(instanceRootDir, id);
   const stateDir = `${rootDir}/state`;
   const logDir = `${stateDir}/logs`;
+  const sharedDir = `${rootDir}/shared`;
   return {
     rootDir,
     configPath: `${rootDir}/config.toml`,
@@ -406,6 +407,7 @@ export function buildRuntimePaths(
     logDir,
     logPath: `${logDir}/rust-mule.log`,
     stateDir,
+    sharedDir,
     metadataPath: `${rootDir}/instance.json`,
   };
 }
@@ -509,6 +511,7 @@ async function materializeRuntimePaths(
   await mkdir(record.runtime.rootDir, { recursive: true });
   await mkdir(record.runtime.logDir, { recursive: true });
   await mkdir(record.runtime.stateDir, { recursive: true });
+  await mkdir(record.runtime.sharedDir, { recursive: true });
   await writeFile(
     record.runtime.configPath,
     renderManagedRustMuleConfig({

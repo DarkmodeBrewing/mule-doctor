@@ -73,6 +73,7 @@ test("buildRuntimePaths derives isolated per-instance paths", () => {
   assert.equal(paths.logDir, "/data/instances/a/state/logs");
   assert.equal(paths.logPath, "/data/instances/a/state/logs/rust-mule.log");
   assert.equal(paths.stateDir, "/data/instances/a/state");
+  assert.equal(paths.sharedDir, "/data/instances/a/shared");
   assert.equal(paths.metadataPath, "/data/instances/a/instance.json");
 });
 
@@ -109,6 +110,11 @@ test("InstanceManager creates and persists planned instances", async () => {
     assert.match(configRaw, new RegExp(`data_dir = "${escapeRegExp(created.runtime.stateDir)}"`));
     assert.match(configRaw, /\[api\]/);
     assert.match(configRaw, /port = 19000/);
+    assert.match(configRaw, /\[sharing\]/);
+    assert.match(
+      configRaw,
+      new RegExp(`share_roots = \\["${escapeRegExp(created.runtime.sharedDir)}"\\]`),
+    );
   } finally {
     await tmp.cleanup();
   }
@@ -343,6 +349,7 @@ test("InstanceManager renders configured rust-mule template values", async () =>
         apiEnableDebugEndpoints: true,
         apiAuthMode: "headless_remote",
         sessionNamePrefix: "managed",
+        sharingShareRoots: ["/srv/fixtures", "/srv/fixtures-extra"],
       },
     });
     await manager.initialize();
@@ -357,6 +364,10 @@ test("InstanceManager renders configured rust-mule template values", async () =>
     assert.match(configRaw, /forward_port = 40000/);
     assert.match(configRaw, /auth_mode = "headless_remote"/);
     assert.match(configRaw, /enable_debug_endpoints = true/);
+    assert.match(
+      configRaw,
+      /share_roots = \["[^"]*\/shared", "\/srv\/fixtures", "\/srv\/fixtures-extra"\]/,
+    );
   } finally {
     await tmp.cleanup();
   }

@@ -114,6 +114,7 @@ export interface ManagedInstanceRuntimePaths {
   logDir: string;
   logPath: string;
   stateDir: string;
+  sharedDir: string;
   metadataPath: string;
 }
 
