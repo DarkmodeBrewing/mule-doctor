@@ -73,9 +73,9 @@ export class ManagedInstanceDiscoverabilityService {
       publisherRecord.id,
       fixture.fileName,
     );
-    await this.sharing.reindex(publisherRecord.id);
-    await this.sharing.republishSources(publisherRecord.id);
-    await this.sharing.republishKeywords(publisherRecord.id);
+    await this.sharing.triggerReindex(publisherRecord.id);
+    await this.sharing.triggerRepublishSources(publisherRecord.id);
+    await this.sharing.triggerRepublishKeywords(publisherRecord.id);
     const publisherSharedAfter = await captureFixtureSnapshot(
       this.sharing,
       publisherRecord.id,

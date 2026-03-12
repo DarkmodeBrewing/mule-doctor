@@ -91,6 +91,56 @@ test("ManagedInstanceSharingService returns shared status from the managed rust-
   assert.equal(overview.downloads[0].state, "queued");
 });
 
+test("ManagedInstanceSharingService refreshes overview after republish with one token load", async () => {
+  const record = {
+    id: "alpha",
+    runtime: {
+      sharedDir: "/data/instances/alpha/shared",
+    },
+  };
+  const calls = [];
+  const client = {
+    async loadToken() {
+      calls.push("loadToken");
+    },
+    async getSharedFiles() {
+      calls.push("getSharedFiles");
+      return { files: [] };
+    },
+    async getSharedActions() {
+      calls.push("getSharedActions");
+      return { actions: [] };
+    },
+    async getDownloads() {
+      calls.push("getDownloads");
+      return { downloads: [] };
+    },
+    async republishKeywords() {
+      calls.push("republishKeywords");
+      return { actions: [] };
+    },
+  };
+  const diagnostics = {
+    async getInstanceRecord() {
+      return record;
+    },
+    getClientForInstance() {
+      return client;
+    },
+  };
+
+  const service = new ManagedInstanceSharingService(diagnostics);
+  await service.republishKeywords("alpha");
+
+  assert.deepEqual(calls, [
+    "loadToken",
+    "republishKeywords",
+    "getSharedFiles",
+    "getSharedActions",
+    "getDownloads",
+  ]);
+});
+
 test("ManagedInstanceSharingService falls back to rootDir/shared for legacy records", async () => {
   const temp = await makeTempDir();
   const record = {

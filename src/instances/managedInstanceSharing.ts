@@ -1,6 +1,9 @@
 import { mkdir, stat, writeFile } from "fs/promises";
 import { basename, join } from "path";
 import type {
+  RustMuleClient,
+} from "../api/rustMuleClient.js";
+import type {
   ManagedInstanceRecord,
   ManagedInstanceSharedOverview,
   ManagedSharedFixture,
@@ -19,22 +22,8 @@ export class ManagedInstanceSharingService {
   }
 
   async getOverview(instanceId: string): Promise<ManagedInstanceSharedOverview> {
-    const record = await this.diagnostics.getInstanceRecord(instanceId);
-    const client = this.diagnostics.getClientForInstance(record);
-    await client.loadToken();
-    const sharedDir = resolveSharedDir(record);
-    const [files, actions, downloads] = await Promise.all([
-      client.getSharedFiles(),
-      client.getSharedActions(),
-      client.getDownloads(),
-    ]);
-    return {
-      instanceId: record.id,
-      sharedDir,
-      files: files.files,
-      actions: actions.actions,
-      downloads: downloads.downloads,
-    };
+    const { record, client } = await this.resolveClient(instanceId);
+    return this.fetchOverview(record, client);
   }
 
   async ensureFixture(
@@ -66,27 +55,64 @@ export class ManagedInstanceSharingService {
   }
 
   async reindex(instanceId: string): Promise<ManagedInstanceSharedOverview> {
-    const record = await this.diagnostics.getInstanceRecord(instanceId);
-    const client = this.diagnostics.getClientForInstance(record);
-    await client.loadToken();
+    const { record, client } = await this.resolveClient(instanceId);
     await client.reindexShared();
-    return this.getOverview(instanceId);
+    return this.fetchOverview(record, client);
   }
 
   async republishSources(instanceId: string): Promise<ManagedInstanceSharedOverview> {
-    const record = await this.diagnostics.getInstanceRecord(instanceId);
-    const client = this.diagnostics.getClientForInstance(record);
-    await client.loadToken();
+    const { record, client } = await this.resolveClient(instanceId);
     await client.republishSources();
-    return this.getOverview(instanceId);
+    return this.fetchOverview(record, client);
   }
 
   async republishKeywords(instanceId: string): Promise<ManagedInstanceSharedOverview> {
+    const { record, client } = await this.resolveClient(instanceId);
+    await client.republishKeywords();
+    return this.fetchOverview(record, client);
+  }
+
+  async triggerReindex(instanceId: string): Promise<void> {
+    const { client } = await this.resolveClient(instanceId);
+    await client.reindexShared();
+  }
+
+  async triggerRepublishSources(instanceId: string): Promise<void> {
+    const { client } = await this.resolveClient(instanceId);
+    await client.republishSources();
+  }
+
+  async triggerRepublishKeywords(instanceId: string): Promise<void> {
+    const { client } = await this.resolveClient(instanceId);
+    await client.republishKeywords();
+  }
+
+  private async resolveClient(
+    instanceId: string,
+  ): Promise<{ record: ManagedInstanceRecord; client: RustMuleClient }> {
     const record = await this.diagnostics.getInstanceRecord(instanceId);
     const client = this.diagnostics.getClientForInstance(record);
     await client.loadToken();
-    await client.republishKeywords();
-    return this.getOverview(instanceId);
+    return { record, client };
+  }
+
+  private async fetchOverview(
+    record: ManagedInstanceRecord,
+    client: RustMuleClient,
+  ): Promise<ManagedInstanceSharedOverview> {
+    const sharedDir = resolveSharedDir(record);
+    const [files, actions, downloads] = await Promise.all([
+      client.getSharedFiles(),
+      client.getSharedActions(),
+      client.getDownloads(),
+    ]);
+    return {
+      instanceId: record.id,
+      sharedDir,
+      files: files.files,
+      actions: actions.actions,
+      downloads: downloads.downloads,
+    };
   }
 }
 

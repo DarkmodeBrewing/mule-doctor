@@ -85,15 +85,15 @@ test("ManagedInstanceDiscoverabilityService completes with found outcome", async
         sizeBytes: 64,
       };
     },
-    async reindex(id) {
+    async triggerReindex(id) {
       sharingCalls.push(["reindex", id]);
       return {};
     },
-    async republishSources(id) {
+    async triggerRepublishSources(id) {
       sharingCalls.push(["republishSources", id]);
       return {};
     },
-    async republishKeywords(id) {
+    async triggerRepublishKeywords(id) {
       sharingCalls.push(["republishKeywords", id]);
       return {};
     },
@@ -169,9 +169,9 @@ test("ManagedInstanceDiscoverabilityService returns completed_empty for terminal
         sizeBytes: 64,
       };
     },
-    async reindex() {},
-    async republishSources() {},
-    async republishKeywords() {},
+    async triggerReindex() {},
+    async triggerRepublishSources() {},
+    async triggerRepublishKeywords() {},
   };
 
   const service = new ManagedInstanceDiscoverabilityService(diagnostics, sharing);
