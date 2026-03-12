@@ -332,7 +332,9 @@ export class RustMuleClient {
       `/searches/${encodeURIComponent(searchId)}`,
     );
     const search =
-      typeof payload["search"] === "object" && payload["search"] !== null
+      typeof payload["search"] === "object" &&
+      payload["search"] !== null &&
+      !Array.isArray(payload["search"])
         ? (payload["search"] as RustMuleKeywordSearchInfo)
         : {};
     return {

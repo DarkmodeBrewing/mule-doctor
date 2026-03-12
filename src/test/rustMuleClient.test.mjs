@@ -116,6 +116,20 @@ test("RustMuleClient reads search detail from /api/v1/searches/{id}", async () =
   assert.equal(detail.hits[0].filename, "fixture-token.txt");
 });
 
+test("RustMuleClient ignores invalid array-shaped search payloads in search detail", async () => {
+  global.fetch = async () =>
+    makeJsonResponse({
+      search: ["not", "an", "object"],
+      hits: [],
+    });
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const detail = await client.getSearchDetail("search-01");
+
+  assert.deepEqual(detail.search, {});
+  assert.deepEqual(detail.hits, []);
+});
+
 test("RustMuleClient reads shared files from /api/v1/shared", async () => {
   const calls = [];
   global.fetch = async (url) => {

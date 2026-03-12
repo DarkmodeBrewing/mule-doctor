@@ -90,3 +90,44 @@ test("ManagedInstanceSharingService returns shared status from the managed rust-
   assert.equal(overview.actions[0].kind, "reindex");
   assert.equal(overview.downloads[0].state, "queued");
 });
+
+test("ManagedInstanceSharingService falls back to rootDir/shared for legacy records", async () => {
+  const temp = await makeTempDir();
+  const record = {
+    id: "legacy",
+    runtime: {
+      rootDir: temp.dir,
+    },
+  };
+  const diagnostics = {
+    async getInstanceRecord(id) {
+      assert.equal(id, "legacy");
+      return record;
+    },
+    getClientForInstance() {
+      return {
+        async loadToken() {},
+        async getSharedFiles() {
+          return { files: [] };
+        },
+        async getSharedActions() {
+          return { actions: [] };
+        },
+        async getDownloads() {
+          return { downloads: [] };
+        },
+      };
+    },
+  };
+
+  try {
+    const service = new ManagedInstanceSharingService(diagnostics);
+    const fixture = await service.ensureFixture("legacy");
+    const overview = await service.getOverview("legacy");
+
+    assert.equal(fixture.absolutePath, join(temp.dir, "shared", "mule-doctor-legacy-discoverability.txt"));
+    assert.equal(overview.sharedDir, join(temp.dir, "shared"));
+  } finally {
+    await temp.cleanup();
+  }
+});

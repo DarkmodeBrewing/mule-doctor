@@ -22,6 +22,7 @@ export class ManagedInstanceSharingService {
     const record = await this.diagnostics.getInstanceRecord(instanceId);
     const client = this.diagnostics.getClientForInstance(record);
     await client.loadToken();
+    const sharedDir = resolveSharedDir(record);
     const [files, actions, downloads] = await Promise.all([
       client.getSharedFiles(),
       client.getSharedActions(),
@@ -29,7 +30,7 @@ export class ManagedInstanceSharingService {
     ]);
     return {
       instanceId: record.id,
-      sharedDir: record.runtime.sharedDir,
+      sharedDir,
       files: files.files,
       actions: actions.actions,
       downloads: downloads.downloads,
@@ -41,12 +42,13 @@ export class ManagedInstanceSharingService {
     input: EnsureManagedSharedFixtureInput = {},
   ): Promise<ManagedSharedFixture> {
     const record = await this.diagnostics.getInstanceRecord(instanceId);
-    await mkdir(record.runtime.sharedDir, { recursive: true });
+    const sharedDir = resolveSharedDir(record);
+    await mkdir(sharedDir, { recursive: true });
 
     const fixtureId = normalizeFixtureId(input.fixtureId);
     const token = `mule-doctor-${record.id}-${fixtureId}`;
     const fileName = `${token}.txt`;
-    const absolutePath = join(record.runtime.sharedDir, fileName);
+    const absolutePath = join(sharedDir, fileName);
     const relativePath = basename(absolutePath);
     const content = buildFixtureContent(record, fixtureId, token);
 
@@ -86,6 +88,14 @@ export class ManagedInstanceSharingService {
     await client.republishKeywords();
     return this.getOverview(instanceId);
   }
+}
+
+function resolveSharedDir(record: ManagedInstanceRecord): string {
+  const sharedDir = record.runtime.sharedDir?.trim();
+  if (sharedDir) {
+    return sharedDir;
+  }
+  return join(record.runtime.rootDir, "shared");
 }
 
 function normalizeFixtureId(fixtureId: string | undefined): string {

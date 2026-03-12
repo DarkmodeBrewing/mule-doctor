@@ -704,7 +704,13 @@ export class OperatorConsoleServer {
   ): Promise<void> {
     const suffix = path.slice("/api/instances/".length);
     const [idRaw, action, ...rest] = suffix.split("/");
-    const id = decodeURIComponent(idRaw ?? "").trim();
+    let id = "";
+    try {
+      id = decodeURIComponent(idRaw ?? "").trim();
+    } catch {
+      sendJson(res, 400, { ok: false, error: "invalid percent-encoding in instance id" });
+      return;
+    }
     if (!id) {
       sendJson(res, 400, { ok: false, error: "missing instance id" });
       return;
@@ -843,6 +849,10 @@ export class OperatorConsoleServer {
     }
 
     const [subAction] = actionSegments;
+    if (actionSegments.length > 1) {
+      sendJson(res, 404, { ok: false, error: "not found" });
+      return;
+    }
     if (!subAction) {
       if (req.method !== "GET") {
         sendJson(res, 405, { ok: false, error: "method not allowed" });
@@ -868,7 +878,7 @@ export class OperatorConsoleServer {
       );
       await this.appendOperatorEvent({
         type: "managed_instance_control_applied",
-        message: `Operator created discoverability fixture ${fixture.fileName} for managed instance ${id}.`,
+        message: `Operator created fixture ${fixture.fileName} for managed instance ${id}.`,
         target: {
           kind: "managed_instance",
           instanceId: id,

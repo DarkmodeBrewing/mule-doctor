@@ -617,6 +617,50 @@ test("OperatorConsoleServer exposes managed shared-content status and actions", 
   }
 });
 
+test("OperatorConsoleServer rejects malformed instance ids and unexpected shared sub-routes", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstanceSharing: new StubManagedInstanceSharing(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+
+    const malformedRes = await fetch(`${server.publicAddress()}/api/instances/%E0%A4%A/shared`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(malformedRes.status, 400);
+
+    const nestedRes = await fetch(
+      `${server.publicAddress()}/api/instances/a/shared/fixtures/extra`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          Origin: server.publicAddress(),
+        },
+      },
+    );
+    assert.equal(nestedRes.status, 404);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("OperatorConsoleServer gets and sets the active diagnostic target", async () => {
   const tmp = await makeTempDir();
   try {
