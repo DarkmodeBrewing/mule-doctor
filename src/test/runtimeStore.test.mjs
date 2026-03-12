@@ -253,10 +253,8 @@ test("RuntimeStore enforces discoverability result retention limit", async () =>
           searcherInstanceId: "b",
           fixture: {
             fixtureId: `f-${i}`,
-            token: `tok-${i}`,
             fileName: `f-${i}.txt`,
             relativePath: `f-${i}.txt`,
-            absolutePath: `/tmp/f-${i}.txt`,
             sizeBytes: 1,
           },
           query: `tok-${i}`,
@@ -280,6 +278,8 @@ test("RuntimeStore enforces discoverability result retention limit", async () =>
       results.map((entry) => entry.recordedAt),
       ["t-3", "t-4"],
     );
+    assert.equal("token" in results[0].result.fixture, false);
+    assert.equal("absolutePath" in results[0].result.fixture, false);
   } finally {
     await tmp.cleanup();
   }

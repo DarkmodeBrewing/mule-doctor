@@ -309,7 +309,25 @@ class StubDiscoverabilityResultsStore {
   async append(result) {
     this.records.push({
       recordedAt: "2026-03-12T10:05:00.000Z",
-      result,
+      result: {
+        publisherInstanceId: result.publisherInstanceId,
+        searcherInstanceId: result.searcherInstanceId,
+        fixture: {
+          fixtureId: result.fixture.fixtureId,
+          fileName: result.fixture.fileName,
+          relativePath: result.fixture.relativePath,
+          sizeBytes: result.fixture.sizeBytes,
+        },
+        query: result.query,
+        dispatchedAt: result.dispatchedAt,
+        searchId: result.searchId,
+        readinessAtDispatch: result.readinessAtDispatch,
+        peerCountAtDispatch: result.peerCountAtDispatch,
+        states: result.states,
+        resultCount: result.resultCount,
+        outcome: result.outcome,
+        finalState: result.finalState,
+      },
     });
   }
 }
@@ -856,6 +874,8 @@ test("OperatorConsoleServer returns persisted discoverability results", async ()
     const body = await res.json();
     assert.equal(body.results.length, 1);
     assert.equal(body.results[0].result.searchId, "search-1");
+    assert.equal("token" in body.results[0].result.fixture, false);
+    assert.equal("absolutePath" in body.results[0].result.fixture, false);
 
     await server.stop();
   } finally {
