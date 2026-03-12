@@ -11,6 +11,7 @@ import {
 } from "./constants.js";
 import { connectStream, fetchJson, postJson } from "./api.js";
 import { renderFileList, setText } from "./dom.js";
+import { createDiscoverabilityController } from "./discoverability.js";
 import { createStatusCards } from "./statusCards.js";
 import { createTimelineController } from "./timeline.js";
 import { createInstancesController } from "./instances.js";
@@ -32,6 +33,7 @@ const state = {
 
 const statusCards = createStatusCards(state, setText);
 const timeline = createTimelineController(state);
+const discoverability = createDiscoverabilityController(fetchJson);
 const instances = createInstancesController({
   state,
   timeline,
@@ -114,6 +116,7 @@ async function refreshAll() {
       instances.refreshInstances(),
       instances.refreshInstancePresets(),
       refreshOperatorEvents(),
+      discoverability.refreshDiscoverabilityResults(),
     ]);
   } catch (err) {
     setText("health", `Refresh failed: ${String(err)}`);
@@ -139,6 +142,8 @@ document.getElementById("refresh-app").onclick = refreshAppLogs;
 document.getElementById("refresh-rust").onclick = refreshRustLogs;
 document.getElementById("refresh-llm-list").onclick = refreshLlmList;
 document.getElementById("refresh-proposals").onclick = refreshProposalList;
+document.getElementById("refresh-discoverability-results").onclick =
+  discoverability.refreshDiscoverabilityResults;
 document.getElementById("refresh-instances").onclick = instances.refreshInstances;
 document.getElementById("refresh-instance-compare").onclick = instances.refreshInstanceCompare;
 document.getElementById("compare-left").onchange = instances.renderCompareTimelineControls;

@@ -1465,6 +1465,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(staticUiScript, /from "\.\/constants\.js"/);
     assert.match(staticUiScript, /from "\.\/timeline\.js"/);
     assert.match(staticUiScript, /from "\.\/instances\.js"/);
+    assert.match(staticUiScript, /from "\.\/discoverability\.js"/);
 
     const instancesModuleRes = await fetch(`${baseUrl}/static/operatorConsole/instances.js`, {
       headers: { Cookie: cookie },
@@ -1509,6 +1510,17 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(timelineFiltersModule, /operator-event-grouping-toggle/);
     assert.match(timelineFiltersModule, /operator-event-signal-failures/);
 
+    const discoverabilityModuleRes = await fetch(
+      `${baseUrl}/static/operatorConsole/discoverability.js`,
+      {
+        headers: { Cookie: cookie },
+      },
+    );
+    assert.equal(discoverabilityModuleRes.status, 200);
+    const discoverabilityModule = await discoverabilityModuleRes.text();
+    assert.match(discoverabilityModule, /createDiscoverabilityController/);
+    assert.match(discoverabilityModule, /discoverability-results/);
+
     const constantsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/constants.js`, {
       headers: { Cookie: cookie },
     });
@@ -1535,6 +1547,8 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /operator-view-runs/);
     assert.match(rootHtml, /selected-instance-feedback/);
     assert.match(rootHtml, /selected-instance-action-summary/);
+    assert.match(rootHtml, /refresh-discoverability-results/);
+    assert.match(rootHtml, /discoverability-results/);
 
     const authorizedIndexHtmlRes = await fetch(`${baseUrl}/static/operatorConsole/index.html`, {
       headers: { Cookie: cookie },

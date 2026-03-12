@@ -521,6 +521,11 @@ li button {
   margin-top: 4px;
 }
 
+.discoverability-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .login-body {
   display: grid;
   place-items: center;
