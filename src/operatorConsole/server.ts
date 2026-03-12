@@ -61,6 +61,7 @@ import type {
   ManagedInstanceControl,
   ManagedInstanceDiagnostics,
   ManagedInstancePresets,
+  ManagedInstanceSharing,
   OperatorConsoleConfig,
   OperatorEventsStore,
   ObserverControl,
@@ -80,6 +81,7 @@ export class OperatorConsoleServer {
   private readonly managedInstances: ManagedInstanceControl | undefined;
   private readonly managedInstanceDiagnostics: ManagedInstanceDiagnostics | undefined;
   private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
+  private readonly managedInstanceSharing: ManagedInstanceSharing | undefined;
   private readonly managedInstancePresets: ManagedInstancePresets | undefined;
   private readonly diagnosticTarget: DiagnosticTargetControl | undefined;
   private readonly observerControl: ObserverControl | undefined;
@@ -111,6 +113,7 @@ export class OperatorConsoleServer {
     this.managedInstances = config.managedInstances;
     this.managedInstanceDiagnostics = config.managedInstanceDiagnostics;
     this.managedInstanceAnalysis = config.managedInstanceAnalysis;
+    this.managedInstanceSharing = config.managedInstanceSharing;
     this.managedInstancePresets = config.managedInstancePresets;
     this.diagnosticTarget = config.diagnosticTarget;
     this.observerControl = config.observerControl;
@@ -700,7 +703,7 @@ export class OperatorConsoleServer {
     path: string,
   ): Promise<void> {
     const suffix = path.slice("/api/instances/".length);
-    const [idRaw, action] = suffix.split("/");
+    const [idRaw, action, ...rest] = suffix.split("/");
     const id = decodeURIComponent(idRaw ?? "").trim();
     if (!id) {
       sendJson(res, 400, { ok: false, error: "missing instance id" });
@@ -789,6 +792,11 @@ export class OperatorConsoleServer {
       return;
     }
 
+    if (action === "shared") {
+      await this.handleInstanceSharedAction(req, res, id, rest);
+      return;
+    }
+
     if (!this.managedInstances) {
       sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
       return;
@@ -821,6 +829,85 @@ export class OperatorConsoleServer {
     );
 
     sendJson(res, 200, { ok: true, instance });
+  }
+
+  private async handleInstanceSharedAction(
+    req: IncomingMessage,
+    res: ServerResponse,
+    id: string,
+    actionSegments: string[],
+  ): Promise<void> {
+    if (!this.managedInstanceSharing) {
+      sendJson(res, 501, { ok: false, error: "managed instance shared-content control unavailable" });
+      return;
+    }
+
+    const [subAction] = actionSegments;
+    if (!subAction) {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      const shared = await handleManagedInstanceErrors(() =>
+        this.managedInstanceSharing!.getOverview(id),
+      );
+      sendJson(res, 200, { ok: true, shared });
+      return;
+    }
+
+    if (subAction === "fixtures") {
+      if (req.method !== "POST") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      const payload = await readJsonBody(req);
+      const fixture = await handleManagedInstanceErrors(() =>
+        this.managedInstanceSharing!.ensureFixture(id, {
+          fixtureId: typeof payload.fixtureId === "string" ? payload.fixtureId : undefined,
+        }),
+      );
+      await this.appendOperatorEvent({
+        type: "managed_instance_control_applied",
+        message: `Operator created discoverability fixture ${fixture.fileName} for managed instance ${id}.`,
+        target: {
+          kind: "managed_instance",
+          instanceId: id,
+        },
+        actor: "operator_console",
+      });
+      sendJson(res, 201, { ok: true, fixture });
+      return;
+    }
+
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+
+    if (subAction !== "reindex" && subAction !== "republish_sources" && subAction !== "republish_keywords") {
+      sendJson(res, 404, { ok: false, error: "not found" });
+      return;
+    }
+
+    const shared = await handleManagedInstanceErrors(() => {
+      if (subAction === "reindex") {
+        return this.managedInstanceSharing!.reindex(id);
+      }
+      if (subAction === "republish_sources") {
+        return this.managedInstanceSharing!.republishSources(id);
+      }
+      return this.managedInstanceSharing!.republishKeywords(id);
+    });
+    await this.appendOperatorEvent({
+      type: "managed_instance_control_applied",
+      message: `Operator triggered ${subAction} for managed instance ${id} shared content.`,
+      target: {
+        kind: "managed_instance",
+        instanceId: id,
+      },
+      actor: "operator_console",
+    });
+    sendJson(res, 200, { ok: true, shared });
   }
 
   private async appendManagedInstanceControlEvent(

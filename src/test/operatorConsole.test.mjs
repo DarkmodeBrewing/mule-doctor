@@ -187,6 +187,50 @@ class StubManagedInstanceAnalysis {
   }
 }
 
+class StubManagedInstanceSharing {
+  constructor() {
+    this.calls = [];
+  }
+
+  async getOverview(id) {
+    this.calls.push(["getOverview", id]);
+    return {
+      instanceId: id,
+      sharedDir: `/data/instances/${id}/shared`,
+      files: [{ identity: { file_name: "fixture.txt" }, keyword_publish_queued: true }],
+      actions: [{ kind: "reindex", state: "idle" }],
+      downloads: [{ file_name: "fixture.txt", state: "queued" }],
+    };
+  }
+
+  async ensureFixture(id, input = {}) {
+    this.calls.push(["ensureFixture", id, input.fixtureId]);
+    return {
+      fixtureId: input.fixtureId ?? "discoverability",
+      token: `mule-doctor-${id}-${input.fixtureId ?? "discoverability"}`,
+      fileName: `mule-doctor-${id}-${input.fixtureId ?? "discoverability"}.txt`,
+      relativePath: `mule-doctor-${id}-${input.fixtureId ?? "discoverability"}.txt`,
+      absolutePath: `/data/instances/${id}/shared/mule-doctor-${id}-${input.fixtureId ?? "discoverability"}.txt`,
+      sizeBytes: 64,
+    };
+  }
+
+  async reindex(id) {
+    this.calls.push(["reindex", id]);
+    return this.getOverview(id);
+  }
+
+  async republishSources(id) {
+    this.calls.push(["republishSources", id]);
+    return this.getOverview(id);
+  }
+
+  async republishKeywords(id) {
+    this.calls.push(["republishKeywords", id]);
+    return this.getOverview(id);
+  }
+}
+
 class StubDiagnosticTargetControl {
   constructor() {
     this.target = { kind: "external" };
@@ -496,6 +540,76 @@ test("OperatorConsoleServer reports 501 for instance detail routes when control 
       headers: { Cookie: cookie },
     });
     assert.equal(diagnosticsRes.status, 200);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer exposes managed shared-content status and actions", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const shared = new StubManagedInstanceSharing();
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstanceSharing: shared,
+      operatorEvents: new StubOperatorEvents(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+
+    const getRes = await fetch(`${server.publicAddress()}/api/instances/a/shared`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(getRes.status, 200);
+    const overview = await getRes.json();
+    assert.equal(overview.shared.instanceId, "a");
+    assert.equal(overview.shared.files[0].identity.file_name, "fixture.txt");
+
+    const fixtureRes = await fetch(`${server.publicAddress()}/api/instances/a/shared/fixtures`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Origin: server.publicAddress(),
+      },
+      body: JSON.stringify({ fixtureId: "search-probe" }),
+    });
+    assert.equal(fixtureRes.status, 201);
+    const fixture = await fixtureRes.json();
+    assert.equal(fixture.fixture.fixtureId, "search-probe");
+
+    const republishRes = await fetch(
+      `${server.publicAddress()}/api/instances/a/shared/republish_keywords`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          Origin: server.publicAddress(),
+        },
+      },
+    );
+    assert.equal(republishRes.status, 200);
+    const republish = await republishRes.json();
+    assert.equal(republish.shared.instanceId, "a");
+    assert.deepEqual(shared.calls, [
+      ["getOverview", "a"],
+      ["ensureFixture", "a", "search-probe"],
+      ["republishKeywords", "a"],
+      ["getOverview", "a"],
+    ]);
 
     await server.stop();
   } finally {

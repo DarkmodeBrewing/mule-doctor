@@ -161,6 +161,23 @@ export interface ManagedInstanceAnalysisResult {
   snapshot?: ManagedInstanceDiagnosticSnapshot;
 }
 
+export interface ManagedSharedFixture {
+  fixtureId: string;
+  token: string;
+  fileName: string;
+  relativePath: string;
+  absolutePath: string;
+  sizeBytes: number;
+}
+
+export interface ManagedInstanceSharedOverview {
+  instanceId: string;
+  sharedDir: string;
+  files: Record<string, unknown>[];
+  actions: Record<string, unknown>[];
+  downloads: Record<string, unknown>[];
+}
+
 export interface ManagedInstancePresetNode {
   suffix: string;
 }

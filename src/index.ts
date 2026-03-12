@@ -19,6 +19,7 @@ import { OperatorEventLog } from "./operatorConsole/operatorEventLog.js";
 import { InstanceManager } from "./instances/instanceManager.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
 import { ManagedInstanceAnalysisService } from "./instances/managedInstanceAnalysis.js";
+import { ManagedInstanceSharingService } from "./instances/managedInstanceSharing.js";
 import { DiagnosticTargetService } from "./instances/diagnosticTargetService.js";
 import { ManagedInstancePresetService } from "./instances/managedInstancePresets.js";
 import { ObserverTargetResolver } from "./observerTargetResolver.js";
@@ -203,6 +204,10 @@ async function main(): Promise<void> {
           patchProposalNotifier,
         })
       : undefined;
+  const managedInstanceSharing =
+    managedInstanceDiagnostics
+      ? new ManagedInstanceSharingService(managedInstanceDiagnostics)
+      : undefined;
   const managedInstancePresets = managedInstances
     ? new ManagedInstancePresetService(managedInstances)
     : undefined;
@@ -251,6 +256,7 @@ async function main(): Promise<void> {
       managedInstances,
       managedInstanceDiagnostics,
       managedInstanceAnalysis,
+      managedInstanceSharing,
       managedInstancePresets,
       diagnosticTarget,
       observerControl: observer,
