@@ -39,6 +39,16 @@ class StubMattermost {
 }
 
 class StubClient {
+  async getReadiness() {
+    return {
+      statusReady: true,
+      searchesReady: true,
+      ready: true,
+      status: { ready: true },
+      searches: { ready: true, searches: [] },
+    };
+  }
+
   async getNodeInfo() {
     return { nodeId: "n1", version: "v1", uptime: 123 };
   }
@@ -141,6 +151,18 @@ class FailingTargetResolver {
 
   async resolve() {
     throw new Error("Managed instance missing is stopped");
+  }
+}
+
+class NotReadyClient extends StubClient {
+  async getReadiness() {
+    return {
+      statusReady: true,
+      searchesReady: false,
+      ready: false,
+      status: { ready: true },
+      searches: { ready: false, searches: [] },
+    };
   }
 }
 
@@ -294,6 +316,46 @@ test("Observer reports unavailable active targets without stopping the loop", as
     const events = await runtimeStore.loadEvents();
     assert.equal(events.length, 2);
     assert.equal(events[1].outcome, "unavailable");
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("Observer reports reachable but not-ready targets as unavailable", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const runtimeStore = new RuntimeStore({ dataDir: tmp.dir });
+    await runtimeStore.initialize();
+
+    const mattermost = new CountingMattermost();
+    const observer = new Observer(new StubAnalyzer(), mattermost, {
+      runtimeStore,
+      eventLog: new OperatorEventLog(runtimeStore),
+      targetResolver: new StubTargetResolver({
+        target: { kind: "external" },
+        label: "external configured rust-mule client",
+        client: new NotReadyClient(),
+        logSource: new StubLogWatcher(),
+      }),
+      intervalMs: 999999,
+    });
+
+    await observer.runCycle();
+
+    assert.equal(mattermost.periodicCalls, 1);
+    assert.match(mattermost.lastPeriodicReport.summary, /Active diagnostic target unavailable/);
+    assert.match(mattermost.lastPeriodicReport.summary, /\/api\/v1\/searches\.ready=false/);
+
+    const state = await runtimeStore.loadState();
+    assert.equal(state.lastHealthScore, 0);
+    assert.equal(state.lastCycleOutcome, "unavailable");
+    assert.match(state.lastTargetFailureReason, /rust-mule target not ready/);
+    assert.match(state.lastTargetFailureReason, /\/api\/v1\/searches\.ready=false/);
+
+    const history = await runtimeStore.loadHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].healthScore, 0);
   } finally {
     await tmp.cleanup();
   }

@@ -61,6 +61,9 @@ End-to-end smoke harness:
 - `npm run smoke:docker` provisions a disposable temp data directory, starts the stack with `docker compose`, waits for:
   - rust-mule token creation
   - rust-mule `GET /api/v1/health`
+  - rust-mule authenticated `GET /api/v1/status`
+  - rust-mule `/api/v1/status.ready == true`
+  - rust-mule `/api/v1/searches.ready == true`
   - authorized mule-doctor `GET /api/health`
 - it then verifies persisted runtime artifacts under the mounted `/data`, including:
   - `config.toml`
@@ -70,7 +73,7 @@ End-to-end smoke harness:
   - `mule-doctor/operator-events.json`
 - by default the temp work directory is deleted on success and preserved on failure with captured compose logs for debugging
 
-Note: rust-mule readiness handling is being aligned with the newer `200 + ready: true/false` contract. The smoke harness still documents the current behavior here; the backlog item is tracked in [docs/TASK.md](/home/coder/projects/mule-doctor/docs/TASK.md).
+Note: rust-mule readiness handling is being aligned with the newer `200 + ready: true/false` contract in code and tests, but the broader observer/search workflow work is still tracked in [docs/TASK.md](/home/coder/projects/mule-doctor/docs/TASK.md).
 
 Operator console (optional):
 

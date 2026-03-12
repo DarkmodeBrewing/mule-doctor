@@ -57,6 +57,61 @@ test("RustMuleClient uses /api/v1 status for node info", async () => {
   assert.equal(info.version, "test-v1");
 });
 
+test("RustMuleClient exposes status readiness explicitly", async () => {
+  global.fetch = async () =>
+    makeJsonResponse({
+      ready: true,
+      uptime_secs: 123,
+      node_id_hex: "abc123",
+    });
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const status = await client.getStatus();
+
+  assert.equal(status.ready, true);
+  assert.equal(status.uptime_secs, 123);
+});
+
+test("RustMuleClient exposes search readiness explicitly", async () => {
+  global.fetch = async () =>
+    makeJsonResponse({
+      ready: true,
+      searches: [{ search_id_hex: "01", keyword_label: "fixture", hits: 1 }],
+    });
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const searches = await client.getSearches();
+
+  assert.equal(searches.ready, true);
+  assert.equal(searches.searches.length, 1);
+  assert.equal(searches.searches[0].search_id_hex, "01");
+});
+
+test("RustMuleClient combines status and search readiness", async () => {
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    if (String(url).endsWith("/status")) {
+      return makeJsonResponse({ ready: true, node_id_hex: "abc123" });
+    }
+    if (String(url).endsWith("/searches")) {
+      return makeJsonResponse({ ready: false, searches: [] });
+    }
+    throw new Error(`Unexpected URL in test: ${String(url)}`);
+  };
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const readiness = await client.getReadiness();
+
+  assert.deepEqual(calls.sort(), [
+    "http://127.0.0.1:17835/api/v1/searches",
+    "http://127.0.0.1:17835/api/v1/status",
+  ]);
+  assert.equal(readiness.statusReady, true);
+  assert.equal(readiness.searchesReady, false);
+  assert.equal(readiness.ready, false);
+});
+
 test("RustMuleClient maps peers from /kad/peers payload", async () => {
   global.fetch = async () =>
     makeJsonResponse({
