@@ -215,6 +215,39 @@ export interface ManagedDiscoverabilityCheckResult {
   finalState: string;
 }
 
+export interface ManagedDiscoverabilityFixtureSummary {
+  fixtureId: string;
+  fileName: string;
+  relativePath: string;
+  sizeBytes: number;
+}
+
+export interface ManagedDiscoverabilitySummaryResult {
+  publisherInstanceId: string;
+  searcherInstanceId: string;
+  fixture: ManagedDiscoverabilityFixtureSummary;
+  query: string;
+  dispatchedAt: string;
+  searchId: string;
+  readinessAtDispatch: {
+    publisherReady: boolean;
+    searcherReady: boolean;
+  };
+  peerCountAtDispatch: {
+    publisher: number;
+    searcher: number;
+  };
+  states: ManagedDiscoverabilityStateSample[];
+  resultCount: number;
+  outcome: ManagedDiscoverabilityOutcome;
+  finalState: string;
+}
+
+export interface ManagedDiscoverabilityRecord {
+  recordedAt: string;
+  result: ManagedDiscoverabilitySummaryResult;
+}
+
 export interface ManagedInstancePresetNode {
   suffix: string;
 }

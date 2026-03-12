@@ -1,4 +1,4 @@
-import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult } from "../types/contracts.js";
+import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord } from "../types/contracts.js";
 
 export interface ListedFile {
   name: string;
@@ -76,6 +76,11 @@ export interface ManagedInstanceDiscoverability {
   }): Promise<ManagedDiscoverabilityCheckResult>;
 }
 
+export interface DiscoverabilityResultsStore {
+  listRecent(limit?: number): Promise<ManagedDiscoverabilityRecord[]>;
+  append(result: ManagedDiscoverabilityCheckResult): Promise<void>;
+}
+
 export interface DiagnosticTargetControl {
   getActiveTarget(): Promise<DiagnosticTargetRef>;
   setActiveTarget(target: DiagnosticTargetRef): Promise<DiagnosticTargetRef>;
@@ -130,6 +135,7 @@ export interface OperatorConsoleConfig {
   diagnosticTarget?: DiagnosticTargetControl;
   observerControl?: ObserverControl;
   operatorEvents?: OperatorEventsStore;
+  discoverabilityResults?: DiscoverabilityResultsStore;
 }
 
 export interface SafeReadResult {

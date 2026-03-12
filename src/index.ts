@@ -15,6 +15,7 @@ import { Observer } from "./observer.js";
 import { RuntimeStore } from "./storage/runtimeStore.js";
 import { installStdoutLogBuffer } from "./operatorConsole/logBuffer.js";
 import { OperatorConsoleServer } from "./operatorConsole/server.js";
+import { DiscoverabilityLog } from "./operatorConsole/discoverabilityLog.js";
 import { OperatorEventLog } from "./operatorConsole/operatorEventLog.js";
 import { InstanceManager } from "./instances/instanceManager.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
@@ -151,6 +152,7 @@ async function main(): Promise<void> {
     proposalDir,
   });
   const operatorEventLog = new OperatorEventLog(runtimeStore);
+  const discoverabilityLog = new DiscoverabilityLog(runtimeStore);
   const usageTracker = new UsageTracker({
     runtimeStore,
     dataDir: llmLogDir,
@@ -270,6 +272,7 @@ async function main(): Promise<void> {
       diagnosticTarget,
       observerControl: observer,
       operatorEvents: operatorEventLog,
+      discoverabilityResults: discoverabilityLog,
     });
     try {
       await operatorConsole.start();

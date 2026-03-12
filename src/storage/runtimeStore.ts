@@ -5,30 +5,41 @@
 
 import { mkdir, readFile, rename, unlink, writeFile } from "fs/promises";
 import { dirname } from "path";
-import type { HistoryEntry, OperatorEventEntry, RuntimeState } from "../types/contracts.js";
+import type {
+  HistoryEntry,
+  ManagedDiscoverabilityRecord,
+  OperatorEventEntry,
+  RuntimeState,
+} from "../types/contracts.js";
 
 const DEFAULT_DATA_DIR = "/data/mule-doctor";
 const DEFAULT_STATE_FILE = "state.json";
 const DEFAULT_HISTORY_FILE = "history.json";
 const DEFAULT_EVENTS_FILE = "operator-events.json";
+const DEFAULT_DISCOVERABILITY_FILE = "discoverability-results.json";
 const DEFAULT_HISTORY_LIMIT = 500;
 const DEFAULT_EVENTS_LIMIT = 200;
+const DEFAULT_DISCOVERABILITY_LIMIT = 100;
 
 export interface RuntimeStoreConfig {
   dataDir?: string;
   statePath?: string;
   historyPath?: string;
   eventsPath?: string;
+  discoverabilityPath?: string;
   historyLimit?: number;
   eventsLimit?: number;
+  discoverabilityLimit?: number;
 }
 
 export class RuntimeStore {
   private readonly statePath: string;
   private readonly historyPath: string;
   private readonly eventsPath: string;
+  private readonly discoverabilityPath: string;
   private readonly historyLimit: number;
   private readonly eventsLimit: number;
+  private readonly discoverabilityLimit: number;
   private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(config: RuntimeStoreConfig = {}) {
@@ -36,14 +47,18 @@ export class RuntimeStore {
     this.statePath = config.statePath ?? `${dataDir}/${DEFAULT_STATE_FILE}`;
     this.historyPath = config.historyPath ?? `${dataDir}/${DEFAULT_HISTORY_FILE}`;
     this.eventsPath = config.eventsPath ?? `${dataDir}/${DEFAULT_EVENTS_FILE}`;
+    this.discoverabilityPath =
+      config.discoverabilityPath ?? `${dataDir}/${DEFAULT_DISCOVERABILITY_FILE}`;
     this.historyLimit = config.historyLimit ?? DEFAULT_HISTORY_LIMIT;
     this.eventsLimit = config.eventsLimit ?? DEFAULT_EVENTS_LIMIT;
+    this.discoverabilityLimit = config.discoverabilityLimit ?? DEFAULT_DISCOVERABILITY_LIMIT;
   }
 
   async initialize(): Promise<void> {
     await this.ensureJsonFile(this.statePath, "{}\n");
     await this.ensureJsonFile(this.historyPath, "[]\n");
     await this.ensureJsonFile(this.eventsPath, "[]\n");
+    await this.ensureJsonFile(this.discoverabilityPath, "[]\n");
   }
 
   async loadState(): Promise<RuntimeState> {
@@ -115,6 +130,28 @@ export class RuntimeStore {
     const events = await this.loadEvents();
     if (n <= 0) return [];
     return events.slice(-n);
+  }
+
+  async loadDiscoverabilityResults(): Promise<ManagedDiscoverabilityRecord[]> {
+    const results = await this.readJsonFile<ManagedDiscoverabilityRecord[]>(this.discoverabilityPath);
+    return Array.isArray(results) ? results : [];
+  }
+
+  async appendDiscoverabilityResult(entry: ManagedDiscoverabilityRecord): Promise<void> {
+    await this.enqueueMutation(async () => {
+      const results = await this.loadDiscoverabilityResults();
+      results.push(entry);
+      if (results.length > this.discoverabilityLimit) {
+        results.splice(0, results.length - this.discoverabilityLimit);
+      }
+      await this.writeJsonFile(this.discoverabilityPath, results);
+    });
+  }
+
+  async getRecentDiscoverabilityResults(n = 20): Promise<ManagedDiscoverabilityRecord[]> {
+    const results = await this.loadDiscoverabilityResults();
+    if (n <= 0) return [];
+    return results.slice(-n);
   }
 
   private async ensureJsonFile(path: string, defaultContent: string): Promise<void> {
