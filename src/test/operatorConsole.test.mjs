@@ -260,6 +260,24 @@ class StubManagedInstanceDiscoverability {
         publisher: 1,
         searcher: 2,
       },
+      publisherSharedBefore: {
+        file: {
+          identity: {
+            file_name: "mule-doctor-a-discoverability.txt",
+          },
+        },
+        actions: [],
+        downloads: [],
+      },
+      publisherSharedAfter: {
+        file: {
+          identity: {
+            file_name: "mule-doctor-a-discoverability.txt",
+          },
+        },
+        actions: [],
+        downloads: [],
+      },
       states: [
         {
           observedAt: "2026-03-12T10:00:01.000Z",

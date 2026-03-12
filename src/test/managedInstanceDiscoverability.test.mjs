@@ -59,6 +59,21 @@ test("ManagedInstanceDiscoverabilityService completes with found outcome", async
   };
   const sharingCalls = [];
   const sharing = {
+    async getOverview() {
+      return {
+        files: [
+          {
+            identity: {
+              file_name: "mule-doctor-publisher-discoverability.txt",
+            },
+            keyword_publish_queued: false,
+            keyword_publish_acked: 1,
+          },
+        ],
+        actions: [{ kind: "republish_keywords", state: "idle" }],
+        downloads: [],
+      };
+    },
     async ensureFixture(id, input = {}) {
       sharingCalls.push(["ensureFixture", id, input.fixtureId]);
       return {
@@ -95,6 +110,8 @@ test("ManagedInstanceDiscoverabilityService completes with found outcome", async
   assert.equal(result.outcome, "found");
   assert.equal(result.resultCount, 1);
   assert.equal(result.searchId, "feedfacefeedfacefeedfacefeedface");
+  assert.equal(result.publisherSharedBefore.file.identity.file_name, "mule-doctor-publisher-discoverability.txt");
+  assert.equal(result.publisherSharedAfter.file.identity.file_name, "mule-doctor-publisher-discoverability.txt");
   assert.deepEqual(sharingCalls, [
     ["ensureFixture", "publisher", undefined],
     ["reindex", "publisher"],
@@ -135,6 +152,13 @@ test("ManagedInstanceDiscoverabilityService returns completed_empty for terminal
     },
   };
   const sharing = {
+    async getOverview() {
+      return {
+        files: [],
+        actions: [],
+        downloads: [],
+      };
+    },
     async ensureFixture() {
       return {
         fixtureId: "discoverability",
@@ -161,4 +185,6 @@ test("ManagedInstanceDiscoverabilityService returns completed_empty for terminal
   assert.equal(result.outcome, "completed_empty");
   assert.equal(result.finalState, "completed");
   assert.equal(result.resultCount, 0);
+  assert.equal(result.publisherSharedBefore.file, undefined);
+  assert.equal(result.publisherSharedAfter.file, undefined);
 });

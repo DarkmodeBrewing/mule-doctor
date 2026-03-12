@@ -7,6 +7,11 @@
 import type {
   BootstrapJobResult,
   RustMuleClient,
+  RustMuleDownloadsResponse,
+  RustMuleSearchDetailResponse,
+  RustMuleSearchesResponse,
+  RustMuleSharedActionsResponse,
+  RustMuleSharedFilesResponse,
   TraceLookupResult,
 } from "../api/rustMuleClient.js";
 import type { RuntimeStore } from "../storage/runtimeStore.js";
@@ -289,6 +294,81 @@ export class ToolRegistry {
           maxWaitMs: clampInt(args["maxWaitMs"], 15_000, 100, 300_000),
         });
       },
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
+          name: "listKeywordSearches",
+          description: "Returns current keyword search readiness and active search threads.",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      (): Promise<RustMuleSearchesResponse> => client.getSearches(),
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
+          name: "getKeywordSearch",
+          description: "Returns one keyword search thread and its current hits.",
+          parameters: {
+            type: "object",
+            properties: {
+              search_id: {
+                type: "string",
+                description: "search_id_hex from /api/v1/searches or search dispatch.",
+              },
+            },
+            required: ["search_id"],
+          },
+        },
+      },
+      async (args): Promise<RustMuleSearchDetailResponse> => {
+        const searchId = typeof args["search_id"] === "string" ? args["search_id"].trim() : "";
+        if (!searchId) {
+          throw new Error("getKeywordSearch requires search_id");
+        }
+        return client.getSearchDetail(searchId);
+      },
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
+          name: "listSharedFiles",
+          description: "Returns shared-library files with source and keyword publish status.",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      (): Promise<RustMuleSharedFilesResponse> => client.getSharedFiles(),
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
+          name: "listSharedActions",
+          description: "Returns shared-library operator action status like reindex or republish jobs.",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      (): Promise<RustMuleSharedActionsResponse> => client.getSharedActions(),
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
+          name: "getDownloads",
+          description: "Returns current download queue state and per-download progress.",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      (): Promise<RustMuleDownloadsResponse> => client.getDownloads(),
     );
 
     if (options.sourcePath) {

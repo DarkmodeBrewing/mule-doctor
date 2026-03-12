@@ -178,6 +178,12 @@ export interface ManagedInstanceSharedOverview {
   downloads: Record<string, unknown>[];
 }
 
+export interface ManagedSharedFixtureSnapshot {
+  file?: Record<string, unknown>;
+  actions: Record<string, unknown>[];
+  downloads: Record<string, unknown>[];
+}
+
 export type ManagedDiscoverabilityOutcome = "found" | "completed_empty" | "timed_out";
 
 export interface ManagedDiscoverabilityStateSample {
@@ -201,6 +207,8 @@ export interface ManagedDiscoverabilityCheckResult {
     publisher: number;
     searcher: number;
   };
+  publisherSharedBefore: ManagedSharedFixtureSnapshot;
+  publisherSharedAfter: ManagedSharedFixtureSnapshot;
   states: ManagedDiscoverabilityStateSample[];
   resultCount: number;
   outcome: ManagedDiscoverabilityOutcome;

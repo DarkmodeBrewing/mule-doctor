@@ -1,6 +1,7 @@
 import type {
   ManagedDiscoverabilityCheckResult,
   ManagedDiscoverabilityStateSample,
+  ManagedSharedFixtureSnapshot,
 } from "../types/contracts.js";
 import { ManagedInstanceDiagnosticsService } from "./managedInstanceDiagnostics.js";
 import { ManagedInstanceSharingService } from "./managedInstanceSharing.js";
@@ -67,9 +68,19 @@ export class ManagedInstanceDiscoverabilityService {
     const fixture = await this.sharing.ensureFixture(publisherRecord.id, {
       fixtureId: input.fixtureId,
     });
+    const publisherSharedBefore = await captureFixtureSnapshot(
+      this.sharing,
+      publisherRecord.id,
+      fixture.fileName,
+    );
     await this.sharing.reindex(publisherRecord.id);
     await this.sharing.republishSources(publisherRecord.id);
     await this.sharing.republishKeywords(publisherRecord.id);
+    const publisherSharedAfter = await captureFixtureSnapshot(
+      this.sharing,
+      publisherRecord.id,
+      fixture.fileName,
+    );
 
     const dispatch = await searcherClient.startKeywordSearch({ query: fixture.token });
     const searchId = dispatch.search_id_hex ?? dispatch.keyword_id_hex;
@@ -106,6 +117,8 @@ export class ManagedInstanceDiscoverabilityService {
             publisher: publisherPeers.length,
             searcher: searcherPeers.length,
           },
+          publisherSharedBefore,
+          publisherSharedAfter,
           states,
           resultCount: hits,
           outcome: "found",
@@ -128,6 +141,8 @@ export class ManagedInstanceDiscoverabilityService {
             publisher: publisherPeers.length,
             searcher: searcherPeers.length,
           },
+          publisherSharedBefore,
+          publisherSharedAfter,
           states,
           resultCount: hits,
           outcome: "completed_empty",
@@ -150,6 +165,8 @@ export class ManagedInstanceDiscoverabilityService {
             publisher: publisherPeers.length,
             searcher: searcherPeers.length,
           },
+          publisherSharedBefore,
+          publisherSharedAfter,
           states,
           resultCount: hits,
           outcome: "timed_out",
@@ -189,4 +206,24 @@ function clampInt(
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function captureFixtureSnapshot(
+  sharing: ManagedInstanceSharingService,
+  instanceId: string,
+  fileName: string,
+): Promise<ManagedSharedFixtureSnapshot> {
+  const overview = await sharing.getOverview(instanceId);
+  const file = overview.files.find((entry) => {
+    const identity =
+      typeof entry["identity"] === "object" && entry["identity"] !== null
+        ? (entry["identity"] as Record<string, unknown>)
+        : undefined;
+    return identity?.["file_name"] === fileName;
+  });
+  return {
+    file,
+    actions: overview.actions,
+    downloads: overview.downloads,
+  };
 }
