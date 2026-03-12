@@ -297,6 +297,23 @@ class StubManagedInstanceDiscoverability {
   }
 }
 
+class StubDiscoverabilityResultsStore {
+  constructor() {
+    this.records = [];
+  }
+
+  async listRecent(limit = 20) {
+    return this.records.slice(-limit);
+  }
+
+  async append(result) {
+    this.records.push({
+      recordedAt: "2026-03-12T10:05:00.000Z",
+      result,
+    });
+  }
+}
+
 class StubDiagnosticTargetControl {
   constructor() {
     this.target = { kind: "external" };
@@ -733,6 +750,7 @@ test("OperatorConsoleServer runs controlled discoverability checks", async () =>
     const rustLogPath = join(tmp.dir, "rust-mule.log");
     await writeFile(rustLogPath, "", "utf8");
     const discoverability = new StubManagedInstanceDiscoverability();
+    const resultsStore = new StubDiscoverabilityResultsStore();
 
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
@@ -745,6 +763,7 @@ test("OperatorConsoleServer runs controlled discoverability checks", async () =>
       subscribeToAppLogs: () => () => {},
       managedInstanceDiscoverability: discoverability,
       operatorEvents: new StubOperatorEvents(),
+      discoverabilityResults: resultsStore,
     });
     await server.start();
 
@@ -777,6 +796,66 @@ test("OperatorConsoleServer runs controlled discoverability checks", async () =>
         pollIntervalMs: 250,
       },
     ]);
+    assert.equal(resultsStore.records.length, 1);
+    assert.equal(resultsStore.records[0].result.outcome, "found");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer returns persisted discoverability results", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const resultsStore = new StubDiscoverabilityResultsStore();
+    await resultsStore.append({
+      publisherInstanceId: "a",
+      searcherInstanceId: "b",
+      fixture: {
+        fixtureId: "probe",
+        token: "probe",
+        fileName: "probe.txt",
+        relativePath: "probe.txt",
+        absolutePath: "/tmp/probe.txt",
+        sizeBytes: 10,
+      },
+      query: "probe",
+      dispatchedAt: "2026-03-12T10:00:00.000Z",
+      searchId: "search-1",
+      readinessAtDispatch: { publisherReady: true, searcherReady: true },
+      peerCountAtDispatch: { publisher: 1, searcher: 1 },
+      publisherSharedBefore: { actions: [], downloads: [] },
+      publisherSharedAfter: { actions: [], downloads: [] },
+      states: [],
+      resultCount: 1,
+      outcome: "found",
+      finalState: "running",
+    });
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      discoverabilityResults: resultsStore,
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/discoverability/results?limit=5`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.results.length, 1);
+    assert.equal(body.results[0].result.searchId, "search-1");
 
     await server.stop();
   } finally {

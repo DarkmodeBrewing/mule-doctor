@@ -90,6 +90,9 @@ export class OperatorConsoleServer {
   private readonly operatorEvents:
     | OperatorConsoleConfig["operatorEvents"]
     | undefined;
+  private readonly discoverabilityResults:
+    | OperatorConsoleConfig["discoverabilityResults"]
+    | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -121,6 +124,7 @@ export class OperatorConsoleServer {
     this.diagnosticTarget = config.diagnosticTarget;
     this.observerControl = config.observerControl;
     this.operatorEvents = config.operatorEvents;
+    this.discoverabilityResults = config.discoverabilityResults;
     this.startedAt = new Date().toISOString();
   }
 
@@ -280,6 +284,11 @@ export class OperatorConsoleServer {
 
     if (path === "/api/operator/events") {
       await this.handleOperatorEvents(req, url, res);
+      return;
+    }
+
+    if (path === "/api/discoverability/results") {
+      await this.handleDiscoverabilityResults(req, url, res);
       return;
     }
 
@@ -603,7 +612,33 @@ export class OperatorConsoleServer {
       },
       actor: "operator_console",
     });
+    if (this.discoverabilityResults) {
+      await this.discoverabilityResults.append(result);
+    }
     sendJson(res, 200, { ok: true, result });
+  }
+
+  private async handleDiscoverabilityResults(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.discoverabilityResults) {
+      sendJson(res, 501, { ok: false, error: "discoverability result history unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(
+      parseInt(url.searchParams.get("limit") ?? "", 10),
+      20,
+      1,
+      200,
+    );
+    const results = await this.discoverabilityResults.listRecent(limit);
+    sendJson(res, 200, { ok: true, results });
   }
 
   private async handleInstancesCollection(

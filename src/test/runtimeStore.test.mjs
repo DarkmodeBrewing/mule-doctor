@@ -26,10 +26,15 @@ test("RuntimeStore initializes state/history files when missing", async () => {
     const stateRaw = await readFile(join(tmp.dir, "state.json"), "utf8");
     const historyRaw = await readFile(join(tmp.dir, "history.json"), "utf8");
     const eventsRaw = await readFile(join(tmp.dir, "operator-events.json"), "utf8");
+    const discoverabilityRaw = await readFile(
+      join(tmp.dir, "discoverability-results.json"),
+      "utf8",
+    );
 
     assert.deepEqual(JSON.parse(stateRaw), {});
     assert.deepEqual(JSON.parse(historyRaw), []);
     assert.deepEqual(JSON.parse(eventsRaw), []);
+    assert.deepEqual(JSON.parse(discoverabilityRaw), []);
   } finally {
     await tmp.cleanup();
   }
@@ -227,6 +232,53 @@ test("RuntimeStore appends batched operator events in a single mutation", async 
     assert.deepEqual(
       events.map((entry) => entry.message),
       ["created a", "created b", "cycle"],
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("RuntimeStore enforces discoverability result retention limit", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir, discoverabilityLimit: 2 });
+    await store.initialize();
+
+    for (let i = 1; i <= 4; i++) {
+      await store.appendDiscoverabilityResult({
+        recordedAt: `t-${i}`,
+        result: {
+          publisherInstanceId: "a",
+          searcherInstanceId: "b",
+          fixture: {
+            fixtureId: `f-${i}`,
+            token: `tok-${i}`,
+            fileName: `f-${i}.txt`,
+            relativePath: `f-${i}.txt`,
+            absolutePath: `/tmp/f-${i}.txt`,
+            sizeBytes: 1,
+          },
+          query: `tok-${i}`,
+          dispatchedAt: `t-${i}`,
+          searchId: `s-${i}`,
+          readinessAtDispatch: { publisherReady: true, searcherReady: true },
+          peerCountAtDispatch: { publisher: 1, searcher: 1 },
+          publisherSharedBefore: { actions: [], downloads: [] },
+          publisherSharedAfter: { actions: [], downloads: [] },
+          states: [],
+          resultCount: 0,
+          outcome: "completed_empty",
+          finalState: "completed",
+        },
+      });
+    }
+
+    const results = await store.loadDiscoverabilityResults();
+    assert.equal(results.length, 2);
+    assert.deepEqual(
+      results.map((entry) => entry.recordedAt),
+      ["t-3", "t-4"],
     );
   } finally {
     await tmp.cleanup();

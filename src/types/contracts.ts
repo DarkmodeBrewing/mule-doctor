@@ -215,6 +215,11 @@ export interface ManagedDiscoverabilityCheckResult {
   finalState: string;
 }
 
+export interface ManagedDiscoverabilityRecord {
+  recordedAt: string;
+  result: ManagedDiscoverabilityCheckResult;
+}
+
 export interface ManagedInstancePresetNode {
   suffix: string;
 }
