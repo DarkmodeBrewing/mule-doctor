@@ -1,4 +1,4 @@
-import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture } from "../types/contracts.js";
+import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult } from "../types/contracts.js";
 
 export interface ListedFile {
   name: string;
@@ -66,6 +66,16 @@ export interface ManagedInstanceSharing {
   republishKeywords(id: string): Promise<ManagedInstanceSharedOverview>;
 }
 
+export interface ManagedInstanceDiscoverability {
+  runControlledCheck(input: {
+    publisherInstanceId: string;
+    searcherInstanceId: string;
+    fixtureId?: string;
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+  }): Promise<ManagedDiscoverabilityCheckResult>;
+}
+
 export interface DiagnosticTargetControl {
   getActiveTarget(): Promise<DiagnosticTargetRef>;
   setActiveTarget(target: DiagnosticTargetRef): Promise<DiagnosticTargetRef>;
@@ -115,6 +125,7 @@ export interface OperatorConsoleConfig {
   managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
   managedInstanceAnalysis?: ManagedInstanceAnalysis;
   managedInstanceSharing?: ManagedInstanceSharing;
+  managedInstanceDiscoverability?: ManagedInstanceDiscoverability;
   managedInstancePresets?: ManagedInstancePresets;
   diagnosticTarget?: DiagnosticTargetControl;
   observerControl?: ObserverControl;

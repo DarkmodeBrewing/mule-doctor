@@ -231,6 +231,54 @@ class StubManagedInstanceSharing {
   }
 }
 
+class StubManagedInstanceDiscoverability {
+  constructor() {
+    this.calls = [];
+  }
+
+  async runControlledCheck(input) {
+    this.calls.push(input);
+    return {
+      publisherInstanceId: input.publisherInstanceId,
+      searcherInstanceId: input.searcherInstanceId,
+      fixture: {
+        fixtureId: input.fixtureId ?? "discoverability",
+        token: "mule-doctor-a-discoverability",
+        fileName: "mule-doctor-a-discoverability.txt",
+        relativePath: "mule-doctor-a-discoverability.txt",
+        absolutePath: "/data/instances/a/shared/mule-doctor-a-discoverability.txt",
+        sizeBytes: 64,
+      },
+      query: "mule-doctor-a-discoverability",
+      dispatchedAt: "2026-03-12T10:00:00.000Z",
+      searchId: "feedfacefeedfacefeedfacefeedface",
+      readinessAtDispatch: {
+        publisherReady: true,
+        searcherReady: true,
+      },
+      peerCountAtDispatch: {
+        publisher: 1,
+        searcher: 2,
+      },
+      states: [
+        {
+          observedAt: "2026-03-12T10:00:01.000Z",
+          state: "running",
+          hits: 0,
+        },
+        {
+          observedAt: "2026-03-12T10:00:03.000Z",
+          state: "running",
+          hits: 1,
+        },
+      ],
+      resultCount: 1,
+      outcome: "found",
+      finalState: "running",
+    };
+  }
+}
+
 class StubDiagnosticTargetControl {
   constructor() {
     this.target = { kind: "external" };
@@ -654,6 +702,63 @@ test("OperatorConsoleServer rejects malformed instance ids and unexpected shared
       },
     );
     assert.equal(nestedRes.status, 404);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer runs controlled discoverability checks", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const discoverability = new StubManagedInstanceDiscoverability();
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstanceDiscoverability: discoverability,
+      operatorEvents: new StubOperatorEvents(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/discoverability/check`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        publisherInstanceId: "a",
+        searcherInstanceId: "b",
+        fixtureId: "probe",
+        timeoutMs: 5000,
+        pollIntervalMs: 250,
+      }),
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.result.outcome, "found");
+    assert.equal(body.result.fixture.fixtureId, "probe");
+    assert.deepEqual(discoverability.calls, [
+      {
+        publisherInstanceId: "a",
+        searcherInstanceId: "b",
+        fixtureId: "probe",
+        timeoutMs: 5000,
+        pollIntervalMs: 250,
+      },
+    ]);
 
     await server.stop();
   } finally {

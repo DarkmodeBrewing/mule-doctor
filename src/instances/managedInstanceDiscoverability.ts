@@ -1,0 +1,192 @@
+import type {
+  ManagedDiscoverabilityCheckResult,
+  ManagedDiscoverabilityStateSample,
+} from "../types/contracts.js";
+import { ManagedInstanceDiagnosticsService } from "./managedInstanceDiagnostics.js";
+import { ManagedInstanceSharingService } from "./managedInstanceSharing.js";
+
+const DEFAULT_POLL_INTERVAL_MS = 2_000;
+const DEFAULT_TIMEOUT_MS = 60_000;
+
+export interface RunControlledDiscoverabilityCheckInput {
+  publisherInstanceId: string;
+  searcherInstanceId: string;
+  fixtureId?: string;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}
+
+export class ManagedInstanceDiscoverabilityService {
+  private readonly diagnostics: ManagedInstanceDiagnosticsService;
+  private readonly sharing: ManagedInstanceSharingService;
+
+  constructor(
+    diagnostics: ManagedInstanceDiagnosticsService,
+    sharing: ManagedInstanceSharingService,
+  ) {
+    this.diagnostics = diagnostics;
+    this.sharing = sharing;
+  }
+
+  async runControlledCheck(
+    input: RunControlledDiscoverabilityCheckInput,
+  ): Promise<ManagedDiscoverabilityCheckResult> {
+    const timeoutMs = clampInt(input.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 15 * 60_000);
+    const pollIntervalMs = clampInt(
+      input.pollIntervalMs,
+      DEFAULT_POLL_INTERVAL_MS,
+      100,
+      30_000,
+    );
+    const publisherRecord = await this.diagnostics.getInstanceRecord(input.publisherInstanceId);
+    const searcherRecord = await this.diagnostics.getInstanceRecord(input.searcherInstanceId);
+    const publisherClient = this.diagnostics.getClientForInstance(publisherRecord);
+    const searcherClient = this.diagnostics.getClientForInstance(searcherRecord);
+    await Promise.all([publisherClient.loadToken(), searcherClient.loadToken()]);
+
+    const [publisherReadiness, searcherReadiness] = await Promise.all([
+      publisherClient.getReadiness(),
+      searcherClient.getReadiness(),
+    ]);
+    if (!publisherReadiness.ready) {
+      throw new Error(
+        `publisher instance ${publisherRecord.id} is not ready for discoverability checks`,
+      );
+    }
+    if (!searcherReadiness.ready) {
+      throw new Error(
+        `searcher instance ${searcherRecord.id} is not ready for discoverability checks`,
+      );
+    }
+
+    const [publisherPeers, searcherPeers] = await Promise.all([
+      publisherClient.getPeers(),
+      searcherClient.getPeers(),
+    ]);
+
+    const fixture = await this.sharing.ensureFixture(publisherRecord.id, {
+      fixtureId: input.fixtureId,
+    });
+    await this.sharing.reindex(publisherRecord.id);
+    await this.sharing.republishSources(publisherRecord.id);
+    await this.sharing.republishKeywords(publisherRecord.id);
+
+    const dispatch = await searcherClient.startKeywordSearch({ query: fixture.token });
+    const searchId = dispatch.search_id_hex ?? dispatch.keyword_id_hex;
+    if (!searchId) {
+      throw new Error(`search dispatch did not return a search identifier: ${JSON.stringify(dispatch)}`);
+    }
+
+    const dispatchedAt = new Date().toISOString();
+    const deadline = Date.now() + timeoutMs;
+    const states: ManagedDiscoverabilityStateSample[] = [];
+
+    while (true) {
+      const detail = await searcherClient.getSearchDetail(searchId);
+      const state = typeof detail.search.state === "string" ? detail.search.state : "unknown";
+      const hits = detail.hits.length;
+      pushState(states, {
+        observedAt: new Date().toISOString(),
+        state,
+        hits,
+      });
+      if (hits > 0) {
+        return {
+          publisherInstanceId: publisherRecord.id,
+          searcherInstanceId: searcherRecord.id,
+          fixture,
+          query: fixture.token,
+          dispatchedAt,
+          searchId,
+          readinessAtDispatch: {
+            publisherReady: publisherReadiness.ready,
+            searcherReady: searcherReadiness.ready,
+          },
+          peerCountAtDispatch: {
+            publisher: publisherPeers.length,
+            searcher: searcherPeers.length,
+          },
+          states,
+          resultCount: hits,
+          outcome: "found",
+          finalState: state,
+        };
+      }
+      if (isTerminalSearchState(state)) {
+        return {
+          publisherInstanceId: publisherRecord.id,
+          searcherInstanceId: searcherRecord.id,
+          fixture,
+          query: fixture.token,
+          dispatchedAt,
+          searchId,
+          readinessAtDispatch: {
+            publisherReady: publisherReadiness.ready,
+            searcherReady: searcherReadiness.ready,
+          },
+          peerCountAtDispatch: {
+            publisher: publisherPeers.length,
+            searcher: searcherPeers.length,
+          },
+          states,
+          resultCount: hits,
+          outcome: "completed_empty",
+          finalState: state,
+        };
+      }
+      if (Date.now() >= deadline) {
+        return {
+          publisherInstanceId: publisherRecord.id,
+          searcherInstanceId: searcherRecord.id,
+          fixture,
+          query: fixture.token,
+          dispatchedAt,
+          searchId,
+          readinessAtDispatch: {
+            publisherReady: publisherReadiness.ready,
+            searcherReady: searcherReadiness.ready,
+          },
+          peerCountAtDispatch: {
+            publisher: publisherPeers.length,
+            searcher: searcherPeers.length,
+          },
+          states,
+          resultCount: hits,
+          outcome: "timed_out",
+          finalState: state,
+        };
+      }
+      await sleep(pollIntervalMs);
+    }
+  }
+}
+
+function isTerminalSearchState(state: string): boolean {
+  const normalized = state.toLowerCase();
+  return normalized === "completed" || normalized === "complete" || normalized === "done";
+}
+
+function pushState(
+  states: ManagedDiscoverabilityStateSample[],
+  sample: ManagedDiscoverabilityStateSample,
+): void {
+  const last = states.at(-1);
+  if (last && last.state === sample.state && last.hits === sample.hits) {
+    return;
+  }
+  states.push(sample);
+}
+
+function clampInt(
+  value: number | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}

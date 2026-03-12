@@ -178,6 +178,35 @@ export interface ManagedInstanceSharedOverview {
   downloads: Record<string, unknown>[];
 }
 
+export type ManagedDiscoverabilityOutcome = "found" | "completed_empty" | "timed_out";
+
+export interface ManagedDiscoverabilityStateSample {
+  observedAt: string;
+  state: string;
+  hits: number;
+}
+
+export interface ManagedDiscoverabilityCheckResult {
+  publisherInstanceId: string;
+  searcherInstanceId: string;
+  fixture: ManagedSharedFixture;
+  query: string;
+  dispatchedAt: string;
+  searchId: string;
+  readinessAtDispatch: {
+    publisherReady: boolean;
+    searcherReady: boolean;
+  };
+  peerCountAtDispatch: {
+    publisher: number;
+    searcher: number;
+  };
+  states: ManagedDiscoverabilityStateSample[];
+  resultCount: number;
+  outcome: ManagedDiscoverabilityOutcome;
+  finalState: string;
+}
+
 export interface ManagedInstancePresetNode {
   suffix: string;
 }

@@ -59,6 +59,7 @@ import type {
   ManagedInstanceAnalysis,
   ManagedInstanceComparisonResponse,
   ManagedInstanceControl,
+  ManagedInstanceDiscoverability,
   ManagedInstanceDiagnostics,
   ManagedInstancePresets,
   ManagedInstanceSharing,
@@ -82,6 +83,7 @@ export class OperatorConsoleServer {
   private readonly managedInstanceDiagnostics: ManagedInstanceDiagnostics | undefined;
   private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
   private readonly managedInstanceSharing: ManagedInstanceSharing | undefined;
+  private readonly managedInstanceDiscoverability: ManagedInstanceDiscoverability | undefined;
   private readonly managedInstancePresets: ManagedInstancePresets | undefined;
   private readonly diagnosticTarget: DiagnosticTargetControl | undefined;
   private readonly observerControl: ObserverControl | undefined;
@@ -114,6 +116,7 @@ export class OperatorConsoleServer {
     this.managedInstanceDiagnostics = config.managedInstanceDiagnostics;
     this.managedInstanceAnalysis = config.managedInstanceAnalysis;
     this.managedInstanceSharing = config.managedInstanceSharing;
+    this.managedInstanceDiscoverability = config.managedInstanceDiscoverability;
     this.managedInstancePresets = config.managedInstancePresets;
     this.diagnosticTarget = config.diagnosticTarget;
     this.observerControl = config.observerControl;
@@ -282,6 +285,11 @@ export class OperatorConsoleServer {
 
     if (path === "/api/instances/compare") {
       await this.handleInstanceComparison(req, url, res);
+      return;
+    }
+
+    if (path === "/api/discoverability/check") {
+      await this.handleDiscoverabilityCheck(req, res);
       return;
     }
 
@@ -557,6 +565,45 @@ export class OperatorConsoleServer {
       }),
     );
     sendJson(res, 200, { ok: true, target });
+  }
+
+  private async handleDiscoverabilityCheck(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.managedInstanceDiscoverability) {
+      sendJson(res, 501, { ok: false, error: "managed discoverability checks unavailable" });
+      return;
+    }
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    const result = await handleManagedInstanceErrors(() =>
+      this.managedInstanceDiscoverability!.runControlledCheck({
+        publisherInstanceId:
+          typeof payload.publisherInstanceId === "string" ? payload.publisherInstanceId : "",
+        searcherInstanceId:
+          typeof payload.searcherInstanceId === "string" ? payload.searcherInstanceId : "",
+        fixtureId: typeof payload.fixtureId === "string" ? payload.fixtureId : undefined,
+        timeoutMs: typeof payload.timeoutMs === "number" ? payload.timeoutMs : undefined,
+        pollIntervalMs:
+          typeof payload.pollIntervalMs === "number" ? payload.pollIntervalMs : undefined,
+      }),
+    );
+    await this.appendOperatorEvent({
+      type: "managed_instance_control_applied",
+      message:
+        `Operator ran controlled discoverability check from ${result.publisherInstanceId} to ${result.searcherInstanceId} ` +
+        `with outcome ${result.outcome}.`,
+      target: {
+        kind: "managed_instance",
+        instanceId: result.searcherInstanceId,
+      },
+      actor: "operator_console",
+    });
+    sendJson(res, 200, { ok: true, result });
   }
 
   private async handleInstancesCollection(

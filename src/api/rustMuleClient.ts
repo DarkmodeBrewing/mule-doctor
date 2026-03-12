@@ -78,6 +78,12 @@ export interface RustMuleSearchDetailResponse {
   [key: string]: unknown;
 }
 
+export interface RustMuleKeywordSearchResponse {
+  keyword_id_hex?: string;
+  search_id_hex?: string;
+  [key: string]: unknown;
+}
+
 export interface RustMuleSharedFileEntry {
   identity?: Record<string, unknown>;
   [key: string]: unknown;
@@ -384,6 +390,31 @@ export class RustMuleClient {
     };
   }
 
+  async startKeywordSearch(input: {
+    query?: string;
+    keywordIdHex?: string;
+  }): Promise<RustMuleKeywordSearchResponse> {
+    const query = input.query?.trim();
+    const keywordIdHex = input.keywordIdHex?.trim();
+    if (!query && !keywordIdHex) {
+      throw new Error("startKeywordSearch requires query or keywordIdHex");
+    }
+    const payload: Record<string, unknown> = {};
+    if (keywordIdHex) {
+      payload["keyword_id_hex"] = keywordIdHex;
+    } else if (query) {
+      payload["query"] = query;
+    }
+    const response = await this.post<Record<string, unknown>>("/kad/search_keyword", payload);
+    return {
+      ...response,
+      keyword_id_hex:
+        typeof response["keyword_id_hex"] === "string" ? response["keyword_id_hex"] : undefined,
+      search_id_hex:
+        typeof response["search_id_hex"] === "string" ? response["search_id_hex"] : undefined,
+    };
+  }
+
   async getReadiness(): Promise<RustMuleReadiness> {
     const [status, searches] = await Promise.all([this.getStatus(), this.getSearches()]);
     const statusReady = status.ready === true;
@@ -588,7 +619,7 @@ export class RustMuleClient {
   }
 
   private async postSharedAction(path: string): Promise<RustMuleSharedActionsResponse> {
-    const payload = await this.post<Record<string, unknown>>(path);
+    const payload = await this.post<Record<string, unknown>>(path, { confirm: true });
     return {
       ...payload,
       actions: Array.isArray(payload["actions"])

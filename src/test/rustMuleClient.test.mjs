@@ -209,11 +209,31 @@ test("RustMuleClient posts shared maintenance actions to rust-mule", async () =>
   for (const call of calls) {
     assert.equal(call.init.method, "POST");
     assert.equal(call.init.headers["Content-Type"], "application/json");
-    assert.equal(call.init.body, "{}");
+    assert.equal(call.init.body, '{"confirm":true}');
   }
   assert.equal(reindex.actions[0].kind, "reindex");
   assert.equal(republishSources.actions[0].kind, "republish_sources");
   assert.equal(republishKeywords.actions[0].kind, "republish_keywords");
+});
+
+test("RustMuleClient starts keyword search via /api/v1/kad/search_keyword", async () => {
+  const calls = [];
+  global.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    return makeJsonResponse({
+      keyword_id_hex: "feedfacefeedfacefeedfacefeedface",
+      search_id_hex: "feedfacefeedfacefeedfacefeedface",
+    });
+  };
+
+  const client = new RustMuleClient("http://127.0.0.1:17835");
+  const response = await client.startKeywordSearch({ query: "fixture token" });
+
+  assert.equal(calls[0].url, "http://127.0.0.1:17835/api/v1/kad/search_keyword");
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init.body, '{"query":"fixture token"}');
+  assert.equal(response.keyword_id_hex, "feedfacefeedfacefeedfacefeedface");
+  assert.equal(response.search_id_hex, "feedfacefeedfacefeedfacefeedface");
 });
 
 test("RustMuleClient reads downloads from /api/v1/downloads", async () => {
