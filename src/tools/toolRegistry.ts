@@ -15,7 +15,12 @@ import type {
   TraceLookupResult,
 } from "../api/rustMuleClient.js";
 import type { RuntimeStore } from "../storage/runtimeStore.js";
-import type { HistoryEntry, ManagedDiscoverabilityRecord, ToolResult } from "../types/contracts.js";
+import type {
+  HistoryEntry,
+  ManagedDiscoverabilityRecord,
+  ManagedDiscoverabilitySummaryResult,
+  ToolResult,
+} from "../types/contracts.js";
 import { SourceCodeTools } from "./sourceCodeTools.js";
 
 /** Shape expected by the OpenAI tools array. */
@@ -187,7 +192,8 @@ export class ToolRegistry {
         },
         async (args): Promise<ManagedDiscoverabilityRecord[]> => {
           const n = clampInt(args["n"], 10, 1, 100);
-          return runtimeStore.getRecentDiscoverabilityResults(n);
+          const records = await runtimeStore.getRecentDiscoverabilityResults(n);
+          return records.map(sanitizeDiscoverabilityRecord);
         },
       );
     }
@@ -591,6 +597,57 @@ export class ToolRegistry {
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
   return Math.min(max, Math.max(min, value));
+}
+
+function sanitizeDiscoverabilityRecord(
+  record: ManagedDiscoverabilityRecord,
+): ManagedDiscoverabilityRecord {
+  return {
+    recordedAt: record.recordedAt,
+    result: sanitizeDiscoverabilityResult(record.result),
+  };
+}
+
+function sanitizeDiscoverabilityResult(
+  result: ManagedDiscoverabilityRecord["result"],
+): ManagedDiscoverabilitySummaryResult {
+  return {
+    publisherInstanceId: result.publisherInstanceId,
+    searcherInstanceId: result.searcherInstanceId,
+    fixture: {
+      fixtureId: result.fixture?.fixtureId ?? "unknown",
+      fileName: result.fixture?.fileName ?? "unknown",
+      relativePath: result.fixture?.relativePath ?? "unknown",
+      sizeBytes: typeof result.fixture?.sizeBytes === "number" ? result.fixture.sizeBytes : 0,
+    },
+    query: result.query,
+    dispatchedAt: result.dispatchedAt,
+    searchId: result.searchId,
+    readinessAtDispatch: {
+      publisherReady: result.readinessAtDispatch?.publisherReady === true,
+      searcherReady: result.readinessAtDispatch?.searcherReady === true,
+    },
+    peerCountAtDispatch: {
+      publisher:
+        typeof result.peerCountAtDispatch?.publisher === "number"
+          ? result.peerCountAtDispatch.publisher
+          : 0,
+      searcher:
+        typeof result.peerCountAtDispatch?.searcher === "number"
+          ? result.peerCountAtDispatch.searcher
+          : 0,
+    },
+    states: Array.isArray(result.states)
+      ? result.states.map((sample) => ({
+          observedAt: sample.observedAt,
+          state: sample.state,
+          hits: typeof sample.hits === "number" ? sample.hits : 0,
+        }))
+      : [],
+    resultCount: typeof result.resultCount === "number" ? result.resultCount : 0,
+    outcome: result.outcome,
+    finalState: result.finalState,
+  };
 }
 
 function log(level: string, module: string, msg: string): void {

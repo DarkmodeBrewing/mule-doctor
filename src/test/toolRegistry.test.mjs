@@ -96,8 +96,10 @@ class StubRuntimeStore {
         searcherInstanceId: "searcher",
         fixture: {
           fixtureId: `fixture-${i + 1}`,
+          token: `fixture-token-${i + 1}`,
           fileName: `fixture-${i + 1}.txt`,
           relativePath: `fixture-${i + 1}.txt`,
+          absolutePath: `/tmp/fixture-${i + 1}.txt`,
           sizeBytes: 16,
         },
         query: `fixture-${i + 1}`,
@@ -109,6 +111,8 @@ class StubRuntimeStore {
         resultCount: i + 1,
         outcome: "found",
         finalState: "completed",
+        publisherSharedBefore: { file: { secret: true }, actions: [], downloads: [] },
+        publisherSharedAfter: { file: { secret: true }, actions: [], downloads: [] },
       },
     }));
   }
@@ -165,6 +169,8 @@ test("ToolRegistry getDiscoverabilityResults reads sanitized records from runtim
   assert.equal(result.data[0].result.searchId, "search-1");
   assert.equal("token" in result.data[0].result.fixture, false);
   assert.equal("absolutePath" in result.data[0].result.fixture, false);
+  assert.equal("publisherSharedBefore" in result.data[0].result, false);
+  assert.equal("publisherSharedAfter" in result.data[0].result, false);
 });
 
 test("ToolRegistry does not expose getHistory when runtime store is unavailable", async () => {

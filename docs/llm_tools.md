@@ -114,8 +114,8 @@ Notes:
 - `n` is optional
 - default `10`
 - bounded to `1..100`
-- returns sanitized persisted summaries, not the full live check payload
-- fixture records omit sensitive fields like absolute paths and fixture tokens
+- sanitizes returned records to a bounded summary shape instead of exposing the full stored payload
+- fixture records omit sensitive fields like absolute paths and fixture tokens, even if older stored records still contain them
 
 ### `searchLogs`
 
