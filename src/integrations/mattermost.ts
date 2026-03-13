@@ -54,6 +54,13 @@ export class MattermostClient {
   private readonly requestTimeoutMs: number;
   private readonly discoverabilityResults: DiscoverabilityReportSource | undefined;
 
+  constructor(webhookUrl: string, analyzer: Analyzer, requestTimeoutMs?: number);
+  constructor(
+    webhookUrl: string,
+    analyzer: Analyzer,
+    discoverabilityResults: DiscoverabilityReportSource | undefined,
+    requestTimeoutMs?: number,
+  );
   constructor(
     webhookUrl: string,
     analyzer: Analyzer,
@@ -63,6 +70,11 @@ export class MattermostClient {
     this.webhookUrl = webhookUrl;
     this.analyzer = analyzer;
     if (typeof discoverabilityResultsOrTimeout === "number") {
+      if (requestTimeoutMs !== DEFAULT_HTTP_TIMEOUT_MS) {
+        throw new Error(
+          "MattermostClient timeout-only constructor does not accept a fourth argument",
+        );
+      }
       this.discoverabilityResults = undefined;
       this.requestTimeoutMs = clampTimeout(discoverabilityResultsOrTimeout);
     } else {
@@ -252,7 +264,17 @@ export class MattermostClient {
     if (!this.discoverabilityResults) {
       return undefined;
     }
-    const results = await this.discoverabilityResults.listRecent(DEFAULT_DISCOVERABILITY_REPORT_LIMIT);
+    let results: ManagedDiscoverabilityRecord[];
+    try {
+      results = await this.discoverabilityResults.listRecent(DEFAULT_DISCOVERABILITY_REPORT_LIMIT);
+    } catch (err) {
+      log(
+        "warn",
+        "mattermost",
+        `Failed to load discoverability report summary: ${String(err)}`,
+      );
+      return undefined;
+    }
     if (results.length === 0) {
       return undefined;
     }

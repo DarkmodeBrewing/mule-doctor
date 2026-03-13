@@ -56,6 +56,12 @@ class StubDiscoverabilityResults {
   }
 }
 
+class ThrowingDiscoverabilityResults {
+  async listRecent() {
+    throw new Error("discoverability store unavailable");
+  }
+}
+
 test("MattermostClient posts structured periodic report attachments", async () => {
   const calls = [];
   global.fetch = async (_url, init) => {
@@ -115,6 +121,31 @@ test("MattermostClient posts daily usage report attachments", async () => {
   assert.ok(payload.attachments[0].text.includes("Estimated cost: $0.012345"));
   assert.equal(payload.attachments[1].title, "Monthly usage");
   assert.ok(payload.attachments[1].text.includes("Period: 2026-03"));
+});
+
+test("MattermostClient still posts periodic report when discoverability summary fails", async () => {
+  const calls = [];
+  global.fetch = async (_url, init) => {
+    calls.push(init);
+    return makeOkResponse();
+  };
+
+  const client = new MattermostClient(
+    "https://example.test/hook",
+    new StubAnalyzer(),
+    new ThrowingDiscoverabilityResults(),
+  );
+  await client.postPeriodicReport({
+    summary: "All clear",
+    targetLabel: "managed instance a",
+    healthScore: 82,
+  });
+
+  assert.equal(calls.length, 1);
+  const payload = JSON.parse(calls[0].body);
+  assert.equal(payload.attachments.length, 2);
+  assert.equal(payload.attachments[0].title, "Node Metrics");
+  assert.equal(payload.attachments[1].title, "Observations");
 });
 
 test("MattermostClient posts patch proposal metadata and diff content", async () => {
