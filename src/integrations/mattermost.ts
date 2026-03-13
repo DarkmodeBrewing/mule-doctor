@@ -6,6 +6,7 @@
 
 import type { Analyzer } from "../llm/analyzer.js";
 import type { UsageSummary } from "../llm/usageTracker.js";
+import type { ManagedDiscoverabilityRecord } from "../types/contracts.js";
 
 export interface MattermostCommandContext {
   command: string;
@@ -40,17 +41,34 @@ export interface PatchProposalInput {
   lines: number;
 }
 
+export interface DiscoverabilityReportSource {
+  listRecent(limit?: number): Promise<ManagedDiscoverabilityRecord[]>;
+}
+
 const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
+const DEFAULT_DISCOVERABILITY_REPORT_LIMIT = 3;
 
 export class MattermostClient {
   private readonly webhookUrl: string;
   private readonly analyzer: Analyzer;
   private readonly requestTimeoutMs: number;
+  private readonly discoverabilityResults: DiscoverabilityReportSource | undefined;
 
-  constructor(webhookUrl: string, analyzer: Analyzer, requestTimeoutMs = DEFAULT_HTTP_TIMEOUT_MS) {
+  constructor(
+    webhookUrl: string,
+    analyzer: Analyzer,
+    discoverabilityResultsOrTimeout?: DiscoverabilityReportSource | number,
+    requestTimeoutMs = DEFAULT_HTTP_TIMEOUT_MS,
+  ) {
     this.webhookUrl = webhookUrl;
     this.analyzer = analyzer;
-    this.requestTimeoutMs = clampTimeout(requestTimeoutMs);
+    if (typeof discoverabilityResultsOrTimeout === "number") {
+      this.discoverabilityResults = undefined;
+      this.requestTimeoutMs = clampTimeout(discoverabilityResultsOrTimeout);
+    } else {
+      this.discoverabilityResults = discoverabilityResultsOrTimeout;
+      this.requestTimeoutMs = clampTimeout(requestTimeoutMs);
+    }
   }
 
   /** Post a plain-text message to the configured Mattermost channel. */
@@ -88,22 +106,28 @@ export class MattermostClient {
 
     const summaryText = report.summary.trim().length > 0 ? report.summary : "(no summary)";
     const targetLine = report.targetLabel ? `Target: ${report.targetLabel}` : undefined;
+    const attachments: MattermostAttachment[] = [
+      {
+        title: "Node Metrics",
+        color,
+        text: metricsLines || "No metrics available",
+      },
+      {
+        title: "Observations",
+        color: "#3498db",
+        text: summaryText,
+      },
+    ];
+    const discoverabilityAttachment = await this.buildDiscoverabilityAttachment();
+    if (discoverabilityAttachment) {
+      attachments.push(discoverabilityAttachment);
+    }
+
     const payload: MattermostPayload = {
       text: ["mule-doctor", targetLine, "", `Node status: ${status}`]
         .filter((line): line is string => line !== undefined)
         .join("\n"),
-      attachments: [
-        {
-          title: "Node Metrics",
-          color,
-          text: metricsLines || "No metrics available",
-        },
-        {
-          title: "Observations",
-          color: "#3498db",
-          text: summaryText,
-        },
-      ],
+      attachments,
     };
     await this.postPayload(payload);
   }
@@ -222,6 +246,33 @@ export class MattermostClient {
 
     const response = await this.analyzer.analyze(prompt);
     await this.post(response);
+  }
+
+  private async buildDiscoverabilityAttachment(): Promise<MattermostAttachment | undefined> {
+    if (!this.discoverabilityResults) {
+      return undefined;
+    }
+    const results = await this.discoverabilityResults.listRecent(DEFAULT_DISCOVERABILITY_REPORT_LIMIT);
+    if (results.length === 0) {
+      return undefined;
+    }
+    const lines = [...results]
+      .reverse()
+      .map((entry) => {
+        const query = entry.result.query || entry.result.fixture.fileName;
+        return [
+          `${entry.result.outcome.toUpperCase()}: ${entry.result.publisherInstanceId} -> ${entry.result.searcherInstanceId}`,
+          `Query: ${query}`,
+          `Hits: ${entry.result.resultCount}`,
+          `Recorded: ${entry.recordedAt}`,
+        ].join("\n");
+      })
+      .join("\n\n");
+    return {
+      title: "Recent Discoverability",
+      color: "#8cf0c6",
+      text: lines,
+    };
   }
 }
 

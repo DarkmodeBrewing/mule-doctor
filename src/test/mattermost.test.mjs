@@ -29,6 +29,33 @@ class StubAnalyzer {
   }
 }
 
+class StubDiscoverabilityResults {
+  async listRecent(limit = 3) {
+    return Array.from({ length: limit }, (_, i) => ({
+      recordedAt: `2026-03-12T10:0${i}:00.000Z`,
+      result: {
+        publisherInstanceId: `publisher-${i + 1}`,
+        searcherInstanceId: `searcher-${i + 1}`,
+        fixture: {
+          fixtureId: `fixture-${i + 1}`,
+          fileName: `fixture-${i + 1}.txt`,
+          relativePath: `fixture-${i + 1}.txt`,
+          sizeBytes: 16,
+        },
+        query: `fixture-${i + 1}`,
+        dispatchedAt: `2026-03-12T10:0${i}:00.000Z`,
+        searchId: `search-${i + 1}`,
+        readinessAtDispatch: { publisherReady: true, searcherReady: true },
+        peerCountAtDispatch: { publisher: 1, searcher: 2 },
+        states: [],
+        resultCount: i + 1,
+        outcome: i === 0 ? "found" : "completed_empty",
+        finalState: "completed",
+      },
+    }));
+  }
+}
+
 test("MattermostClient posts structured periodic report attachments", async () => {
   const calls = [];
   global.fetch = async (_url, init) => {
@@ -36,7 +63,11 @@ test("MattermostClient posts structured periodic report attachments", async () =
     return makeOkResponse();
   };
 
-  const client = new MattermostClient("https://example.test/hook", new StubAnalyzer());
+  const client = new MattermostClient(
+    "https://example.test/hook",
+    new StubAnalyzer(),
+    new StubDiscoverabilityResults(),
+  );
   await client.postPeriodicReport({
     summary: "All clear",
     targetLabel: "managed instance a",
@@ -50,12 +81,15 @@ test("MattermostClient posts structured periodic report attachments", async () =
   assert.equal(calls.length, 1);
   const payload = JSON.parse(calls[0].body);
   assert.match(payload.text, /Target: managed instance a/);
-  assert.equal(payload.attachments.length, 2);
+  assert.equal(payload.attachments.length, 3);
   assert.equal(payload.attachments[0].title, "Node Metrics");
   assert.equal(payload.attachments[0].color, "#2ecc71");
   assert.ok(payload.attachments[0].text.includes("Health score: 82/100"));
   assert.equal(payload.attachments[1].title, "Observations");
   assert.equal(payload.attachments[1].text, "All clear");
+  assert.equal(payload.attachments[2].title, "Recent Discoverability");
+  assert.ok(payload.attachments[2].text.includes("FOUND: publisher-1 -> searcher-1"));
+  assert.ok(payload.attachments[2].text.includes("Query: fixture-1"));
 });
 
 test("MattermostClient posts daily usage report attachments", async () => {

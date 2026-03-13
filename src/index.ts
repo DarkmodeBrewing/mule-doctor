@@ -163,7 +163,7 @@ async function main(): Promise<void> {
     model: openaiModel,
     usageTracker,
   });
-  const mattermostClient = new MattermostClient(webhookUrl, analyzer);
+  const mattermostClient = new MattermostClient(webhookUrl, analyzer, discoverabilityLog);
   const patchProposalNotifier = async (proposal: {
     artifactPath: string;
     diff: string;
