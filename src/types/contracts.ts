@@ -248,6 +248,23 @@ export interface ManagedDiscoverabilityRecord {
   result: ManagedDiscoverabilitySummaryResult;
 }
 
+export interface ManagedDiscoverabilitySummary {
+  windowSize: number;
+  totalChecks: number;
+  foundCount: number;
+  completedEmptyCount: number;
+  timedOutCount: number;
+  successRatePct?: number;
+  latestRecordedAt?: string;
+  latestOutcome?: ManagedDiscoverabilityOutcome;
+  latestQuery?: string;
+  latestPair?: {
+    publisherInstanceId: string;
+    searcherInstanceId: string;
+  };
+  lastSuccessAt?: string;
+}
+
 export interface ManagedInstancePresetNode {
   suffix: string;
 }

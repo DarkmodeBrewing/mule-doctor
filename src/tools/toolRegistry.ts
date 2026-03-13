@@ -18,9 +18,11 @@ import type { RuntimeStore } from "../storage/runtimeStore.js";
 import type {
   HistoryEntry,
   ManagedDiscoverabilityRecord,
+  ManagedDiscoverabilitySummary,
   ManagedDiscoverabilitySummaryResult,
   ToolResult,
 } from "../types/contracts.js";
+import { summarizeDiscoverabilityResults } from "../discoverability/summary.js";
 import { SourceCodeTools } from "./sourceCodeTools.js";
 
 /** Shape expected by the OpenAI tools array. */
@@ -194,6 +196,32 @@ export class ToolRegistry {
           const n = clampInt(args["n"], 10, 1, 100);
           const records = await runtimeStore.getRecentDiscoverabilityResults(n);
           return records.map(sanitizeDiscoverabilityRecord);
+        },
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "getDiscoverabilitySummary",
+            description:
+              "Returns a compact summary of recent controlled discoverability outcomes recorded by mule-doctor.",
+            parameters: {
+              type: "object",
+              properties: {
+                n: {
+                  type: "number",
+                  description: "Number of recent discoverability records to summarize (default 10).",
+                },
+              },
+              required: [],
+            },
+          },
+        },
+        async (args): Promise<ManagedDiscoverabilitySummary> => {
+          const n = clampInt(args["n"], 10, 1, 100);
+          const records = await runtimeStore.getRecentDiscoverabilityResults(n);
+          return summarizeDiscoverabilityResults(records.map(sanitizeDiscoverabilityRecord));
         },
       );
     }

@@ -30,34 +30,28 @@ class StubAnalyzer {
 }
 
 class StubDiscoverabilityResults {
-  async listRecent(limit = 3) {
-    return Array.from({ length: limit }, (_, i) => ({
-      recordedAt: `2026-03-12T10:0${i}:00.000Z`,
-      result: {
-        publisherInstanceId: `publisher-${i + 1}`,
-        searcherInstanceId: `searcher-${i + 1}`,
-        fixture: {
-          fixtureId: `fixture-${i + 1}`,
-          fileName: `fixture-${i + 1}.txt`,
-          relativePath: `fixture-${i + 1}.txt`,
-          sizeBytes: 16,
-        },
-        query: `fixture-${i + 1}`,
-        dispatchedAt: `2026-03-12T10:0${i}:00.000Z`,
-        searchId: `search-${i + 1}`,
-        readinessAtDispatch: { publisherReady: true, searcherReady: true },
-        peerCountAtDispatch: { publisher: 1, searcher: 2 },
-        states: [],
-        resultCount: i + 1,
-        outcome: i === 0 ? "found" : "completed_empty",
-        finalState: "completed",
+  async summarizeRecent(limit = 3) {
+    return {
+      windowSize: limit,
+      totalChecks: limit,
+      foundCount: 1,
+      completedEmptyCount: limit - 1,
+      timedOutCount: 0,
+      successRatePct: (1 / limit) * 100,
+      latestRecordedAt: "2026-03-12T10:00:00.000Z",
+      latestOutcome: "found",
+      latestQuery: "fixture-1",
+      latestPair: {
+        publisherInstanceId: "publisher-1",
+        searcherInstanceId: "searcher-1",
       },
-    }));
+      lastSuccessAt: "2026-03-12T10:00:00.000Z",
+    };
   }
 }
 
 class ThrowingDiscoverabilityResults {
-  async listRecent() {
+  async summarizeRecent() {
     throw new Error("discoverability store unavailable");
   }
 }
@@ -93,9 +87,11 @@ test("MattermostClient posts structured periodic report attachments", async () =
   assert.ok(payload.attachments[0].text.includes("Health score: 82/100"));
   assert.equal(payload.attachments[1].title, "Observations");
   assert.equal(payload.attachments[1].text, "All clear");
-  assert.equal(payload.attachments[2].title, "Recent Discoverability");
-  assert.ok(payload.attachments[2].text.includes("FOUND: publisher-1 -> searcher-1"));
-  assert.ok(payload.attachments[2].text.includes("Query: fixture-1"));
+  assert.equal(payload.attachments[2].title, "Discoverability Summary");
+  assert.ok(payload.attachments[2].text.includes("Window: 3 recent checks"));
+  assert.ok(payload.attachments[2].text.includes("Found: 1"));
+  assert.ok(payload.attachments[2].text.includes("Latest path: publisher-1 -> searcher-1"));
+  assert.ok(payload.attachments[2].text.includes("Latest query: fixture-1"));
 });
 
 test("MattermostClient posts daily usage report attachments", async () => {

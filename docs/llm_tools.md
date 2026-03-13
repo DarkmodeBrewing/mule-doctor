@@ -117,6 +117,28 @@ Notes:
 - sanitizes returned records to a bounded summary shape instead of exposing the full stored payload
 - fixture records omit sensitive fields like absolute paths and fixture tokens, even if older stored records still contain them
 
+### `getDiscoverabilitySummary`
+
+Purpose:
+
+- returns a compact summary of recent controlled discoverability outcomes
+
+Arguments:
+
+```json
+{
+  "n": 10
+}
+```
+
+Notes:
+
+- only available when a runtime store is configured
+- `n` is optional
+- default `10`
+- bounded to `1..100`
+- returns derived counts/trends such as `found`, `completed_empty`, `timed_out`, success rate, latest outcome, and last success time
+
 ### `searchLogs`
 
 Purpose:
@@ -483,6 +505,7 @@ Conditionally registered:
 
 - `getHistory`
 - `getDiscoverabilityResults`
+- `getDiscoverabilitySummary`
   - only when mule-doctor has a runtime store
 - `search_code`
 - `read_file`
