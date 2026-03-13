@@ -7,9 +7,8 @@ import type {
 export function summarizeDiscoverabilityResults(
   records: ManagedDiscoverabilityRecord[],
 ): ManagedDiscoverabilitySummary {
-  const normalized = [...records].sort((left, right) => left.recordedAt.localeCompare(right.recordedAt));
-  const latest = normalized.at(-1);
-  const lastSuccess = [...normalized]
+  const latest = records.at(-1);
+  const lastSuccess = [...records]
     .reverse()
     .find((record) => record.result.outcome === "found");
 
@@ -18,11 +17,11 @@ export function summarizeDiscoverabilityResults(
     completed_empty: 0,
     timed_out: 0,
   };
-  for (const record of normalized) {
+  for (const record of records) {
     counts[record.result.outcome] += 1;
   }
 
-  const totalChecks = normalized.length;
+  const totalChecks = records.length;
   return {
     windowSize: totalChecks,
     totalChecks,

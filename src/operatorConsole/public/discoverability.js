@@ -87,11 +87,14 @@ export function createDiscoverabilityController(fetchJson) {
     const list = document.getElementById("discoverability-results");
     list.replaceChildren();
     try {
-      const [summaryData, data] = await Promise.all([
-        fetchJson("/api/discoverability/summary?limit=8"),
-        fetchJson("/api/discoverability/results?limit=8"),
-      ]);
+      const summaryData = await fetchJson("/api/discoverability/summary?limit=8");
       renderDiscoverabilitySummary(summaryData.summary);
+    } catch {
+      renderDiscoverabilitySummary(undefined);
+    }
+
+    try {
+      const data = await fetchJson("/api/discoverability/results?limit=8");
       const results = Array.isArray(data.results) ? [...data.results].reverse() : [];
       if (!results.length) {
         const item = document.createElement("li");
@@ -105,7 +108,6 @@ export function createDiscoverabilityController(fetchJson) {
         list.appendChild(renderDiscoverabilityItem(record));
       }
     } catch (err) {
-      renderDiscoverabilitySummary(undefined);
       const item = document.createElement("li");
       item.className = "muted";
       item.textContent = `Failed to load discoverability results: ${String(err)}`;
