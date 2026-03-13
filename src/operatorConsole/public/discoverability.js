@@ -29,6 +29,34 @@ function renderDiscoverabilityDetail(result, recordedAt) {
   return detail;
 }
 
+function renderDiscoverabilitySummary(summary) {
+  const element = document.getElementById("discoverability-summary");
+  if (!summary || typeof summary.totalChecks !== "number" || summary.totalChecks === 0) {
+    element.textContent = "No controlled discoverability summary available yet.";
+    return;
+  }
+
+  const parts = [
+    `Window: ${summary.windowSize} recent checks`,
+    `Found ${summary.foundCount}, empty ${summary.completedEmptyCount}, timed out ${summary.timedOutCount}`,
+  ];
+  if (typeof summary.successRatePct === "number") {
+    parts.push(`Success rate: ${summary.successRatePct.toFixed(1)}%`);
+  }
+  if (summary.latestOutcome) {
+    parts.push(`Latest outcome: ${summary.latestOutcome}`);
+  }
+  if (summary.latestPair) {
+    parts.push(
+      `Latest path: ${summary.latestPair.publisherInstanceId} -> ${summary.latestPair.searcherInstanceId}`,
+    );
+  }
+  if (summary.lastSuccessAt) {
+    parts.push(`Last success: ${formatRecordedAt(summary.lastSuccessAt)}`);
+  }
+  element.textContent = parts.join(" • ");
+}
+
 function renderDiscoverabilityItem(record) {
   const item = document.createElement("li");
   const line = document.createElement("div");
@@ -58,6 +86,13 @@ export function createDiscoverabilityController(fetchJson) {
   async function refreshDiscoverabilityResults() {
     const list = document.getElementById("discoverability-results");
     list.replaceChildren();
+    try {
+      const summaryData = await fetchJson("/api/discoverability/summary?limit=8");
+      renderDiscoverabilitySummary(summaryData.summary);
+    } catch {
+      renderDiscoverabilitySummary(undefined);
+    }
+
     try {
       const data = await fetchJson("/api/discoverability/results?limit=8");
       const results = Array.isArray(data.results) ? [...data.results].reverse() : [];

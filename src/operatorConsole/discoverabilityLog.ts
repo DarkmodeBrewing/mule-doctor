@@ -1,7 +1,9 @@
+import { summarizeDiscoverabilityResults } from "../discoverability/summary.js";
 import type { RuntimeStore } from "../storage/runtimeStore.js";
 import type {
   ManagedDiscoverabilityCheckResult,
   ManagedDiscoverabilityRecord,
+  ManagedDiscoverabilitySummary,
   ManagedDiscoverabilitySummaryResult,
 } from "../types/contracts.js";
 
@@ -27,6 +29,10 @@ export class DiscoverabilityLog {
       return [];
     }
     return this.runtimeStore.getRecentDiscoverabilityResults(limit);
+  }
+
+  async summarizeRecent(limit = 20): Promise<ManagedDiscoverabilitySummary> {
+    return summarizeDiscoverabilityResults(await this.listRecent(limit));
   }
 }
 

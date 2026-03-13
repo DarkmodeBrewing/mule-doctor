@@ -173,6 +173,19 @@ test("ToolRegistry getDiscoverabilityResults reads sanitized records from runtim
   assert.equal("publisherSharedAfter" in result.data[0].result, false);
 });
 
+test("ToolRegistry getDiscoverabilitySummary returns derived outcome totals", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore());
+
+  const result = await registry.invoke("getDiscoverabilitySummary", { n: 10 });
+
+  assert.equal(result.success, true);
+  assert.equal(result.data.totalChecks, 2);
+  assert.equal(result.data.foundCount, 2);
+  assert.equal(result.data.completedEmptyCount, 0);
+  assert.equal(result.data.timedOutCount, 0);
+  assert.equal(result.data.latestPair.publisherInstanceId, "publisher");
+});
+
 test("ToolRegistry does not expose getHistory when runtime store is unavailable", async () => {
   const registry = new ToolRegistry(new StubClient(), new StubLogWatcher());
 
@@ -181,8 +194,12 @@ test("ToolRegistry does not expose getHistory when runtime store is unavailable"
   const hasDiscoverability = defs.some(
     (def) => def.function.name === "getDiscoverabilityResults",
   );
+  const hasDiscoverabilitySummary = defs.some(
+    (def) => def.function.name === "getDiscoverabilitySummary",
+  );
   assert.equal(hasGetHistory, false);
   assert.equal(hasDiscoverability, false);
+  assert.equal(hasDiscoverabilitySummary, false);
 
   const result = await registry.invoke("getHistory", { n: 5 });
   assert.deepEqual(result, {
@@ -196,6 +213,13 @@ test("ToolRegistry does not expose getHistory when runtime store is unavailable"
     tool: "getDiscoverabilityResults",
     success: false,
     error: "Unknown tool: getDiscoverabilityResults",
+  });
+
+  const discoverabilitySummary = await registry.invoke("getDiscoverabilitySummary", { n: 5 });
+  assert.deepEqual(discoverabilitySummary, {
+    tool: "getDiscoverabilitySummary",
+    success: false,
+    error: "Unknown tool: getDiscoverabilitySummary",
   });
 });
 

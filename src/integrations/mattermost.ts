@@ -6,7 +6,7 @@
 
 import type { Analyzer } from "../llm/analyzer.js";
 import type { UsageSummary } from "../llm/usageTracker.js";
-import type { ManagedDiscoverabilityRecord } from "../types/contracts.js";
+import type { ManagedDiscoverabilitySummary } from "../types/contracts.js";
 
 export interface MattermostCommandContext {
   command: string;
@@ -42,7 +42,7 @@ export interface PatchProposalInput {
 }
 
 export interface DiscoverabilityReportSource {
-  listRecent(limit?: number): Promise<ManagedDiscoverabilityRecord[]>;
+  summarizeRecent(limit?: number): Promise<ManagedDiscoverabilitySummary>;
 }
 
 const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
@@ -264,9 +264,11 @@ export class MattermostClient {
     if (!this.discoverabilityResults) {
       return undefined;
     }
-    let results: ManagedDiscoverabilityRecord[];
+    let summary: ManagedDiscoverabilitySummary;
     try {
-      results = await this.discoverabilityResults.listRecent(DEFAULT_DISCOVERABILITY_REPORT_LIMIT);
+      summary = await this.discoverabilityResults.summarizeRecent(
+        DEFAULT_DISCOVERABILITY_REPORT_LIMIT,
+      );
     } catch (err) {
       log(
         "warn",
@@ -275,23 +277,28 @@ export class MattermostClient {
       );
       return undefined;
     }
-    if (results.length === 0) {
+    if (summary.totalChecks === 0) {
       return undefined;
     }
-    const lines = [...results]
-      .reverse()
-      .map((entry) => {
-        const query = entry.result.query || entry.result.fixture.fileName;
-        return [
-          `${entry.result.outcome.toUpperCase()}: ${entry.result.publisherInstanceId} -> ${entry.result.searcherInstanceId}`,
-          `Query: ${query}`,
-          `Hits: ${entry.result.resultCount}`,
-          `Recorded: ${entry.recordedAt}`,
-        ].join("\n");
-      })
-      .join("\n\n");
+    const lines = [
+      `Window: ${summary.windowSize} recent checks`,
+      `Found: ${summary.foundCount}`,
+      `Completed empty: ${summary.completedEmptyCount}`,
+      `Timed out: ${summary.timedOutCount}`,
+      summary.successRatePct !== undefined
+        ? `Success rate: ${summary.successRatePct.toFixed(1)}%`
+        : undefined,
+      summary.latestOutcome ? `Latest outcome: ${summary.latestOutcome}` : undefined,
+      summary.latestPair
+        ? `Latest path: ${summary.latestPair.publisherInstanceId} -> ${summary.latestPair.searcherInstanceId}`
+        : undefined,
+      summary.latestQuery ? `Latest query: ${summary.latestQuery}` : undefined,
+      summary.lastSuccessAt ? `Last success: ${summary.lastSuccessAt}` : undefined,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n");
     return {
-      title: "Recent Discoverability",
+      title: "Discoverability Summary",
       color: "#8cf0c6",
       text: lines,
     };
