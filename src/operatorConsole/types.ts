@@ -1,4 +1,4 @@
-import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord } from "../types/contracts.js";
+import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary } from "../types/contracts.js";
 
 export interface ListedFile {
   name: string;
@@ -78,6 +78,7 @@ export interface ManagedInstanceDiscoverability {
 
 export interface DiscoverabilityResultsStore {
   listRecent(limit?: number): Promise<ManagedDiscoverabilityRecord[]>;
+  summarizeRecent(limit?: number): Promise<ManagedDiscoverabilitySummary>;
   append(result: ManagedDiscoverabilityCheckResult): Promise<void>;
 }
 

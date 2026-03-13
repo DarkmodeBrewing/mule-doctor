@@ -292,6 +292,11 @@ export class OperatorConsoleServer {
       return;
     }
 
+    if (path === "/api/discoverability/summary") {
+      await this.handleDiscoverabilitySummary(req, url, res);
+      return;
+    }
+
     if (path === "/api/instances/compare") {
       await this.handleInstanceComparison(req, url, res);
       return;
@@ -639,6 +644,29 @@ export class OperatorConsoleServer {
     );
     const results = await this.discoverabilityResults.listRecent(limit);
     sendJson(res, 200, { ok: true, results });
+  }
+
+  private async handleDiscoverabilitySummary(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.discoverabilityResults) {
+      sendJson(res, 501, { ok: false, error: "discoverability summary unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(
+      parseInt(url.searchParams.get("limit") ?? "", 10),
+      20,
+      1,
+      200,
+    );
+    const summary = await this.discoverabilityResults.summarizeRecent(limit);
+    sendJson(res, 200, { ok: true, summary });
   }
 
   private async handleInstancesCollection(
