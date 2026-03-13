@@ -105,7 +105,14 @@ class StubRuntimeStore {
         query: `fixture-${i + 1}`,
         dispatchedAt: `2026-03-12T10:0${i}:00.000Z`,
         searchId: `search-${i + 1}`,
-        readinessAtDispatch: { publisherReady: true, searcherReady: true },
+        readinessAtDispatch: {
+          publisherStatusReady: true,
+          publisherSearchesReady: true,
+          publisherReady: true,
+          searcherStatusReady: true,
+          searcherSearchesReady: true,
+          searcherReady: true,
+        },
         peerCountAtDispatch: { publisher: 1, searcher: 2 },
         states: [],
         resultCount: i + 1,
@@ -113,6 +120,38 @@ class StubRuntimeStore {
         finalState: "completed",
         publisherSharedBefore: { file: { secret: true }, actions: [], downloads: [] },
         publisherSharedAfter: { file: { secret: true }, actions: [], downloads: [] },
+      },
+    }));
+  }
+
+  async getRecentSearchHealthResults(n) {
+    return Array.from({ length: Math.min(2, n) }, (_, i) => ({
+      recordedAt: `2026-03-12T11:0${i}:00.000Z`,
+      source: "controlled_discoverability",
+      query: `fixture-${i + 1}`,
+      searchId: `search-${i + 1}`,
+      dispatchedAt: `2026-03-12T10:0${i}:00.000Z`,
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 1, degradedIndicators: [] },
+        searcher: { peerCount: 2, degradedIndicators: [] },
+      },
+      states: [],
+      resultCount: i + 1,
+      outcome: "found",
+      finalState: "completed",
+      controlledContext: {
+        publisherInstanceId: "publisher",
+        searcherInstanceId: "searcher",
+        fixture: {
+          fixtureId: `fixture-${i + 1}`,
+          fileName: `fixture-${i + 1}.txt`,
+          relativePath: `fixture-${i + 1}.txt`,
+          sizeBytes: 16,
+        },
       },
     }));
   }
@@ -186,6 +225,32 @@ test("ToolRegistry getDiscoverabilitySummary returns derived outcome totals", as
   assert.equal(result.data.latestPair.publisherInstanceId, "publisher");
 });
 
+test("ToolRegistry getSearchHealthResults reads sanitized lifecycle records from runtime store", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore());
+
+  const result = await registry.invoke("getSearchHealthResults", { n: 10 });
+
+  assert.equal(result.success, true);
+  assert.equal(result.data.length, 2);
+  assert.equal(result.data[0].source, "controlled_discoverability");
+  assert.equal(result.data[0].transportAtDispatch.searcher.peerCount, 2);
+  assert.deepEqual(result.data[0].transportAtDispatch.searcher.degradedIndicators, []);
+  assert.equal(result.data[0].controlledContext.fixture.fileName, "fixture-1.txt");
+});
+
+test("ToolRegistry getSearchHealthSummary returns derived lifecycle totals", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore());
+
+  const result = await registry.invoke("getSearchHealthSummary", { n: 10 });
+
+  assert.equal(result.success, true);
+  assert.equal(result.data.totalSearches, 2);
+  assert.equal(result.data.foundCount, 2);
+  assert.equal(result.data.dispatchReadyCount, 2);
+  assert.equal(result.data.degradedTransportCount, 0);
+  assert.equal(result.data.latestPair.publisherInstanceId, "publisher");
+});
+
 test("ToolRegistry does not expose getHistory when runtime store is unavailable", async () => {
   const registry = new ToolRegistry(new StubClient(), new StubLogWatcher());
 
@@ -197,9 +262,13 @@ test("ToolRegistry does not expose getHistory when runtime store is unavailable"
   const hasDiscoverabilitySummary = defs.some(
     (def) => def.function.name === "getDiscoverabilitySummary",
   );
+  const hasSearchHealth = defs.some((def) => def.function.name === "getSearchHealthResults");
+  const hasSearchHealthSummary = defs.some((def) => def.function.name === "getSearchHealthSummary");
   assert.equal(hasGetHistory, false);
   assert.equal(hasDiscoverability, false);
   assert.equal(hasDiscoverabilitySummary, false);
+  assert.equal(hasSearchHealth, false);
+  assert.equal(hasSearchHealthSummary, false);
 
   const result = await registry.invoke("getHistory", { n: 5 });
   assert.deepEqual(result, {
@@ -220,6 +289,20 @@ test("ToolRegistry does not expose getHistory when runtime store is unavailable"
     tool: "getDiscoverabilitySummary",
     success: false,
     error: "Unknown tool: getDiscoverabilitySummary",
+  });
+
+  const searchHealth = await registry.invoke("getSearchHealthResults", { n: 5 });
+  assert.deepEqual(searchHealth, {
+    tool: "getSearchHealthResults",
+    success: false,
+    error: "Unknown tool: getSearchHealthResults",
+  });
+
+  const searchHealthSummary = await registry.invoke("getSearchHealthSummary", { n: 5 });
+  assert.deepEqual(searchHealthSummary, {
+    tool: "getSearchHealthSummary",
+    success: false,
+    error: "Unknown tool: getSearchHealthSummary",
   });
 });
 

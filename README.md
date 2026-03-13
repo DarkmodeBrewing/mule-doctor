@@ -16,6 +16,7 @@ Observability and diagnostic agent for `rust-mule` nodes.
 - tails rust-mule logs
 - runs an LLM diagnostic loop with tool-calling
 - posts periodic reports to Mattermost via incoming webhook
+- persists controlled discoverability and normalized search-health history for operators and LLM diagnostics
 
 ## Configuration
 
@@ -93,4 +94,5 @@ Operator console (optional):
 - Observer now computes a deterministic network health score (peer count, bucket balance, lookup success, hop efficiency, error rate) and persists it as `lastHealthScore` + history entries.
 - The LLM tool surface is documented in [docs/llm_tools.md](/home/coder/projects/mule-doctor/docs/llm_tools.md).
 - Analyzer records per-call LLM usage logs (`LLM_<timestamp>.log`), aggregates daily/monthly usage in state, and emits one Mattermost usage report per UTC day when usage exists.
+- Periodic Mattermost reports now include compact discoverability and search-health summary attachments when recent history exists.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

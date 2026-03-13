@@ -10,6 +10,7 @@ import type {
   ManagedDiscoverabilityRecord,
   OperatorEventEntry,
   RuntimeState,
+  SearchHealthRecord,
 } from "../types/contracts.js";
 
 const DEFAULT_DATA_DIR = "/data/mule-doctor";
@@ -17,6 +18,7 @@ const DEFAULT_STATE_FILE = "state.json";
 const DEFAULT_HISTORY_FILE = "history.json";
 const DEFAULT_EVENTS_FILE = "operator-events.json";
 const DEFAULT_DISCOVERABILITY_FILE = "discoverability-results.json";
+const DEFAULT_SEARCH_HEALTH_FILE = "search-health-results.json";
 const DEFAULT_HISTORY_LIMIT = 500;
 const DEFAULT_EVENTS_LIMIT = 200;
 const DEFAULT_DISCOVERABILITY_LIMIT = 100;
@@ -27,9 +29,11 @@ export interface RuntimeStoreConfig {
   historyPath?: string;
   eventsPath?: string;
   discoverabilityPath?: string;
+  searchHealthPath?: string;
   historyLimit?: number;
   eventsLimit?: number;
   discoverabilityLimit?: number;
+  searchHealthLimit?: number;
 }
 
 export class RuntimeStore {
@@ -37,9 +41,11 @@ export class RuntimeStore {
   private readonly historyPath: string;
   private readonly eventsPath: string;
   private readonly discoverabilityPath: string;
+  private readonly searchHealthPath: string;
   private readonly historyLimit: number;
   private readonly eventsLimit: number;
   private readonly discoverabilityLimit: number;
+  private readonly searchHealthLimit: number;
   private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(config: RuntimeStoreConfig = {}) {
@@ -49,9 +55,11 @@ export class RuntimeStore {
     this.eventsPath = config.eventsPath ?? `${dataDir}/${DEFAULT_EVENTS_FILE}`;
     this.discoverabilityPath =
       config.discoverabilityPath ?? `${dataDir}/${DEFAULT_DISCOVERABILITY_FILE}`;
+    this.searchHealthPath = config.searchHealthPath ?? `${dataDir}/${DEFAULT_SEARCH_HEALTH_FILE}`;
     this.historyLimit = config.historyLimit ?? DEFAULT_HISTORY_LIMIT;
     this.eventsLimit = config.eventsLimit ?? DEFAULT_EVENTS_LIMIT;
     this.discoverabilityLimit = config.discoverabilityLimit ?? DEFAULT_DISCOVERABILITY_LIMIT;
+    this.searchHealthLimit = config.searchHealthLimit ?? DEFAULT_DISCOVERABILITY_LIMIT;
   }
 
   async initialize(): Promise<void> {
@@ -59,6 +67,7 @@ export class RuntimeStore {
     await this.ensureJsonFile(this.historyPath, "[]\n");
     await this.ensureJsonFile(this.eventsPath, "[]\n");
     await this.ensureJsonFile(this.discoverabilityPath, "[]\n");
+    await this.ensureJsonFile(this.searchHealthPath, "[]\n");
   }
 
   async loadState(): Promise<RuntimeState> {
@@ -150,6 +159,28 @@ export class RuntimeStore {
 
   async getRecentDiscoverabilityResults(n = 20): Promise<ManagedDiscoverabilityRecord[]> {
     const results = await this.loadDiscoverabilityResults();
+    if (n <= 0) return [];
+    return results.slice(-n);
+  }
+
+  async loadSearchHealthResults(): Promise<SearchHealthRecord[]> {
+    const results = await this.readJsonFile<SearchHealthRecord[]>(this.searchHealthPath);
+    return Array.isArray(results) ? results : [];
+  }
+
+  async appendSearchHealthResult(entry: SearchHealthRecord): Promise<void> {
+    await this.enqueueMutation(async () => {
+      const results = await this.loadSearchHealthResults();
+      results.push(entry);
+      if (results.length > this.searchHealthLimit) {
+        results.splice(0, results.length - this.searchHealthLimit);
+      }
+      await this.writeJsonFile(this.searchHealthPath, results);
+    });
+  }
+
+  async getRecentSearchHealthResults(n = 20): Promise<SearchHealthRecord[]> {
+    const results = await this.loadSearchHealthResults();
     if (n <= 0) return [];
     return results.slice(-n);
   }

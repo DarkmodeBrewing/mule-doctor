@@ -6,7 +6,7 @@
 
 import type { Analyzer } from "../llm/analyzer.js";
 import type { UsageSummary } from "../llm/usageTracker.js";
-import type { ManagedDiscoverabilitySummary } from "../types/contracts.js";
+import type { ManagedDiscoverabilitySummary, SearchHealthSummary } from "../types/contracts.js";
 
 export interface MattermostCommandContext {
   command: string;
@@ -45,40 +45,53 @@ export interface DiscoverabilityReportSource {
   summarizeRecent(limit?: number): Promise<ManagedDiscoverabilitySummary>;
 }
 
+export interface SearchHealthReportSource {
+  summarizeRecent(limit?: number): Promise<SearchHealthSummary>;
+}
+
+export interface MattermostReportSources {
+  discoverabilityResults?: DiscoverabilityReportSource;
+  searchHealthResults?: SearchHealthReportSource;
+}
+
 const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
 const DEFAULT_DISCOVERABILITY_REPORT_LIMIT = 3;
+const DEFAULT_SEARCH_HEALTH_REPORT_LIMIT = 5;
 
 export class MattermostClient {
   private readonly webhookUrl: string;
   private readonly analyzer: Analyzer;
   private readonly requestTimeoutMs: number;
   private readonly discoverabilityResults: DiscoverabilityReportSource | undefined;
+  private readonly searchHealthResults: SearchHealthReportSource | undefined;
 
   constructor(webhookUrl: string, analyzer: Analyzer, requestTimeoutMs?: number);
   constructor(
     webhookUrl: string,
     analyzer: Analyzer,
-    discoverabilityResults: DiscoverabilityReportSource | undefined,
+    reportSources: MattermostReportSources | undefined,
     requestTimeoutMs?: number,
   );
   constructor(
     webhookUrl: string,
     analyzer: Analyzer,
-    discoverabilityResultsOrTimeout?: DiscoverabilityReportSource | number,
+    reportSourcesOrTimeout?: MattermostReportSources | number,
     requestTimeoutMs = DEFAULT_HTTP_TIMEOUT_MS,
   ) {
     this.webhookUrl = webhookUrl;
     this.analyzer = analyzer;
-    if (typeof discoverabilityResultsOrTimeout === "number") {
+    if (typeof reportSourcesOrTimeout === "number") {
       if (requestTimeoutMs !== DEFAULT_HTTP_TIMEOUT_MS) {
         throw new Error(
           "MattermostClient timeout-only constructor does not accept a fourth argument",
         );
       }
       this.discoverabilityResults = undefined;
-      this.requestTimeoutMs = clampTimeout(discoverabilityResultsOrTimeout);
+      this.searchHealthResults = undefined;
+      this.requestTimeoutMs = clampTimeout(reportSourcesOrTimeout);
     } else {
-      this.discoverabilityResults = discoverabilityResultsOrTimeout;
+      this.discoverabilityResults = reportSourcesOrTimeout?.discoverabilityResults;
+      this.searchHealthResults = reportSourcesOrTimeout?.searchHealthResults;
       this.requestTimeoutMs = clampTimeout(requestTimeoutMs);
     }
   }
@@ -133,6 +146,10 @@ export class MattermostClient {
     const discoverabilityAttachment = await this.buildDiscoverabilityAttachment();
     if (discoverabilityAttachment) {
       attachments.push(discoverabilityAttachment);
+    }
+    const searchHealthAttachment = await this.buildSearchHealthAttachment();
+    if (searchHealthAttachment) {
+      attachments.push(searchHealthAttachment);
     }
 
     const payload: MattermostPayload = {
@@ -300,6 +317,47 @@ export class MattermostClient {
     return {
       title: "Discoverability Summary",
       color: "#8cf0c6",
+      text: lines,
+    };
+  }
+
+  private async buildSearchHealthAttachment(): Promise<MattermostAttachment | undefined> {
+    if (!this.searchHealthResults) {
+      return undefined;
+    }
+    let summary: SearchHealthSummary;
+    try {
+      summary = await this.searchHealthResults.summarizeRecent(DEFAULT_SEARCH_HEALTH_REPORT_LIMIT);
+    } catch (err) {
+      log("warn", "mattermost", `Failed to load search health summary: ${String(err)}`);
+      return undefined;
+    }
+    if (summary.totalSearches === 0) {
+      return undefined;
+    }
+    const lines = [
+      `Window: ${summary.windowSize} recent searches`,
+      `Found: ${summary.foundCount}`,
+      `Completed empty: ${summary.completedEmptyCount}`,
+      `Timed out: ${summary.timedOutCount}`,
+      `Dispatch-ready: ${summary.dispatchReadyCount}`,
+      `Dispatch-not-ready: ${summary.dispatchNotReadyCount}`,
+      `Degraded transport: ${summary.degradedTransportCount}`,
+      summary.successRatePct !== undefined
+        ? `Success rate: ${summary.successRatePct.toFixed(1)}%`
+        : undefined,
+      summary.latestOutcome ? `Latest outcome: ${summary.latestOutcome}` : undefined,
+      summary.latestPair
+        ? `Latest path: ${summary.latestPair.publisherInstanceId} -> ${summary.latestPair.searcherInstanceId}`
+        : undefined,
+      summary.latestQuery ? `Latest query: ${summary.latestQuery}` : undefined,
+      summary.lastSuccessAt ? `Last success: ${summary.lastSuccessAt}` : undefined,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n");
+    return {
+      title: "Search Health Summary",
+      color: "#7fd1ff",
       text: lines,
     };
   }

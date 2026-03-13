@@ -117,6 +117,7 @@ async function refreshAll() {
       instances.refreshInstancePresets(),
       refreshOperatorEvents(),
       discoverability.refreshDiscoverabilityResults(),
+      discoverability.refreshSearchHealthResults(),
     ]);
   } catch (err) {
     setText("health", `Refresh failed: ${String(err)}`);
@@ -144,6 +145,8 @@ document.getElementById("refresh-llm-list").onclick = refreshLlmList;
 document.getElementById("refresh-proposals").onclick = refreshProposalList;
 document.getElementById("refresh-discoverability-results").onclick =
   discoverability.refreshDiscoverabilityResults;
+document.getElementById("refresh-search-health-results").onclick =
+  discoverability.refreshSearchHealthResults;
 document.getElementById("refresh-instances").onclick = instances.refreshInstances;
 document.getElementById("refresh-instance-compare").onclick = instances.refreshInstanceCompare;
 document.getElementById("compare-left").onchange = instances.renderCompareTimelineControls;

@@ -20,9 +20,13 @@ import type {
   ManagedDiscoverabilityRecord,
   ManagedDiscoverabilitySummary,
   ManagedDiscoverabilitySummaryResult,
+  SearchHealthRecord,
+  SearchHealthSummary,
   ToolResult,
 } from "../types/contracts.js";
 import { summarizeDiscoverabilityResults } from "../discoverability/summary.js";
+import { sanitizeSearchHealthRecord } from "../searchHealth/records.js";
+import { summarizeSearchHealthRecords } from "../searchHealth/summary.js";
 import { SourceCodeTools } from "./sourceCodeTools.js";
 
 /** Shape expected by the OpenAI tools array. */
@@ -222,6 +226,58 @@ export class ToolRegistry {
           const n = clampInt(args["n"], 10, 1, 100);
           const records = await runtimeStore.getRecentDiscoverabilityResults(n);
           return summarizeDiscoverabilityResults(records.map(sanitizeDiscoverabilityRecord));
+        },
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "getSearchHealthResults",
+            description:
+              "Returns recent persisted search lifecycle records recorded by mule-doctor.",
+            parameters: {
+              type: "object",
+              properties: {
+                n: {
+                  type: "number",
+                  description: "Number of recent search health records to return (default 10).",
+                },
+              },
+              required: [],
+            },
+          },
+        },
+        async (args): Promise<SearchHealthRecord[]> => {
+          const n = clampInt(args["n"], 10, 1, 100);
+          const records = await runtimeStore.getRecentSearchHealthResults(n);
+          return records.map(sanitizeSearchHealthRecord);
+        },
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "getSearchHealthSummary",
+            description:
+              "Returns a compact summary of recent persisted search lifecycle records recorded by mule-doctor.",
+            parameters: {
+              type: "object",
+              properties: {
+                n: {
+                  type: "number",
+                  description: "Number of recent search health records to summarize (default 10).",
+                },
+              },
+              required: [],
+            },
+          },
+        },
+        async (args): Promise<SearchHealthSummary> => {
+          const n = clampInt(args["n"], 10, 1, 100);
+          const records = await runtimeStore.getRecentSearchHealthResults(n);
+          return summarizeSearchHealthRecords(records.map(sanitizeSearchHealthRecord));
         },
       );
     }
@@ -652,7 +708,11 @@ function sanitizeDiscoverabilityResult(
     dispatchedAt: result.dispatchedAt,
     searchId: result.searchId,
     readinessAtDispatch: {
+      publisherStatusReady: result.readinessAtDispatch?.publisherStatusReady === true,
+      publisherSearchesReady: result.readinessAtDispatch?.publisherSearchesReady === true,
       publisherReady: result.readinessAtDispatch?.publisherReady === true,
+      searcherStatusReady: result.readinessAtDispatch?.searcherStatusReady === true,
+      searcherSearchesReady: result.readinessAtDispatch?.searcherSearchesReady === true,
       searcherReady: result.readinessAtDispatch?.searcherReady === true,
     },
     peerCountAtDispatch: {

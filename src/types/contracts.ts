@@ -200,7 +200,11 @@ export interface ManagedDiscoverabilityCheckResult {
   dispatchedAt: string;
   searchId: string;
   readinessAtDispatch: {
+    publisherStatusReady: boolean;
+    publisherSearchesReady: boolean;
     publisherReady: boolean;
+    searcherStatusReady: boolean;
+    searcherSearchesReady: boolean;
     searcherReady: boolean;
   };
   peerCountAtDispatch: {
@@ -230,7 +234,11 @@ export interface ManagedDiscoverabilitySummaryResult {
   dispatchedAt: string;
   searchId: string;
   readinessAtDispatch: {
+    publisherStatusReady: boolean;
+    publisherSearchesReady: boolean;
     publisherReady: boolean;
+    searcherStatusReady: boolean;
+    searcherSearchesReady: boolean;
     searcherReady: boolean;
   };
   peerCountAtDispatch: {
@@ -258,6 +266,68 @@ export interface ManagedDiscoverabilitySummary {
   latestRecordedAt?: string;
   latestOutcome?: ManagedDiscoverabilityOutcome;
   latestQuery?: string;
+  latestPair?: {
+    publisherInstanceId: string;
+    searcherInstanceId: string;
+  };
+  lastSuccessAt?: string;
+}
+
+export type SearchHealthRecordSource = "controlled_discoverability";
+export type SearchHealthOutcome = ManagedDiscoverabilityOutcome;
+
+export interface SearchHealthReadinessSnapshot {
+  statusReady: boolean;
+  searchesReady: boolean;
+  ready: boolean;
+}
+
+export interface SearchHealthTransportSnapshot {
+  peerCount: number;
+  degradedIndicators: string[];
+}
+
+export interface SearchHealthControlledContext {
+  publisherInstanceId: string;
+  searcherInstanceId: string;
+  fixture: ManagedDiscoverabilityFixtureSummary;
+}
+
+export interface SearchHealthRecord {
+  recordedAt: string;
+  source: SearchHealthRecordSource;
+  query: string;
+  searchId: string;
+  dispatchedAt: string;
+  readinessAtDispatch: {
+    publisher: SearchHealthReadinessSnapshot;
+    searcher: SearchHealthReadinessSnapshot;
+  };
+  transportAtDispatch: {
+    publisher: SearchHealthTransportSnapshot;
+    searcher: SearchHealthTransportSnapshot;
+  };
+  states: ManagedDiscoverabilityStateSample[];
+  resultCount: number;
+  outcome: SearchHealthOutcome;
+  finalState: string;
+  controlledContext?: SearchHealthControlledContext;
+}
+
+export interface SearchHealthSummary {
+  windowSize: number;
+  totalSearches: number;
+  foundCount: number;
+  completedEmptyCount: number;
+  timedOutCount: number;
+  dispatchReadyCount: number;
+  dispatchNotReadyCount: number;
+  degradedTransportCount: number;
+  successRatePct?: number;
+  latestRecordedAt?: string;
+  latestOutcome?: SearchHealthOutcome;
+  latestQuery?: string;
+  latestSource?: SearchHealthRecordSource;
   latestPair?: {
     publisherInstanceId: string;
     searcherInstanceId: string;

@@ -93,6 +93,9 @@ export class OperatorConsoleServer {
   private readonly discoverabilityResults:
     | OperatorConsoleConfig["discoverabilityResults"]
     | undefined;
+  private readonly searchHealthResults:
+    | OperatorConsoleConfig["searchHealthResults"]
+    | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -125,6 +128,7 @@ export class OperatorConsoleServer {
     this.observerControl = config.observerControl;
     this.operatorEvents = config.operatorEvents;
     this.discoverabilityResults = config.discoverabilityResults;
+    this.searchHealthResults = config.searchHealthResults;
     this.startedAt = new Date().toISOString();
   }
 
@@ -294,6 +298,16 @@ export class OperatorConsoleServer {
 
     if (path === "/api/discoverability/summary") {
       await this.handleDiscoverabilitySummary(req, url, res);
+      return;
+    }
+
+    if (path === "/api/search-health/results") {
+      await this.handleSearchHealthResults(req, url, res);
+      return;
+    }
+
+    if (path === "/api/search-health/summary") {
+      await this.handleSearchHealthSummary(req, url, res);
       return;
     }
 
@@ -620,6 +634,9 @@ export class OperatorConsoleServer {
     if (this.discoverabilityResults) {
       await this.discoverabilityResults.append(result);
     }
+    if (this.searchHealthResults) {
+      await this.searchHealthResults.appendControlledDiscoverability(result);
+    }
     sendJson(res, 200, { ok: true, result });
   }
 
@@ -666,6 +683,52 @@ export class OperatorConsoleServer {
       200,
     );
     const summary = await this.discoverabilityResults.summarizeRecent(limit);
+    sendJson(res, 200, { ok: true, summary });
+  }
+
+  private async handleSearchHealthResults(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.searchHealthResults) {
+      sendJson(res, 501, { ok: false, error: "search health history unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(
+      parseInt(url.searchParams.get("limit") ?? "", 10),
+      20,
+      1,
+      200,
+    );
+    const results = await this.searchHealthResults.listRecent(limit);
+    sendJson(res, 200, { ok: true, results });
+  }
+
+  private async handleSearchHealthSummary(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.searchHealthResults) {
+      sendJson(res, 501, { ok: false, error: "search health summary unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(
+      parseInt(url.searchParams.get("limit") ?? "", 10),
+      20,
+      1,
+      200,
+    );
+    const summary = await this.searchHealthResults.summarizeRecent(limit);
     sendJson(res, 200, { ok: true, summary });
   }
 
