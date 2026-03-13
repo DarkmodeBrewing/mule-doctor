@@ -80,6 +80,10 @@ Common status codes:
 | `GET` | `/api/proposals` | List saved patch proposal files |
 | `GET` | `/api/proposals/{file}` | Read one proposal file |
 | `GET` | `/api/operator/events` | List recent operator timeline events |
+| `GET` | `/api/discoverability/results` | List recent persisted controlled discoverability checks |
+| `GET` | `/api/discoverability/summary` | Read compact recent discoverability summary |
+| `GET` | `/api/search-health/results` | List recent persisted search lifecycle records |
+| `GET` | `/api/search-health/summary` | Read compact recent search health summary |
 | `GET` | `/api/stream/app` | SSE app-log stream |
 | `GET` | `/api/stream/rust-mule` | SSE rust-mule-log stream |
 
@@ -105,6 +109,7 @@ Common status codes:
 | `POST` | `/api/instances/{id}/stop` | Stop instance |
 | `POST` | `/api/instances/{id}/restart` | Restart instance |
 | `GET` | `/api/instances/compare?left={id}&right={id}` | Compare two managed instances |
+| `POST` | `/api/discoverability/check` | Run a controlled discoverability check between managed instances |
 
 ### Managed Instance Presets
 

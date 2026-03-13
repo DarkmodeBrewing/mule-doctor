@@ -139,6 +139,52 @@ Notes:
 - bounded to `1..100`
 - returns derived counts/trends such as `found`, `completed_empty`, `timed_out`, success rate, latest outcome, and last success time
 
+### `getSearchHealthResults`
+
+Purpose:
+
+- returns recent persisted search-lifecycle records recorded by mule-doctor
+
+Arguments:
+
+```json
+{
+  "n": 10
+}
+```
+
+Notes:
+
+- only available when a runtime store is configured
+- `n` is optional
+- default `10`
+- bounded to `1..100`
+- currently records controlled discoverability searches as the first search-health source
+- includes readiness-at-dispatch, transport context, state transitions, and terminal outcome in a normalized mule-doctor-owned shape
+
+### `getSearchHealthSummary`
+
+Purpose:
+
+- returns a compact summary of recent persisted search lifecycle records
+
+Arguments:
+
+```json
+{
+  "n": 10
+}
+```
+
+Notes:
+
+- only available when a runtime store is configured
+- `n` is optional
+- default `10`
+- bounded to `1..100`
+- returns derived counts such as `found`, `completed_empty`, `timed_out`
+- also summarizes dispatch readiness and degraded transport counts so the LLM does not need to derive those trends from raw records each time
+
 ### `searchLogs`
 
 Purpose:
@@ -506,6 +552,8 @@ Conditionally registered:
 - `getHistory`
 - `getDiscoverabilityResults`
 - `getDiscoverabilitySummary`
+- `getSearchHealthResults`
+- `getSearchHealthSummary`
   - only when mule-doctor has a runtime store
 - `search_code`
 - `read_file`

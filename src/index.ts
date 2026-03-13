@@ -17,6 +17,7 @@ import { installStdoutLogBuffer } from "./operatorConsole/logBuffer.js";
 import { OperatorConsoleServer } from "./operatorConsole/server.js";
 import { DiscoverabilityLog } from "./operatorConsole/discoverabilityLog.js";
 import { OperatorEventLog } from "./operatorConsole/operatorEventLog.js";
+import { SearchHealthLog } from "./searchHealth/searchHealthLog.js";
 import { InstanceManager } from "./instances/instanceManager.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
 import { ManagedInstanceAnalysisService } from "./instances/managedInstanceAnalysis.js";
@@ -153,6 +154,7 @@ async function main(): Promise<void> {
   });
   const operatorEventLog = new OperatorEventLog(runtimeStore);
   const discoverabilityLog = new DiscoverabilityLog(runtimeStore);
+  const searchHealthLog = new SearchHealthLog(runtimeStore);
   const usageTracker = new UsageTracker({
     runtimeStore,
     dataDir: llmLogDir,
@@ -163,7 +165,10 @@ async function main(): Promise<void> {
     model: openaiModel,
     usageTracker,
   });
-  const mattermostClient = new MattermostClient(webhookUrl, analyzer, discoverabilityLog);
+  const mattermostClient = new MattermostClient(webhookUrl, analyzer, {
+    discoverabilityResults: discoverabilityLog,
+    searchHealthResults: searchHealthLog,
+  });
   const patchProposalNotifier = async (proposal: {
     artifactPath: string;
     diff: string;
@@ -273,6 +278,7 @@ async function main(): Promise<void> {
       observerControl: observer,
       operatorEvents: operatorEventLog,
       discoverabilityResults: discoverabilityLog,
+      searchHealthResults: searchHealthLog,
     });
     try {
       await operatorConsole.start();
