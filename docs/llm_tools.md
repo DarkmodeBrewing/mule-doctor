@@ -161,6 +161,12 @@ Notes:
 - bounded to `1..100`
 - currently records controlled discoverability searches as the first search-health source
 - includes readiness-at-dispatch, transport context, state transitions, and terminal outcome in a normalized mule-doctor-owned shape
+- `source` is currently `controlled_discoverability`
+- `transportAtDispatch.*.degradedIndicators` is mule-doctor-derived context such as:
+  - `no_live_peers`
+  - `status_not_ready`
+  - `searches_not_ready`
+  - `search_pipeline_not_ready`
 
 ### `getSearchHealthSummary`
 
@@ -184,6 +190,12 @@ Notes:
 - bounded to `1..100`
 - returns derived counts such as `found`, `completed_empty`, `timed_out`
 - also summarizes dispatch readiness and degraded transport counts so the LLM does not need to derive those trends from raw records each time
+- current fields include:
+  - `dispatchReadyCount`
+  - `dispatchNotReadyCount`
+  - `degradedTransportCount`
+  - `latestSource`
+  - `latestPair`
 
 ### `searchLogs`
 
