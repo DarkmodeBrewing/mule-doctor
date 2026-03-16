@@ -34,6 +34,14 @@ The following major slices are already landed on `main`:
    - operator-console frontend split into focused browser modules
    - tests consolidated under `src/test/`
    - Alpine.js evaluated and explicitly deferred
+5. Runtime and search/discoverability groundwork:
+   - runtime readiness validation and readiness-contract alignment
+   - Docker smoke harness for local/manual stack checks
+   - rust-mule API edge-case coverage
+   - managed shared-content orchestration primitives
+   - controlled discoverability checks between managed instances
+   - discoverability persistence, summary, operator-console visibility, and Mattermost reporting
+   - bounded LLM tools for discoverability, searches, shared content, and downloads
 
 ## Goals
 
@@ -43,50 +51,6 @@ The following major slices are already landed on `main`:
 4. Keep implementation and architecture docs aligned as the system evolves.
 
 ## Outstanding Tasks
-
-## Task A: End-to-End Smoke Harness
-
-1. Add a repeatable local smoke script that:
-   - boots the stack via `docker compose`
-   - waits for rust-mule + mule-doctor readiness
-   - validates key observer/tool flows
-   - verifies persisted artifacts under mounted `/data`
-2. Ensure clear pass/fail output and non-zero exit on failure.
-
-Acceptance criteria:
-
-- One command executes the smoke run end-to-end.
-- Script verifies state/history/proposal artifact creation.
-- Suitable for pre-release validation.
-
-## Task B: Integration Coverage for rust-mule API Edge Cases
-
-1. Add integration tests for debug endpoint behaviors:
-   - `403` for invalid debug token
-   - `404` when debug mode is disabled
-   - async `202 -> poll` flows for bootstrap and trace lookup
-2. Validate bearer-token rejection behavior (`403`) across relevant endpoints.
-
-Acceptance criteria:
-
-- Edge-case handling is covered by automated integration tests.
-- Regressions in debug/auth/polling behavior are caught before merge.
-
-## Task C: Runtime Readiness Validation
-
-1. Add startup/readiness validation for runtime prerequisites:
-   - required env vars
-   - token and debug-token file paths
-   - config file presence where required
-   - writable `/data` subpaths
-2. Fail fast with explicit operator-facing diagnostics when prerequisites are missing.
-3. Document the readiness contract alongside runtime configuration.
-
-Acceptance criteria:
-
-- Startup failures surface concrete missing prerequisites.
-- Operational setup issues are identified before the observer loop begins.
-- The readiness contract is documented clearly enough for operators to self-diagnose setup errors.
 
 ## Task D: Operator Console Control Plane Completion
 
@@ -127,75 +91,6 @@ Acceptance criteria:
 - CI covers the checks the project actually relies on.
 - Regression detection happens before merge for the critical runtime paths.
 - Release validation is repeatable rather than ad hoc.
-
-## Task G: Align rust-mule Readiness Handling with the New 200/ready Contract
-
-1. Update mule-doctor to treat rust-mule readiness as explicit payload state rather than HTTP `503`/`504` responses.
-2. Review and correct all current readiness assumptions, including:
-   - the Docker smoke harness
-   - `RustMuleClient` fallback/recoverable-error logic
-   - observer-cycle behavior when rust-mule responds with `ready: false`
-   - docs that still describe readiness as HTTP-status-based
-3. Incorporate the current rust-mule readiness signals:
-   - `GET /api/v1/health == 200`
-   - `GET /api/v1/status == 200`
-   - `/api/v1/status.ready == true`
-   - `/api/v1/searches.ready == true`
-4. Decide and document the intended mule-doctor behavior when rust-mule is reachable but not ready:
-   - block startup-sensitive flows such as smoke validation until ready
-   - degrade observer behavior gracefully with explicit unavailable/not-ready state where appropriate
-
-Acceptance criteria:
-
-- mule-doctor no longer depends on upstream `503`/`504` readiness semantics.
-- smoke validation waits for the new readiness contract instead of HTTP `200` alone.
-- observer/runtime behavior is explicit and documented for `ready: false` upstream states.
-- implementation and docs both reflect the new rust-mule readiness model.
-
-## Task H: Add Controlled Search Discoverability Checks for Managed Instances
-
-1. Teach mule-doctor to run controlled search checks between mule-doctor-managed local rust-mule instances instead of relying on random public-network keyword searches.
-2. Start with the highest-signal scenario:
-   - instance A shares a known file
-   - instance B searches for a distinctive keyword derived from that file
-   - mule-doctor repeats the search for a bounded window until found or timed out
-3. Use readiness-gated dispatch so search checks only start after:
-   - `GET /api/v1/health == 200`
-   - `GET /api/v1/status == 200`
-   - `/api/v1/status.ready == true`
-   - `/api/v1/searches.ready == true`
-4. Treat “random public-network keyword search” as a secondary signal only, not the primary health check.
-5. Base the check on the current rust-mule share/publish workflow:
-   - managed instance A exposes a known file through `sharing.share_roots`
-   - rust-mule indexes and publishes it
-   - managed instance B searches for a distinctive keyword derived from that controlled fixture
-
-Acceptance criteria:
-
-- mule-doctor can execute a repeatable controlled discoverability check between managed instances.
-- search checks do not dispatch before the upstream readiness contract is satisfied.
-- the first-class search health path is based on known shared content, not opportunistic public-network results.
-
-## Task I: Add Managed Shared-Content Orchestration Primitives
-
-1. Add the missing mule-doctor primitives needed to drive controlled share/publish flows for managed rust-mule instances.
-2. Extend managed-instance config generation so mule-doctor can assign per-instance `sharing.share_roots`.
-3. Define how mule-doctor owns and lays out controlled shared-content fixture directories per instance.
-4. Add rust-mule client/helpers for the upstream surfaces needed by share/publish orchestration and diagnostics:
-   - `GET /api/v1/shared`
-   - `GET /api/v1/shared/actions`
-   - `POST /api/v1/shared/actions/reindex`
-   - `POST /api/v1/shared/actions/republish_sources`
-   - `POST /api/v1/shared/actions/republish_keywords`
-   - `GET /api/v1/searches/{search_id}`
-   - `GET /api/v1/downloads`
-5. Keep this slice focused on the orchestration plumbing, not on the higher-level controlled search policy itself.
-
-Acceptance criteria:
-
-- mule-doctor can configure managed instances with dedicated shared roots before launch.
-- mule-doctor can trigger the current rust-mule shared-content reindex/republish flows through explicit code paths.
-- the codebase has the basic building blocks required for controlled discoverability checks, publish diagnostics, and download diagnostics.
 
 ## Task J: Track Full Search Lifecycle and Search Health Signals
 
@@ -242,34 +137,7 @@ Acceptance criteria:
 - operators and future LLM diagnostics can tell which information comes from active searches, shared-file publish state, shared-action jobs, and download state.
 - the lack of a first-class upstream keyword-publish job endpoint is documented as a real dependency/gap.
 
-## Task L: Add LLM Investigation Tools for Downloads, Searches, and Keyword Publish State
-
-1. Extend the LLM tool surface with bounded investigation tools for rust-mule search/download workflows.
-2. Start with explicit tools for the currently known upstream surfaces:
-   - active keyword searches
-   - per-search detail
-   - shared-file keyword publish state
-   - shared action jobs such as reindex / republish
-   - download status from `GET /api/v1/downloads`
-3. Normalize the most important fields for LLM use instead of exposing raw upstream payloads only, including:
-   - ID
-   - query or target
-   - state
-   - timing fields
-   - result count
-   - terminal outcome
-   - error detail
-4. Preserve the bounded-tool model:
-   - no generic arbitrary API passthrough
-   - only named, documented, test-covered investigation tools
-
-Acceptance criteria:
-
-- the LLM can inspect search, publish, shared-action, and download-related state through dedicated mule-doctor tools.
-- tool outputs are normalized enough for reliable diagnostics without requiring the model to reverse-engineer raw rust-mule payloads each time.
-- the new tools are documented alongside the existing LLM tool surface.
-
-## Task M: Formalize Managed rust-mule config.toml Template Ownership
+## Task L: Formalize Managed rust-mule config.toml Template Ownership
 
 1. Turn the current managed-instance config generation into an explicit ownership model for per-instance `config.toml` files.
 2. Preserve the existing split of responsibility:
@@ -293,13 +161,9 @@ Acceptance criteria:
 
 ## Recommended Next Order
 
-1. Task G: Align rust-mule Readiness Handling with the New 200/ready Contract
-2. Task I: Add Managed Shared-Content Orchestration Primitives
-3. Task H: Add Controlled Search Discoverability Checks for Managed Instances
-4. Task J: Track Full Search Lifecycle and Search Health Signals
-5. Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
-6. Task L: Add LLM Investigation Tools for Downloads, Searches, and Keyword Publish State
-7. Task M: Formalize Managed rust-mule config.toml Template Ownership
-8. Task D: Operator Console Control Plane Completion
-9. Task E: Runtime and Container Hardening
-10. Task F: Release and CI Hardening
+1. Task J: Track Full Search Lifecycle and Search Health Signals
+2. Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
+3. Task L: Formalize Managed rust-mule config.toml Template Ownership
+4. Task D: Operator Console Control Plane Completion
+5. Task E: Runtime and Container Hardening
+6. Task F: Release and CI Hardening

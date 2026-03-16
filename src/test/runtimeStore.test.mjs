@@ -30,11 +30,16 @@ test("RuntimeStore initializes state/history files when missing", async () => {
       join(tmp.dir, "discoverability-results.json"),
       "utf8",
     );
+    const searchHealthRaw = await readFile(
+      join(tmp.dir, "search-health-results.json"),
+      "utf8",
+    );
 
     assert.deepEqual(JSON.parse(stateRaw), {});
     assert.deepEqual(JSON.parse(historyRaw), []);
     assert.deepEqual(JSON.parse(eventsRaw), []);
     assert.deepEqual(JSON.parse(discoverabilityRaw), []);
+    assert.deepEqual(JSON.parse(searchHealthRaw), []);
   } finally {
     await tmp.cleanup();
   }
@@ -260,10 +265,15 @@ test("RuntimeStore enforces discoverability result retention limit", async () =>
           query: `tok-${i}`,
           dispatchedAt: `t-${i}`,
           searchId: `s-${i}`,
-          readinessAtDispatch: { publisherReady: true, searcherReady: true },
+          readinessAtDispatch: {
+            publisherStatusReady: true,
+            publisherSearchesReady: true,
+            publisherReady: true,
+            searcherStatusReady: true,
+            searcherSearchesReady: true,
+            searcherReady: true,
+          },
           peerCountAtDispatch: { publisher: 1, searcher: 1 },
-          publisherSharedBefore: { actions: [], downloads: [] },
-          publisherSharedAfter: { actions: [], downloads: [] },
           states: [],
           resultCount: 0,
           outcome: "completed_empty",
@@ -280,6 +290,57 @@ test("RuntimeStore enforces discoverability result retention limit", async () =>
     );
     assert.equal("token" in results[0].result.fixture, false);
     assert.equal("absolutePath" in results[0].result.fixture, false);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("RuntimeStore enforces search health retention limit", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir, searchHealthLimit: 2 });
+    await store.initialize();
+
+    for (let i = 1; i <= 4; i++) {
+      await store.appendSearchHealthResult({
+        recordedAt: `t-${i}`,
+        source: "controlled_discoverability",
+        query: `tok-${i}`,
+        searchId: `s-${i}`,
+        dispatchedAt: `t-${i}`,
+        readinessAtDispatch: {
+          publisher: { statusReady: true, searchesReady: true, ready: true },
+          searcher: { statusReady: true, searchesReady: true, ready: true },
+        },
+        transportAtDispatch: {
+          publisher: { peerCount: 1, degradedIndicators: [] },
+          searcher: { peerCount: i - 1, degradedIndicators: i === 1 ? ["no_live_peers"] : [] },
+        },
+        states: [],
+        resultCount: 0,
+        outcome: "completed_empty",
+        finalState: "completed",
+        controlledContext: {
+          publisherInstanceId: "a",
+          searcherInstanceId: "b",
+          fixture: {
+            fixtureId: `f-${i}`,
+            fileName: `f-${i}.txt`,
+            relativePath: `f-${i}.txt`,
+            sizeBytes: 1,
+          },
+        },
+      });
+    }
+
+    const results = await store.loadSearchHealthResults();
+    assert.equal(results.length, 2);
+    assert.deepEqual(
+      results.map((entry) => entry.recordedAt),
+      ["t-3", "t-4"],
+    );
+    assert.equal(results[0].transportAtDispatch.searcher.peerCount, 2);
   } finally {
     await tmp.cleanup();
   }

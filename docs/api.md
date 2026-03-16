@@ -80,6 +80,10 @@ Common status codes:
 | `GET` | `/api/proposals` | List saved patch proposal files |
 | `GET` | `/api/proposals/{file}` | Read one proposal file |
 | `GET` | `/api/operator/events` | List recent operator timeline events |
+| `GET` | `/api/discoverability/results` | List recent persisted controlled discoverability checks |
+| `GET` | `/api/discoverability/summary` | Read compact recent discoverability summary |
+| `GET` | `/api/search-health/results` | List recent persisted search lifecycle records |
+| `GET` | `/api/search-health/summary` | Read compact recent search health summary |
 | `GET` | `/api/stream/app` | SSE app-log stream |
 | `GET` | `/api/stream/rust-mule` | SSE rust-mule-log stream |
 
@@ -105,6 +109,7 @@ Common status codes:
 | `POST` | `/api/instances/{id}/stop` | Stop instance |
 | `POST` | `/api/instances/{id}/restart` | Restart instance |
 | `GET` | `/api/instances/compare?left={id}&right={id}` | Compare two managed instances |
+| `POST` | `/api/discoverability/check` | Run a controlled discoverability check between managed instances |
 
 ### Managed Instance Presets
 
@@ -601,6 +606,278 @@ Error behavior:
 - `400` if `left` and `right` are the same
 - `404` if either instance is not found
 
+## Discoverability and Search Health Endpoints
+
+### `POST /api/discoverability/check`
+
+Runs a controlled search/discoverability check between two mule-doctor-managed instances.
+
+Request body:
+
+```json
+{
+  "publisherInstanceId": "lab-a",
+  "searcherInstanceId": "lab-b",
+  "fixtureId": "probe",
+  "timeoutMs": 60000,
+  "pollIntervalMs": 2000
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "result": {
+    "publisherInstanceId": "lab-a",
+    "searcherInstanceId": "lab-b",
+    "fixture": {
+      "fixtureId": "probe",
+      "token": "mule-doctor-lab-a-probe",
+      "fileName": "mule-doctor-lab-a-probe.txt",
+      "relativePath": "mule-doctor-lab-a-probe.txt",
+      "absolutePath": "/data/instances/lab-a/shared/mule-doctor-lab-a-probe.txt",
+      "sizeBytes": 64
+    },
+    "query": "mule-doctor-lab-a-probe",
+    "dispatchedAt": "2026-03-13T12:00:00.000Z",
+    "searchId": "feedfacefeedfacefeedfacefeedface",
+    "readinessAtDispatch": {
+      "publisherStatusReady": true,
+      "publisherSearchesReady": true,
+      "publisherReady": true,
+      "searcherStatusReady": true,
+      "searcherSearchesReady": true,
+      "searcherReady": true
+    },
+    "peerCountAtDispatch": {
+      "publisher": 3,
+      "searcher": 4
+    },
+    "states": [
+      {
+        "observedAt": "2026-03-13T12:00:01.000Z",
+        "state": "running",
+        "hits": 0
+      },
+      {
+        "observedAt": "2026-03-13T12:00:03.000Z",
+        "state": "running",
+        "hits": 1
+      }
+    ],
+    "resultCount": 1,
+    "outcome": "found",
+    "finalState": "running"
+  }
+}
+```
+
+Notes:
+
+- on success, mule-doctor also:
+  - appends an operator timeline event
+  - stores a sanitized discoverability record
+  - stores a normalized search-health lifecycle record
+- persisted history intentionally omits sensitive fixture fields such as absolute paths and tokens
+- this endpoint is intended for mule-doctor-managed local instances only
+- missing managed discoverability support returns `501`
+
+### `GET /api/discoverability/results?limit={n}`
+
+Query parameters:
+
+- `limit`: optional integer, default `20`, min `1`, max `200`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "results": [
+    {
+      "recordedAt": "2026-03-13T12:05:00.000Z",
+      "result": {
+        "publisherInstanceId": "lab-a",
+        "searcherInstanceId": "lab-b",
+        "fixture": {
+          "fixtureId": "probe",
+          "fileName": "mule-doctor-lab-a-probe.txt",
+          "relativePath": "mule-doctor-lab-a-probe.txt",
+          "sizeBytes": 64
+        },
+        "query": "mule-doctor-lab-a-probe",
+        "dispatchedAt": "2026-03-13T12:00:00.000Z",
+        "searchId": "feedfacefeedfacefeedfacefeedface",
+        "readinessAtDispatch": {
+          "publisherStatusReady": true,
+          "publisherSearchesReady": true,
+          "publisherReady": true,
+          "searcherStatusReady": true,
+          "searcherSearchesReady": true,
+          "searcherReady": true
+        },
+        "peerCountAtDispatch": {
+          "publisher": 3,
+          "searcher": 4
+        },
+        "states": [],
+        "resultCount": 1,
+        "outcome": "found",
+        "finalState": "running"
+      }
+    }
+  ]
+}
+```
+
+Notes:
+
+- returns the sanitized persisted discoverability history
+- fixture `token`, fixture `absolutePath`, and publisher-side shared snapshots are not exposed here
+- unavailable discoverability history returns `501`
+
+### `GET /api/discoverability/summary?limit={n}`
+
+Query parameters:
+
+- `limit`: optional integer, default `20`, min `1`, max `200`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "summary": {
+    "windowSize": 8,
+    "totalChecks": 8,
+    "foundCount": 5,
+    "completedEmptyCount": 2,
+    "timedOutCount": 1,
+    "successRatePct": 62.5,
+    "latestRecordedAt": "2026-03-13T12:05:00.000Z",
+    "latestOutcome": "found",
+    "latestQuery": "mule-doctor-lab-a-probe",
+    "latestPair": {
+      "publisherInstanceId": "lab-a",
+      "searcherInstanceId": "lab-b"
+    },
+    "lastSuccessAt": "2026-03-13T12:05:00.000Z"
+  }
+}
+```
+
+Notes:
+
+- this is a compact derived view over recent discoverability history
+- used by both the operator console and Mattermost periodic reporting
+
+### `GET /api/search-health/results?limit={n}`
+
+Query parameters:
+
+- `limit`: optional integer, default `20`, min `1`, max `200`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "results": [
+    {
+      "recordedAt": "2026-03-13T12:05:00.000Z",
+      "source": "controlled_discoverability",
+      "query": "mule-doctor-lab-a-probe",
+      "searchId": "feedfacefeedfacefeedfacefeedface",
+      "dispatchedAt": "2026-03-13T12:00:00.000Z",
+      "readinessAtDispatch": {
+        "publisher": {
+          "statusReady": true,
+          "searchesReady": true,
+          "ready": true
+        },
+        "searcher": {
+          "statusReady": true,
+          "searchesReady": true,
+          "ready": true
+        }
+      },
+      "transportAtDispatch": {
+        "publisher": {
+          "peerCount": 3,
+          "degradedIndicators": []
+        },
+        "searcher": {
+          "peerCount": 4,
+          "degradedIndicators": []
+        }
+      },
+      "states": [],
+      "resultCount": 1,
+      "outcome": "found",
+      "finalState": "running",
+      "controlledContext": {
+        "publisherInstanceId": "lab-a",
+        "searcherInstanceId": "lab-b",
+        "fixture": {
+          "fixtureId": "probe",
+          "fileName": "mule-doctor-lab-a-probe.txt",
+          "relativePath": "mule-doctor-lab-a-probe.txt",
+          "sizeBytes": 64
+        }
+      }
+    }
+  ]
+}
+```
+
+Notes:
+
+- search-health records are mule-doctor-owned normalized lifecycle records
+- current `source` values are limited to `controlled_discoverability`
+- the goal of this surface is to preserve lifecycle evidence without requiring consumers to correlate raw upstream endpoints every time
+
+### `GET /api/search-health/summary?limit={n}`
+
+Query parameters:
+
+- `limit`: optional integer, default `20`, min `1`, max `200`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "summary": {
+    "windowSize": 8,
+    "totalSearches": 8,
+    "foundCount": 5,
+    "completedEmptyCount": 2,
+    "timedOutCount": 1,
+    "dispatchReadyCount": 7,
+    "dispatchNotReadyCount": 1,
+    "degradedTransportCount": 2,
+    "successRatePct": 62.5,
+    "latestRecordedAt": "2026-03-13T12:05:00.000Z",
+    "latestOutcome": "found",
+    "latestQuery": "mule-doctor-lab-a-probe",
+    "latestSource": "controlled_discoverability",
+    "latestPair": {
+      "publisherInstanceId": "lab-a",
+      "searcherInstanceId": "lab-b"
+    },
+    "lastSuccessAt": "2026-03-13T12:05:00.000Z"
+  }
+}
+```
+
+Notes:
+
+- this is the compact derived summary above recent search-health records
+- used by the operator console, LLM tooling, and Mattermost periodic reporting
+- unavailable search-health storage returns `501`
+
 ## Managed Preset Endpoints
 
 ### `GET /api/instance-presets`
@@ -750,6 +1027,14 @@ Subsystem-gated routes:
   - `/api/instance-presets`
   - `/api/instance-presets/apply`
   - `/api/instance-presets/{prefix}/{action}`
+- managed discoverability:
+  - `/api/discoverability/check`
+- discoverability history:
+  - `/api/discoverability/results`
+  - `/api/discoverability/summary`
+- search health history:
+  - `/api/search-health/results`
+  - `/api/search-health/summary`
 - observer target control:
   - `/api/observer/target`
 - observer run control:

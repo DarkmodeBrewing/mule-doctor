@@ -110,7 +110,11 @@ export class ManagedInstanceDiscoverabilityService {
           dispatchedAt,
           searchId,
           readinessAtDispatch: {
+            publisherStatusReady: publisherReadiness.statusReady,
+            publisherSearchesReady: publisherReadiness.searchesReady,
             publisherReady: publisherReadiness.ready,
+            searcherStatusReady: searcherReadiness.statusReady,
+            searcherSearchesReady: searcherReadiness.searchesReady,
             searcherReady: searcherReadiness.ready,
           },
           peerCountAtDispatch: {
@@ -134,7 +138,11 @@ export class ManagedInstanceDiscoverabilityService {
           dispatchedAt,
           searchId,
           readinessAtDispatch: {
+            publisherStatusReady: publisherReadiness.statusReady,
+            publisherSearchesReady: publisherReadiness.searchesReady,
             publisherReady: publisherReadiness.ready,
+            searcherStatusReady: searcherReadiness.statusReady,
+            searcherSearchesReady: searcherReadiness.searchesReady,
             searcherReady: searcherReadiness.ready,
           },
           peerCountAtDispatch: {
@@ -158,7 +166,11 @@ export class ManagedInstanceDiscoverabilityService {
           dispatchedAt,
           searchId,
           readinessAtDispatch: {
+            publisherStatusReady: publisherReadiness.statusReady,
+            publisherSearchesReady: publisherReadiness.searchesReady,
             publisherReady: publisherReadiness.ready,
+            searcherStatusReady: searcherReadiness.statusReady,
+            searcherSearchesReady: searcherReadiness.searchesReady,
             searcherReady: searcherReadiness.ready,
           },
           peerCountAtDispatch: {

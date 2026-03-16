@@ -253,7 +253,11 @@ class StubManagedInstanceDiscoverability {
       dispatchedAt: "2026-03-12T10:00:00.000Z",
       searchId: "feedfacefeedfacefeedfacefeedface",
       readinessAtDispatch: {
+        publisherStatusReady: true,
+        publisherSearchesReady: true,
         publisherReady: true,
+        searcherStatusReady: true,
+        searcherSearchesReady: true,
         searcherReady: true,
       },
       peerCountAtDispatch: {
@@ -356,6 +360,99 @@ class StubDiscoverabilityResultsStore {
         resultCount: result.resultCount,
         outcome: result.outcome,
         finalState: result.finalState,
+      },
+    });
+  }
+}
+
+class StubSearchHealthResultsStore {
+  constructor() {
+    this.records = [];
+  }
+
+  async listRecent(limit = 20) {
+    return this.records.slice(-limit);
+  }
+
+  async summarizeRecent(limit = 20) {
+    const records = this.records.slice(-limit);
+    const latest = records.at(-1);
+    const foundCount = records.filter((record) => record.outcome === "found").length;
+    const completedEmptyCount = records.filter(
+      (record) => record.outcome === "completed_empty",
+    ).length;
+    const timedOutCount = records.filter((record) => record.outcome === "timed_out").length;
+    const dispatchReadyCount = records.filter(
+      (record) =>
+        record.readinessAtDispatch.publisher.ready === true &&
+        record.readinessAtDispatch.searcher.ready === true,
+    ).length;
+    const degradedTransportCount = records.filter(
+      (record) =>
+        record.transportAtDispatch.publisher.degradedIndicators.length > 0 ||
+        record.transportAtDispatch.searcher.degradedIndicators.length > 0,
+    ).length;
+    return {
+      windowSize: records.length,
+      totalSearches: records.length,
+      foundCount,
+      completedEmptyCount,
+      timedOutCount,
+      dispatchReadyCount,
+      dispatchNotReadyCount: records.length - dispatchReadyCount,
+      degradedTransportCount,
+      successRatePct: records.length > 0 ? (foundCount / records.length) * 100 : undefined,
+      latestRecordedAt: latest?.recordedAt,
+      latestOutcome: latest?.outcome,
+      latestQuery: latest?.query,
+      latestSource: latest?.source,
+      latestPair: latest?.controlledContext
+        ? {
+            publisherInstanceId: latest.controlledContext.publisherInstanceId,
+            searcherInstanceId: latest.controlledContext.searcherInstanceId,
+          }
+        : undefined,
+      lastSuccessAt: [...records].reverse().find((record) => record.outcome === "found")
+        ?.recordedAt,
+    };
+  }
+
+  async appendControlledDiscoverability(result) {
+    this.records.push({
+      recordedAt: "2026-03-12T10:05:00.000Z",
+      source: "controlled_discoverability",
+      query: result.query,
+      searchId: result.searchId,
+      dispatchedAt: result.dispatchedAt,
+      readinessAtDispatch: {
+        publisher: {
+          statusReady: result.readinessAtDispatch.publisherStatusReady,
+          searchesReady: result.readinessAtDispatch.publisherSearchesReady,
+          ready: result.readinessAtDispatch.publisherReady,
+        },
+        searcher: {
+          statusReady: result.readinessAtDispatch.searcherStatusReady,
+          searchesReady: result.readinessAtDispatch.searcherSearchesReady,
+          ready: result.readinessAtDispatch.searcherReady,
+        },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: result.peerCountAtDispatch.publisher, degradedIndicators: [] },
+        searcher: { peerCount: result.peerCountAtDispatch.searcher, degradedIndicators: [] },
+      },
+      states: result.states,
+      resultCount: result.resultCount,
+      outcome: result.outcome,
+      finalState: result.finalState,
+      controlledContext: {
+        publisherInstanceId: result.publisherInstanceId,
+        searcherInstanceId: result.searcherInstanceId,
+        fixture: {
+          fixtureId: result.fixture.fixtureId,
+          fileName: result.fixture.fileName,
+          relativePath: result.fixture.relativePath,
+          sizeBytes: result.fixture.sizeBytes,
+        },
       },
     });
   }
@@ -798,6 +895,7 @@ test("OperatorConsoleServer runs controlled discoverability checks", async () =>
     await writeFile(rustLogPath, "", "utf8");
     const discoverability = new StubManagedInstanceDiscoverability();
     const resultsStore = new StubDiscoverabilityResultsStore();
+    const searchHealthStore = new StubSearchHealthResultsStore();
 
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
@@ -811,6 +909,7 @@ test("OperatorConsoleServer runs controlled discoverability checks", async () =>
       managedInstanceDiscoverability: discoverability,
       operatorEvents: new StubOperatorEvents(),
       discoverabilityResults: resultsStore,
+      searchHealthResults: searchHealthStore,
     });
     await server.start();
 
@@ -845,6 +944,8 @@ test("OperatorConsoleServer runs controlled discoverability checks", async () =>
     ]);
     assert.equal(resultsStore.records.length, 1);
     assert.equal(resultsStore.records[0].result.outcome, "found");
+    assert.equal(searchHealthStore.records.length, 1);
+    assert.equal(searchHealthStore.records[0].source, "controlled_discoverability");
 
     await server.stop();
   } finally {
@@ -872,10 +973,15 @@ test("OperatorConsoleServer returns persisted discoverability results", async ()
       query: "probe",
       dispatchedAt: "2026-03-12T10:00:00.000Z",
       searchId: "search-1",
-      readinessAtDispatch: { publisherReady: true, searcherReady: true },
+      readinessAtDispatch: {
+        publisherStatusReady: true,
+        publisherSearchesReady: true,
+        publisherReady: true,
+        searcherStatusReady: true,
+        searcherSearchesReady: true,
+        searcherReady: true,
+      },
       peerCountAtDispatch: { publisher: 1, searcher: 1 },
-      publisherSharedBefore: { actions: [], downloads: [] },
-      publisherSharedAfter: { actions: [], downloads: [] },
       states: [],
       resultCount: 1,
       outcome: "found",
@@ -932,10 +1038,15 @@ test("OperatorConsoleServer returns discoverability summary", async () => {
       query: "probe",
       dispatchedAt: "2026-03-12T10:00:00.000Z",
       searchId: "search-1",
-      readinessAtDispatch: { publisherReady: true, searcherReady: true },
+      readinessAtDispatch: {
+        publisherStatusReady: true,
+        publisherSearchesReady: true,
+        publisherReady: true,
+        searcherStatusReady: true,
+        searcherSearchesReady: true,
+        searcherReady: true,
+      },
       peerCountAtDispatch: { publisher: 1, searcher: 1 },
-      publisherSharedBefore: { actions: [], downloads: [] },
-      publisherSharedAfter: { actions: [], downloads: [] },
       states: [],
       resultCount: 1,
       outcome: "found",
@@ -962,6 +1073,138 @@ test("OperatorConsoleServer returns discoverability summary", async () => {
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.summary.totalChecks, 1);
+    assert.equal(body.summary.foundCount, 1);
+    assert.equal(body.summary.latestPair.publisherInstanceId, "a");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer returns persisted search health results", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const searchHealthStore = new StubSearchHealthResultsStore();
+    await searchHealthStore.appendControlledDiscoverability({
+      publisherInstanceId: "a",
+      searcherInstanceId: "b",
+      fixture: {
+        fixtureId: "probe",
+        token: "probe",
+        fileName: "probe.txt",
+        relativePath: "probe.txt",
+        absolutePath: "/tmp/probe.txt",
+        sizeBytes: 10,
+      },
+      query: "probe",
+      dispatchedAt: "2026-03-12T10:00:00.000Z",
+      searchId: "search-1",
+      readinessAtDispatch: {
+        publisherStatusReady: true,
+        publisherSearchesReady: true,
+        publisherReady: true,
+        searcherStatusReady: true,
+        searcherSearchesReady: true,
+        searcherReady: true,
+      },
+      peerCountAtDispatch: { publisher: 1, searcher: 1 },
+      publisherSharedBefore: { actions: [], downloads: [] },
+      publisherSharedAfter: { actions: [], downloads: [] },
+      states: [],
+      resultCount: 1,
+      outcome: "found",
+      finalState: "running",
+    });
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      searchHealthResults: searchHealthStore,
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/search-health/results?limit=5`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.results.length, 1);
+    assert.equal(body.results[0].searchId, "search-1");
+    assert.equal(body.results[0].controlledContext.fixture.fileName, "probe.txt");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer returns search health summary", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const searchHealthStore = new StubSearchHealthResultsStore();
+    await searchHealthStore.appendControlledDiscoverability({
+      publisherInstanceId: "a",
+      searcherInstanceId: "b",
+      fixture: {
+        fixtureId: "probe",
+        token: "probe",
+        fileName: "probe.txt",
+        relativePath: "probe.txt",
+        absolutePath: "/tmp/probe.txt",
+        sizeBytes: 10,
+      },
+      query: "probe",
+      dispatchedAt: "2026-03-12T10:00:00.000Z",
+      searchId: "search-1",
+      readinessAtDispatch: {
+        publisherStatusReady: true,
+        publisherSearchesReady: true,
+        publisherReady: true,
+        searcherStatusReady: true,
+        searcherSearchesReady: true,
+        searcherReady: true,
+      },
+      peerCountAtDispatch: { publisher: 1, searcher: 1 },
+      publisherSharedBefore: { actions: [], downloads: [] },
+      publisherSharedAfter: { actions: [], downloads: [] },
+      states: [],
+      resultCount: 1,
+      outcome: "found",
+      finalState: "running",
+    });
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      searchHealthResults: searchHealthStore,
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/search-health/summary?limit=5`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.summary.totalSearches, 1);
     assert.equal(body.summary.foundCount, 1);
     assert.equal(body.summary.latestPair.publisherInstanceId, "a");
 
@@ -1629,6 +1872,8 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(discoverabilityModule, /createDiscoverabilityController/);
     assert.match(discoverabilityModule, /discoverability-results/);
     assert.match(discoverabilityModule, /discoverability-summary/);
+    assert.match(discoverabilityModule, /search-health-results/);
+    assert.match(discoverabilityModule, /search-health-summary/);
 
     const constantsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/constants.js`, {
       headers: { Cookie: cookie },
@@ -1659,6 +1904,9 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /refresh-discoverability-results/);
     assert.match(rootHtml, /discoverability-results/);
     assert.match(rootHtml, /discoverability-summary/);
+    assert.match(rootHtml, /refresh-search-health-results/);
+    assert.match(rootHtml, /search-health-results/);
+    assert.match(rootHtml, /search-health-summary/);
 
     const authorizedIndexHtmlRes = await fetch(`${baseUrl}/static/operatorConsole/index.html`, {
       headers: { Cookie: cookie },

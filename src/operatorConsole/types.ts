@@ -1,4 +1,4 @@
-import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary } from "../types/contracts.js";
+import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary, SearchHealthRecord, SearchHealthSummary } from "../types/contracts.js";
 
 export interface ListedFile {
   name: string;
@@ -82,6 +82,12 @@ export interface DiscoverabilityResultsStore {
   append(result: ManagedDiscoverabilityCheckResult): Promise<void>;
 }
 
+export interface SearchHealthResultsStore {
+  listRecent(limit?: number): Promise<SearchHealthRecord[]>;
+  summarizeRecent(limit?: number): Promise<SearchHealthSummary>;
+  appendControlledDiscoverability(result: ManagedDiscoverabilityCheckResult): Promise<void>;
+}
+
 export interface DiagnosticTargetControl {
   getActiveTarget(): Promise<DiagnosticTargetRef>;
   setActiveTarget(target: DiagnosticTargetRef): Promise<DiagnosticTargetRef>;
@@ -137,6 +143,7 @@ export interface OperatorConsoleConfig {
   observerControl?: ObserverControl;
   operatorEvents?: OperatorEventsStore;
   discoverabilityResults?: DiscoverabilityResultsStore;
+  searchHealthResults?: SearchHealthResultsStore;
 }
 
 export interface SafeReadResult {
