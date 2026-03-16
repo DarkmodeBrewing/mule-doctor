@@ -123,6 +123,8 @@ These variables are read by [entrypoint.sh](/home/coder/projects/mule-doctor/ent
 | `RUST_MULE_LOG_PATH` | `/data/logs/rust-mule.log` | Log file rust-mule writes to in the container |
 | `RUST_MULE_EXTRA_ARGS` | empty | Additional rust-mule CLI arguments |
 | `TOKEN_WAIT_TIMEOUT_SEC` | `120` | Timeout waiting for the token file |
+| `RUST_MULE_PID_FILE` | `/tmp/rust-mule.pid` | PID file written for the rust-mule container process |
+| `MULE_DOCTOR_PID_FILE` | `/tmp/mule-doctor.pid` | PID file written for the mule-doctor container process |
 
 Entrypoint behavior:
 
@@ -135,6 +137,8 @@ Entrypoint behavior:
 4. waits for the rust-mule token file at `RUST_MULE_TOKEN_PATH`
 5. exports `RUST_MULE_TOKEN_PATH`
 6. starts mule-doctor
+
+The entrypoint also creates parent directories for `RUST_MULE_PID_FILE` and `MULE_DOCTOR_PID_FILE` before writing them.
 
 Important distinction:
 
@@ -279,6 +283,12 @@ Runtime files used by the container healthcheck:
 | `/tmp/rust-mule.pid` or `RUST_MULE_PID_FILE` | tracked rust-mule process id |
 | `/tmp/mule-doctor.pid` or `MULE_DOCTOR_PID_FILE` | tracked mule-doctor process id |
 | `RUST_MULE_TOKEN_PATH` | rust-mule bearer token used for local health requests |
+
+Healthcheck-specific variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MULE_DOCTOR_UI_HEALTHCHECK_HOST` | unset | Optional override for the UI probe host; otherwise the healthcheck uses `MULE_DOCTOR_UI_HOST`, except `0.0.0.0` and `::` are probed through `127.0.0.1` |
 
 Operational note:
 

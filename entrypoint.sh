@@ -12,6 +12,8 @@ MULE_DOCTOR_PID_FILE="${MULE_DOCTOR_PID_FILE:-/tmp/mule-doctor.pid}"
 
 mkdir -p /data/logs /data/mule-doctor
 mkdir -p "$(dirname "$RUST_MULE_LOG_PATH")"
+mkdir -p "$(dirname "$RUST_MULE_PID_FILE")"
+mkdir -p "$(dirname "$MULE_DOCTOR_PID_FILE")"
 
 if [ ! -x "$RUST_MULE_BIN" ]; then
   echo "rust-mule binary not found or not executable: $RUST_MULE_BIN" >&2

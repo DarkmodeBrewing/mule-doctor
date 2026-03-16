@@ -8,6 +8,7 @@ MULE_DOCTOR_UI_ENABLED="${MULE_DOCTOR_UI_ENABLED:-false}"
 MULE_DOCTOR_UI_HOST="${MULE_DOCTOR_UI_HOST:-127.0.0.1}"
 MULE_DOCTOR_UI_PORT="${MULE_DOCTOR_UI_PORT:-18080}"
 MULE_DOCTOR_UI_AUTH_TOKEN="${MULE_DOCTOR_UI_AUTH_TOKEN:-}"
+MULE_DOCTOR_UI_HEALTHCHECK_HOST="${MULE_DOCTOR_UI_HEALTHCHECK_HOST:-}"
 RUST_MULE_PID_FILE="${RUST_MULE_PID_FILE:-/tmp/rust-mule.pid}"
 MULE_DOCTOR_PID_FILE="${MULE_DOCTOR_PID_FILE:-/tmp/mule-doctor.pid}"
 
@@ -47,6 +48,7 @@ export MULE_DOCTOR_UI_ENABLED
 export MULE_DOCTOR_UI_HOST
 export MULE_DOCTOR_UI_PORT
 export MULE_DOCTOR_UI_AUTH_TOKEN
+export MULE_DOCTOR_UI_HEALTHCHECK_HOST
 
 node <<'EOF'
 const rustBase = process.env.RUST_MULE_API_URL.replace(/\/+$/, "");
@@ -54,8 +56,19 @@ const apiPrefix = process.env.RUST_MULE_API_PREFIX || "/api/v1";
 const rustToken = process.env.RUST_MULE_TOKEN;
 const uiEnabled = String(process.env.MULE_DOCTOR_UI_ENABLED || "").toLowerCase() === "true";
 const uiHost = process.env.MULE_DOCTOR_UI_HOST || "127.0.0.1";
+const uiHealthcheckHost = process.env.MULE_DOCTOR_UI_HEALTHCHECK_HOST || "";
 const uiPort = process.env.MULE_DOCTOR_UI_PORT || "18080";
 const uiAuthToken = process.env.MULE_DOCTOR_UI_AUTH_TOKEN || "";
+
+function resolveUiProbeHost(host, overrideHost) {
+  if (overrideHost) {
+    return overrideHost;
+  }
+  if (host === "0.0.0.0" || host === "::" || host === "[::]") {
+    return "127.0.0.1";
+  }
+  return host;
+}
 
 async function fetchJson(url, headers = {}) {
   const response = await fetch(url, { headers });
@@ -86,7 +99,7 @@ async function main() {
     if (!uiAuthToken) {
       throw new Error("MULE_DOCTOR_UI_ENABLED requires MULE_DOCTOR_UI_AUTH_TOKEN for healthcheck");
     }
-    const doctor = await fetchJson(`http://${uiHost}:${uiPort}/api/health`, {
+    const doctor = await fetchJson(`http://${resolveUiProbeHost(uiHost, uiHealthcheckHost)}:${uiPort}/api/health`, {
       Authorization: `Bearer ${uiAuthToken}`,
     });
     if (doctor.ok !== true) {
