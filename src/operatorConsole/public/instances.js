@@ -102,7 +102,6 @@ export function createInstancesController({
       renderSurfaceDiagnosticsSummary(surfaceDiagnostics.diagnostics);
       setText("instance-runtime-diagnostics", JSON.stringify(surfaceDiagnostics.diagnostics, null, 2));
     } catch (err) {
-      renderSurfaceDiagnosticsSummary(undefined);
       const summaryElement = document.getElementById("instance-runtime-summary");
       summaryElement.textContent = `Failed to load runtime surface summary: ${String(err)}`;
       summaryElement.className = "preset-help muted";
