@@ -548,6 +548,8 @@ Returns a mule-doctor-owned summary over the stable rust-mule surfaces for one m
 - `/api/v1/shared/actions`
 - `/api/v1/downloads`
 
+The operator console selected-instance panel uses this endpoint for its human-readable runtime surface summary and the raw diagnostic payload shown underneath it.
+
 Response:
 
 ```json
