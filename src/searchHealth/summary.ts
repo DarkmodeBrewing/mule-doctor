@@ -3,10 +3,14 @@ import type {
   SearchHealthRecord,
   SearchHealthSummary,
 } from "../types/contracts.js";
+import { sanitizeSearchHealthRecord } from "./records.js";
 
 export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): SearchHealthSummary {
-  const latest = records.at(-1);
-  const lastSuccess = [...records].reverse().find((record) => record.outcome === "found");
+  const sanitizedRecords = records.map(sanitizeSearchHealthRecord);
+  const latest = sanitizedRecords.at(-1);
+  const lastSuccess = [...sanitizedRecords]
+    .reverse()
+    .find((record) => record.outcome === "found");
 
   const counts: Record<SearchHealthOutcome, number> = {
     found: 0,
@@ -16,8 +20,10 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
   let dispatchReadyCount = 0;
   let degradedTransportCount = 0;
 
-  for (const record of records) {
-    counts[record.outcome] += 1;
+  for (const record of sanitizedRecords) {
+    if (record.outcome in counts) {
+      counts[record.outcome] += 1;
+    }
     if (
       record.readinessAtDispatch.publisher.ready === true &&
       record.readinessAtDispatch.searcher.ready === true
@@ -32,7 +38,7 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
     }
   }
 
-  const totalSearches = records.length;
+  const totalSearches = sanitizedRecords.length;
   return {
     windowSize: totalSearches,
     totalSearches,

@@ -22,6 +22,7 @@ const DEFAULT_SEARCH_HEALTH_FILE = "search-health-results.json";
 const DEFAULT_HISTORY_LIMIT = 500;
 const DEFAULT_EVENTS_LIMIT = 200;
 const DEFAULT_DISCOVERABILITY_LIMIT = 100;
+const DEFAULT_SEARCH_HEALTH_LIMIT = 100;
 
 export interface RuntimeStoreConfig {
   dataDir?: string;
@@ -59,7 +60,7 @@ export class RuntimeStore {
     this.historyLimit = config.historyLimit ?? DEFAULT_HISTORY_LIMIT;
     this.eventsLimit = config.eventsLimit ?? DEFAULT_EVENTS_LIMIT;
     this.discoverabilityLimit = config.discoverabilityLimit ?? DEFAULT_DISCOVERABILITY_LIMIT;
-    this.searchHealthLimit = config.searchHealthLimit ?? DEFAULT_DISCOVERABILITY_LIMIT;
+    this.searchHealthLimit = config.searchHealthLimit ?? DEFAULT_SEARCH_HEALTH_LIMIT;
   }
 
   async initialize(): Promise<void> {

@@ -34,7 +34,8 @@ export class SearchHealthLog {
     if (!this.runtimeStore) {
       return [];
     }
-    return this.runtimeStore.getRecentSearchHealthResults(limit);
+    const records = await this.runtimeStore.getRecentSearchHealthResults(limit);
+    return records.map(sanitizeSearchHealthRecord);
   }
 
   async summarizeRecent(limit = 20): Promise<SearchHealthSummary> {
