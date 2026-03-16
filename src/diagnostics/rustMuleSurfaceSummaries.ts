@@ -157,7 +157,7 @@ export function summarizeDownloads(payload: RustMuleDownloadsResponse): Download
   let progressCount = 0;
 
   for (const entry of downloads) {
-    const state = readString(entry.state) ?? "unknown";
+    const state = readNormalizedState(entry.state);
     stateCounts[state] = (stateCounts[state] ?? 0) + 1;
     if (!isTerminalDownloadState(state)) {
       activeDownloads += 1;
@@ -200,7 +200,7 @@ export function summarizeSearchPublishDiagnostics(input: {
 }
 
 function readState(search: RustMuleKeywordSearchInfo): string {
-  return readString(search.state)?.toLowerCase() ?? "unknown";
+  return readNormalizedState(search.state);
 }
 
 function isTerminalSearchState(state: string): boolean {
@@ -228,4 +228,8 @@ function readString(value: unknown): string | undefined {
 
 function readNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readNormalizedState(value: unknown): string {
+  return readString(value)?.toLowerCase() ?? "unknown";
 }

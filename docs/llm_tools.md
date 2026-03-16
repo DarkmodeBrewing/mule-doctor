@@ -329,7 +329,7 @@ Arguments:
 
 Notes:
 
-- summarizes current search threads without exposing only raw upstream fields
+- summarizes current search threads without forcing the LLM to interpret raw upstream fields every time
 - keeps active searches distinct from terminal zero-hit searches
 - current fields include:
   - `ready`
