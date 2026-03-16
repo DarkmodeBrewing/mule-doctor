@@ -214,6 +214,11 @@ class StubManagedInstanceSurfaceDiagnostics {
           avgProgressPct: 50,
         },
       },
+      highlights: {
+        searches: ["fixture-search: running (2 hits, publish enabled)"],
+        sharedActions: ["reindex: idle"],
+        downloads: ["fixture.bin: queued (50%, 1 sources)"],
+      },
     };
   }
 }
@@ -1872,6 +1877,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(instancesModule, /confirmAction/);
     assert.match(instancesModule, /surface_diagnostics/);
     assert.match(instancesModule, /instance-runtime-summary/);
+    assert.match(instancesModule, /instance-runtime-highlights/);
 
     const instanceViewsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/instanceViews.js`, {
       headers: { Cookie: cookie },
@@ -1950,6 +1956,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /selected-instance-feedback/);
     assert.match(rootHtml, /selected-instance-action-summary/);
     assert.match(rootHtml, /instance-runtime-summary/);
+    assert.match(rootHtml, /instance-runtime-highlights/);
     assert.match(rootHtml, /instance-runtime-diagnostics/);
     assert.match(rootHtml, /refresh-discoverability-results/);
     assert.match(rootHtml, /discoverability-results/);
@@ -2008,6 +2015,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     const instanceSurfaceDiagnostics = await instanceSurfaceDiagnosticsRes.json();
     assert.equal(instanceSurfaceDiagnostics.diagnostics.instanceId, "a");
     assert.equal(instanceSurfaceDiagnostics.diagnostics.summary.searches.totalSearches, 2);
+    assert.equal(instanceSurfaceDiagnostics.diagnostics.highlights.searches[0], "fixture-search: running (2 hits, publish enabled)");
 
     const invalidLinesRes = await fetch(`${baseUrl}/api/instances/a/logs?lines=not-a-number`, {
       headers: { Cookie: cookie },

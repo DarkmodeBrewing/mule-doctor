@@ -549,6 +549,7 @@ Returns a mule-doctor-owned summary over the stable rust-mule surfaces for one m
 - `/api/v1/downloads`
 
 The operator console selected-instance panel uses this endpoint for its human-readable runtime surface summary and the raw diagnostic payload shown underneath it.
+It also includes bounded highlight lists for the most relevant current keyword searches, shared actions, and downloads driving the summary.
 
 Response:
 
@@ -558,7 +559,7 @@ Response:
   "diagnostics": {
     "instanceId": "a",
     "observedAt": "2026-03-16T09:00:00.000Z",
-    "summary": {
+      "summary": {
       "searches": {
         "ready": true,
         "totalSearches": 2,
@@ -582,6 +583,17 @@ Response:
           "queued": 1,
           "completed": 1
         }
+      },
+      "highlights": {
+        "searches": [
+          "fixture-search: running (2 hits, publish enabled)"
+        ],
+        "sharedActions": [
+          "reindex: idle"
+        ],
+        "downloads": [
+          "fixture.bin: queued (50%, 1 sources)"
+        ]
       }
     }
   }

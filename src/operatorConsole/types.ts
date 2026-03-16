@@ -34,6 +34,11 @@ export interface ManagedInstanceSurfaceDiagnostics {
     instanceId: string;
     observedAt: string;
     summary: SearchPublishDiagnosticsSummary;
+    highlights: {
+      searches: string[];
+      sharedActions: string[];
+      downloads: string[];
+    };
   }>;
 }
 

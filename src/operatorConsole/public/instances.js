@@ -92,6 +92,31 @@ export function createInstancesController({
     element.className = "preset-help";
   }
 
+  function renderSurfaceDiagnosticsHighlights(diagnostics) {
+    const element = document.getElementById("instance-runtime-highlights");
+    const highlights = diagnostics?.highlights;
+    if (!highlights) {
+      element.textContent = "No runtime surface highlights loaded.";
+      element.className = "preset-help muted";
+      return;
+    }
+
+    const sections = [
+      formatHighlightSection("Searches", highlights.searches),
+      formatHighlightSection("Shared actions", highlights.sharedActions),
+      formatHighlightSection("Downloads", highlights.downloads),
+    ].filter((value) => value.length > 0);
+    element.textContent = sections.join(" | ");
+    element.className = "preset-help";
+  }
+
+  function formatHighlightSection(label, items) {
+    if (!Array.isArray(items) || items.length === 0) {
+      return `${label}: none`;
+    }
+    return `${label}: ${items.join(" • ")}`;
+  }
+
   async function inspectInstance(id) {
     state.selectedInstanceId = id;
     views.renderSelectedInstanceTimelineControls();
@@ -100,11 +125,15 @@ export function createInstancesController({
         `/api/instances/${encodeURIComponent(id)}/surface_diagnostics`,
       );
       renderSurfaceDiagnosticsSummary(surfaceDiagnostics.diagnostics);
+      renderSurfaceDiagnosticsHighlights(surfaceDiagnostics.diagnostics);
       setText("instance-runtime-diagnostics", JSON.stringify(surfaceDiagnostics.diagnostics, null, 2));
     } catch (err) {
       const summaryElement = document.getElementById("instance-runtime-summary");
       summaryElement.textContent = `Failed to load runtime surface summary: ${String(err)}`;
       summaryElement.className = "preset-help muted";
+      const highlightsElement = document.getElementById("instance-runtime-highlights");
+      highlightsElement.textContent = `Failed to load runtime surface highlights: ${String(err)}`;
+      highlightsElement.className = "preset-help muted";
       setText("instance-runtime-diagnostics", `Failed to load runtime diagnostics: ${String(err)}`);
     }
     try {
