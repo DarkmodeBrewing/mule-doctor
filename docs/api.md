@@ -559,7 +559,7 @@ Response:
   "diagnostics": {
     "instanceId": "a",
     "observedAt": "2026-03-16T09:00:00.000Z",
-      "summary": {
+    "summary": {
       "searches": {
         "ready": true,
         "totalSearches": 2,
@@ -583,18 +583,18 @@ Response:
           "queued": 1,
           "completed": 1
         }
-      },
-      "highlights": {
-        "searches": [
-          "fixture-search: running (2 hits, publish enabled)"
-        ],
-        "sharedActions": [
-          "reindex: idle"
-        ],
-        "downloads": [
-          "fixture.bin: queued (50%, 1 sources)"
-        ]
       }
+    },
+    "highlights": {
+      "searches": [
+        "fixture-search: running (2 hits, publish enabled)"
+      ],
+      "sharedActions": [
+        "reindex: idle"
+      ],
+      "downloads": [
+        "fixture.bin: queued (50%, 1 source)"
+      ]
     }
   }
 }

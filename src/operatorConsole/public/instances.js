@@ -105,7 +105,7 @@ export function createInstancesController({
       formatHighlightSection("Searches", highlights.searches),
       formatHighlightSection("Shared actions", highlights.sharedActions),
       formatHighlightSection("Downloads", highlights.downloads),
-    ].filter((value) => value.length > 0);
+    ];
     element.textContent = sections.join(" | ");
     element.className = "preset-help";
   }

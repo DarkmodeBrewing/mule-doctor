@@ -217,7 +217,7 @@ class StubManagedInstanceSurfaceDiagnostics {
       highlights: {
         searches: ["fixture-search: running (2 hits, publish enabled)"],
         sharedActions: ["reindex: idle"],
-        downloads: ["fixture.bin: queued (50%, 1 sources)"],
+        downloads: ["fixture.bin: queued (50%, 1 source)"],
       },
     };
   }

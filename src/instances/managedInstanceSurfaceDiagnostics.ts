@@ -56,7 +56,7 @@ function summarizeSearchHighlights(searches: unknown[]): string[] {
       const state = readString(search.state) ?? "unknown";
       const hits = readNumber(search.hits);
       const tags = [
-        typeof hits === "number" ? `${hits} hits` : undefined,
+        typeof hits === "number" ? pluralize(hits, "hit") : undefined,
         search.publish_enabled === true ? "publish enabled" : undefined,
         search.got_publish_ack === true ? "publish acked" : undefined,
       ].filter((value): value is string => Boolean(value));
@@ -97,7 +97,7 @@ function summarizeDownloadHighlights(downloads: unknown[]): string[] {
       const lastError = readString(download.last_error);
       const tags = [
         typeof progress === "number" ? `${progress}%` : undefined,
-        typeof sources === "number" ? `${sources} sources` : undefined,
+        typeof sources === "number" ? pluralize(sources, "source") : undefined,
         lastError ? `error: ${lastError}` : undefined,
       ].filter((value): value is string => Boolean(value));
       return {
@@ -130,4 +130,8 @@ function isSearchActive(state: string): boolean {
 function isTerminalState(state: string): boolean {
   const normalized = state.toLowerCase();
   return normalized === "completed" || normalized === "complete" || normalized === "done" || normalized === "failed";
+}
+
+function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
