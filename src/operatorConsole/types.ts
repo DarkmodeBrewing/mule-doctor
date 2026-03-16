@@ -1,3 +1,4 @@
+import type { SearchPublishDiagnosticsSummary } from "../diagnostics/rustMuleSurfaceSummaries.js";
 import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary, SearchHealthRecord, SearchHealthSummary } from "../types/contracts.js";
 
 export interface ListedFile {
@@ -26,6 +27,14 @@ export interface ManagedInstanceControl {
 
 export interface ManagedInstanceDiagnostics {
   getSnapshot(id: string): Promise<ManagedInstanceDiagnosticSnapshot>;
+}
+
+export interface ManagedInstanceSurfaceDiagnostics {
+  getSummary(id: string): Promise<{
+    instanceId: string;
+    observedAt: string;
+    summary: SearchPublishDiagnosticsSummary;
+  }>;
 }
 
 export interface ManagedInstancePresets {
@@ -135,6 +144,7 @@ export interface OperatorConsoleConfig {
   rustMuleStreamPollMs?: number;
   managedInstances?: ManagedInstanceControl;
   managedInstanceDiagnostics?: ManagedInstanceDiagnostics;
+  managedInstanceSurfaceDiagnostics?: ManagedInstanceSurfaceDiagnostics;
   managedInstanceAnalysis?: ManagedInstanceAnalysis;
   managedInstanceSharing?: ManagedInstanceSharing;
   managedInstanceDiscoverability?: ManagedInstanceDiscoverability;

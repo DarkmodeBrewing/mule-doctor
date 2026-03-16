@@ -20,6 +20,7 @@ import { OperatorEventLog } from "./operatorConsole/operatorEventLog.js";
 import { SearchHealthLog } from "./searchHealth/searchHealthLog.js";
 import { InstanceManager } from "./instances/instanceManager.js";
 import { ManagedInstanceDiagnosticsService } from "./instances/managedInstanceDiagnostics.js";
+import { ManagedInstanceSurfaceDiagnosticsService } from "./instances/managedInstanceSurfaceDiagnostics.js";
 import { ManagedInstanceAnalysisService } from "./instances/managedInstanceAnalysis.js";
 import { ManagedInstanceSharingService } from "./instances/managedInstanceSharing.js";
 import { ManagedInstanceDiscoverabilityService } from "./instances/managedInstanceDiscoverability.js";
@@ -165,19 +166,6 @@ async function main(): Promise<void> {
     model: openaiModel,
     usageTracker,
   });
-  const mattermostClient = new MattermostClient(webhookUrl, analyzer, {
-    discoverabilityResults: discoverabilityLog,
-    searchHealthResults: searchHealthLog,
-  });
-  const patchProposalNotifier = async (proposal: {
-    artifactPath: string;
-    diff: string;
-    bytes: number;
-    lines: number;
-  }) => {
-    await mattermostClient.postPatchProposal(proposal);
-  };
-  toolRegistry.setPatchProposalNotifier(patchProposalNotifier);
   let managedInstances: InstanceManager | undefined;
   const configuredManagedInstances = new InstanceManager({
     dataDir,
@@ -199,6 +187,24 @@ async function main(): Promise<void> {
   const managedInstanceDiagnostics = managedInstances
     ? new ManagedInstanceDiagnosticsService(managedInstances, { apiPrefix })
     : undefined;
+  const managedInstanceSurfaceDiagnostics =
+    managedInstanceDiagnostics
+      ? new ManagedInstanceSurfaceDiagnosticsService(managedInstanceDiagnostics)
+      : undefined;
+  const mattermostClient = new MattermostClient(webhookUrl, analyzer, {
+    discoverabilityResults: discoverabilityLog,
+    searchHealthResults: searchHealthLog,
+    managedInstanceSurfaceDiagnostics,
+  });
+  const patchProposalNotifier = async (proposal: {
+    artifactPath: string;
+    diff: string;
+    bytes: number;
+    lines: number;
+  }) => {
+    await mattermostClient.postPatchProposal(proposal);
+  };
+  toolRegistry.setPatchProposalNotifier(patchProposalNotifier);
   const managedInstanceAnalysis =
     managedInstances && managedInstanceDiagnostics
       ? new ManagedInstanceAnalysisService({
@@ -270,6 +276,7 @@ async function main(): Promise<void> {
       subscribeToAppLogs: appLogBuffer ? (listener) => appLogBuffer.subscribe(listener) : undefined,
       managedInstances,
       managedInstanceDiagnostics,
+      managedInstanceSurfaceDiagnostics,
       managedInstanceAnalysis,
       managedInstanceSharing,
       managedInstanceDiscoverability,

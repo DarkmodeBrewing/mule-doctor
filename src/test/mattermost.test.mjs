@@ -75,6 +75,48 @@ class StubSearchHealthResults {
   }
 }
 
+class StubManagedInstanceSurfaceDiagnostics {
+  async getSummary(instanceId) {
+    return {
+      instanceId,
+      observedAt: "2026-03-16T09:30:00.000Z",
+      summary: {
+        searches: {
+          ready: true,
+          totalSearches: 3,
+          activeSearches: 1,
+          stateCounts: { running: 1, completed: 2 },
+          publishEnabledCount: 2,
+          publishAckedCount: 1,
+          wantedSearchCount: 2,
+          zeroHitTerminalCount: 1,
+        },
+        sharedLibrary: {
+          totalFiles: 4,
+          localSourceCachedCount: 4,
+          keywordPublishQueuedCount: 1,
+          keywordPublishFailedCount: 0,
+          keywordPublishAckedCount: 3,
+          sourcePublishResponseCount: 4,
+          activeTransferFileCount: 1,
+          sharedActionCounts: { republish_keywords: 1 },
+          sharedActionStateCounts: { idle: 1 },
+          publishJobSurface: "shared_file_status_only",
+        },
+        downloads: {
+          queueLen: 2,
+          totalDownloads: 2,
+          activeDownloads: 1,
+          stateCounts: { queued: 1, completed: 1 },
+          downloadsWithErrors: 0,
+          downloadsWithSources: 2,
+          avgProgressPct: 50,
+        },
+      },
+    };
+  }
+}
+
 class ThrowingDiscoverabilityResults {
   async summarizeRecent() {
     throw new Error("discoverability store unavailable");
@@ -100,10 +142,12 @@ test("MattermostClient posts structured periodic report attachments", async () =
     {
       discoverabilityResults: new StubDiscoverabilityResults(),
       searchHealthResults: new StubSearchHealthResults(),
+      managedInstanceSurfaceDiagnostics: new StubManagedInstanceSurfaceDiagnostics(),
     },
   );
   await client.postPeriodicReport({
     summary: "All clear",
+    target: { kind: "managed_instance", instanceId: "managed-a" },
     targetLabel: "managed instance a",
     healthScore: 82,
     peerCount: 120,
@@ -115,7 +159,7 @@ test("MattermostClient posts structured periodic report attachments", async () =
   assert.equal(calls.length, 1);
   const payload = JSON.parse(calls[0].body);
   assert.match(payload.text, /Target: managed instance a/);
-  assert.equal(payload.attachments.length, 4);
+  assert.equal(payload.attachments.length, 5);
   assert.equal(payload.attachments[0].title, "Node Metrics");
   assert.equal(payload.attachments[0].color, "#2ecc71");
   assert.ok(payload.attachments[0].text.includes("Health score: 82/100"));
@@ -131,6 +175,10 @@ test("MattermostClient posts structured periodic report attachments", async () =
   assert.ok(payload.attachments[3].text.includes("Dispatch-ready: 4"));
   assert.ok(payload.attachments[3].text.includes("Degraded transport: 1"));
   assert.ok(payload.attachments[3].text.includes("Latest path: publisher-2 -> searcher-2"));
+  assert.equal(payload.attachments[4].title, "Managed Surface Diagnostics");
+  assert.ok(payload.attachments[4].text.includes("Instance: managed-a"));
+  assert.ok(payload.attachments[4].text.includes("Searches: 3 total, 1 active, ready=yes"));
+  assert.ok(payload.attachments[4].text.includes("Downloads: 2 total, 1 active, errors=0"));
 });
 
 test("MattermostClient posts daily usage report attachments", async () => {
@@ -175,6 +223,7 @@ test("MattermostClient still posts periodic report when discoverability summary 
   );
   await client.postPeriodicReport({
     summary: "All clear",
+    target: { kind: "managed_instance", instanceId: "managed-a" },
     targetLabel: "managed instance a",
     healthScore: 82,
   });

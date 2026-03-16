@@ -206,6 +206,7 @@ export class Observer {
       const summary = await analyzer.analyze(prompt);
       await this.mattermost.postPeriodicReport({
         summary,
+        target: targetDescriptor.target,
         targetLabel: context?.targetLabel ?? targetDescriptor.label,
         healthScore: context?.networkHealth.score,
         peerCount: context?.peerCount,
@@ -397,11 +398,12 @@ export class Observer {
     this.currentCycleStartedAt = undefined;
     this.currentCycleTarget = undefined;
 
-    await this.mattermost.postPeriodicReport({
-      summary: `Active diagnostic target unavailable: ${reason}`,
-      targetLabel: target.label,
-      healthScore: 0,
-    });
+      await this.mattermost.postPeriodicReport({
+        summary: `Active diagnostic target unavailable: ${reason}`,
+        target: target.target,
+        targetLabel: target.label,
+        healthScore: 0,
+      });
     await this.eventLog?.append({
       type: "observer_cycle_completed",
       message: `Observer cycle unavailable for ${target.label}: ${reason}`,

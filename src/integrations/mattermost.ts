@@ -6,7 +6,12 @@
 
 import type { Analyzer } from "../llm/analyzer.js";
 import type { UsageSummary } from "../llm/usageTracker.js";
-import type { ManagedDiscoverabilitySummary, SearchHealthSummary } from "../types/contracts.js";
+import type { SearchPublishDiagnosticsSummary } from "../diagnostics/rustMuleSurfaceSummaries.js";
+import type {
+  DiagnosticTargetRef,
+  ManagedDiscoverabilitySummary,
+  SearchHealthSummary,
+} from "../types/contracts.js";
 
 export interface MattermostCommandContext {
   command: string;
@@ -26,6 +31,7 @@ interface MattermostPayload {
 
 export interface PeriodicReportInput {
   summary: string;
+  target?: DiagnosticTargetRef;
   targetLabel?: string;
   healthScore?: number;
   peerCount?: number;
@@ -52,6 +58,13 @@ export interface SearchHealthReportSource {
 export interface MattermostReportSources {
   discoverabilityResults?: DiscoverabilityReportSource;
   searchHealthResults?: SearchHealthReportSource;
+  managedInstanceSurfaceDiagnostics?: {
+    getSummary(id: string): Promise<{
+      instanceId: string;
+      observedAt: string;
+      summary: SearchPublishDiagnosticsSummary;
+    }>;
+  };
 }
 
 const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
@@ -64,6 +77,9 @@ export class MattermostClient {
   private readonly requestTimeoutMs: number;
   private readonly discoverabilityResults: DiscoverabilityReportSource | undefined;
   private readonly searchHealthResults: SearchHealthReportSource | undefined;
+  private readonly managedInstanceSurfaceDiagnostics:
+    | MattermostReportSources["managedInstanceSurfaceDiagnostics"]
+    | undefined;
 
   constructor(webhookUrl: string, analyzer: Analyzer, requestTimeoutMs?: number);
   constructor(
@@ -88,10 +104,13 @@ export class MattermostClient {
       }
       this.discoverabilityResults = undefined;
       this.searchHealthResults = undefined;
+      this.managedInstanceSurfaceDiagnostics = undefined;
       this.requestTimeoutMs = clampTimeout(reportSourcesOrTimeout);
     } else {
       this.discoverabilityResults = reportSourcesOrTimeout?.discoverabilityResults;
       this.searchHealthResults = reportSourcesOrTimeout?.searchHealthResults;
+      this.managedInstanceSurfaceDiagnostics =
+        reportSourcesOrTimeout?.managedInstanceSurfaceDiagnostics;
       this.requestTimeoutMs = clampTimeout(requestTimeoutMs);
     }
   }
@@ -150,6 +169,10 @@ export class MattermostClient {
     const searchHealthAttachment = await this.buildSearchHealthAttachment();
     if (searchHealthAttachment) {
       attachments.push(searchHealthAttachment);
+    }
+    const surfaceDiagnosticsAttachment = await this.buildManagedInstanceSurfaceAttachment(report);
+    if (surfaceDiagnosticsAttachment) {
+      attachments.push(surfaceDiagnosticsAttachment);
     }
 
     const payload: MattermostPayload = {
@@ -360,6 +383,42 @@ export class MattermostClient {
       color: "#7fd1ff",
       text: lines,
     };
+  }
+
+  private async buildManagedInstanceSurfaceAttachment(
+    report: PeriodicReportInput,
+  ): Promise<MattermostAttachment | undefined> {
+    if (
+      !this.managedInstanceSurfaceDiagnostics ||
+      report.target?.kind !== "managed_instance" ||
+      !report.target.instanceId
+    ) {
+      return undefined;
+    }
+
+    try {
+      const diagnostics = await this.managedInstanceSurfaceDiagnostics.getSummary(
+        report.target.instanceId,
+      );
+      return {
+        title: "Managed Surface Diagnostics",
+        color: "#9b59b6",
+        text: [
+          `Instance: ${diagnostics.instanceId}`,
+          `Observed: ${diagnostics.observedAt}`,
+          `Searches: ${diagnostics.summary.searches.totalSearches} total, ${diagnostics.summary.searches.activeSearches} active, ready=${diagnostics.summary.searches.ready ? "yes" : "no"}`,
+          `Shared files: ${diagnostics.summary.sharedLibrary.totalFiles}, keyword queued=${diagnostics.summary.sharedLibrary.keywordPublishQueuedCount}, failed=${diagnostics.summary.sharedLibrary.keywordPublishFailedCount}, acked=${diagnostics.summary.sharedLibrary.keywordPublishAckedCount}`,
+          `Downloads: ${diagnostics.summary.downloads.totalDownloads} total, ${diagnostics.summary.downloads.activeDownloads} active, errors=${diagnostics.summary.downloads.downloadsWithErrors}`,
+        ].join("\n"),
+      };
+    } catch (err) {
+      log(
+        "warn",
+        "mattermost",
+        `Failed to load managed surface diagnostics: ${String(err)}`,
+      );
+      return undefined;
+    }
   }
 }
 

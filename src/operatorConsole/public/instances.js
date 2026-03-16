@@ -76,6 +76,14 @@ export function createInstancesController({
     state.selectedInstanceId = id;
     views.renderSelectedInstanceTimelineControls();
     try {
+      const surfaceDiagnostics = await fetchJson(
+        `/api/instances/${encodeURIComponent(id)}/surface_diagnostics`,
+      );
+      setText("instance-runtime-diagnostics", JSON.stringify(surfaceDiagnostics.diagnostics, null, 2));
+    } catch (err) {
+      setText("instance-runtime-diagnostics", `Failed to load runtime diagnostics: ${String(err)}`);
+    }
+    try {
       const [detail, diagnostics, logs] = await Promise.all([
         fetchJson(`/api/instances/${encodeURIComponent(id)}`),
         fetchJson(`/api/instances/${encodeURIComponent(id)}/diagnostics`),

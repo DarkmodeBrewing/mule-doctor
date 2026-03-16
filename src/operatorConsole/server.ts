@@ -61,6 +61,7 @@ import type {
   ManagedInstanceControl,
   ManagedInstanceDiscoverability,
   ManagedInstanceDiagnostics,
+  ManagedInstanceSurfaceDiagnostics,
   ManagedInstancePresets,
   ManagedInstanceSharing,
   OperatorConsoleConfig,
@@ -81,6 +82,7 @@ export class OperatorConsoleServer {
   private readonly rustMuleStreamPollMs: number;
   private readonly managedInstances: ManagedInstanceControl | undefined;
   private readonly managedInstanceDiagnostics: ManagedInstanceDiagnostics | undefined;
+  private readonly managedInstanceSurfaceDiagnostics: ManagedInstanceSurfaceDiagnostics | undefined;
   private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
   private readonly managedInstanceSharing: ManagedInstanceSharing | undefined;
   private readonly managedInstanceDiscoverability: ManagedInstanceDiscoverability | undefined;
@@ -120,6 +122,7 @@ export class OperatorConsoleServer {
     );
     this.managedInstances = config.managedInstances;
     this.managedInstanceDiagnostics = config.managedInstanceDiagnostics;
+    this.managedInstanceSurfaceDiagnostics = config.managedInstanceSurfaceDiagnostics;
     this.managedInstanceAnalysis = config.managedInstanceAnalysis;
     this.managedInstanceSharing = config.managedInstanceSharing;
     this.managedInstanceDiscoverability = config.managedInstanceDiscoverability;
@@ -952,6 +955,22 @@ export class OperatorConsoleServer {
         this.managedInstanceDiagnostics!.getSnapshot(id),
       );
       sendJson(res, 200, { ok: true, snapshot });
+      return;
+    }
+
+    if (action === "surface_diagnostics") {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      if (!this.managedInstanceSurfaceDiagnostics) {
+        sendJson(res, 501, { ok: false, error: "managed instance surface diagnostics unavailable" });
+        return;
+      }
+      const diagnostics = await handleManagedInstanceErrors(() =>
+        this.managedInstanceSurfaceDiagnostics!.getSummary(id),
+      );
+      sendJson(res, 200, { ok: true, diagnostics });
       return;
     }
 
