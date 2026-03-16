@@ -123,6 +123,8 @@ These variables are read by [entrypoint.sh](/home/coder/projects/mule-doctor/ent
 | `RUST_MULE_LOG_PATH` | `/data/logs/rust-mule.log` | Log file rust-mule writes to in the container |
 | `RUST_MULE_EXTRA_ARGS` | empty | Additional rust-mule CLI arguments |
 | `TOKEN_WAIT_TIMEOUT_SEC` | `120` | Timeout waiting for the token file |
+| `RUST_MULE_PID_FILE` | `/tmp/rust-mule.pid` | PID file written for the rust-mule container process |
+| `MULE_DOCTOR_PID_FILE` | `/tmp/mule-doctor.pid` | PID file written for the mule-doctor container process |
 
 Entrypoint behavior:
 
@@ -135,6 +137,8 @@ Entrypoint behavior:
 4. waits for the rust-mule token file at `RUST_MULE_TOKEN_PATH`
 5. exports `RUST_MULE_TOKEN_PATH`
 6. starts mule-doctor
+
+The entrypoint also creates parent directories for `RUST_MULE_PID_FILE` and `MULE_DOCTOR_PID_FILE` before writing them.
 
 Important distinction:
 
@@ -257,6 +261,39 @@ mule-doctor startup readiness currently validates:
 This is mule-doctor readiness, not full rust-mule network readiness.
 
 rust-mule readiness semantics are currently evolving toward explicit payload readiness flags rather than HTTP `503`/`504` responses. See [TASK.md](/home/coder/projects/mule-doctor/docs/TASK.md) `Task G` for the planned alignment work.
+
+### Container healthcheck behavior
+
+The container image now includes a Docker `HEALTHCHECK` that verifies:
+
+- the tracked rust-mule PID is still alive
+- the tracked mule-doctor PID is still alive
+- `RUST_MULE_TOKEN_PATH` is readable and non-empty
+- rust-mule responds locally with:
+  - `GET /api/v1/health`
+  - `GET /api/v1/status` where `ready == true`
+  - `GET /api/v1/searches` where `ready == true`
+- when `MULE_DOCTOR_UI_ENABLED=true`, mule-doctor also responds locally with:
+  - `GET /api/health` using `MULE_DOCTOR_UI_AUTH_TOKEN`
+
+Runtime files used by the container healthcheck:
+
+| Path / setting | Purpose |
+| --- | --- |
+| `/tmp/rust-mule.pid` or `RUST_MULE_PID_FILE` | tracked rust-mule process id |
+| `/tmp/mule-doctor.pid` or `MULE_DOCTOR_PID_FILE` | tracked mule-doctor process id |
+| `RUST_MULE_TOKEN_PATH` | rust-mule bearer token used for local health requests |
+
+Healthcheck-specific variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MULE_DOCTOR_UI_HEALTHCHECK_HOST` | unset | Optional override for the UI probe host; otherwise the healthcheck uses `MULE_DOCTOR_UI_HOST`, except `0.0.0.0` and `::` are probed through `127.0.0.1` |
+
+Operational note:
+
+- the healthcheck treats `status.ready=false` or `searches.ready=false` as unhealthy, even if the HTTP endpoints return `200`
+- this matches the current runtime contract more closely than older `503/504` assumptions
 
 ## Minimum Practical Configurations
 

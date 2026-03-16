@@ -7,9 +7,13 @@ RUST_MULE_TOKEN_PATH="${RUST_MULE_TOKEN_PATH-/data/token}"
 RUST_MULE_LOG_PATH="${RUST_MULE_LOG_PATH:-/data/logs/rust-mule.log}"
 RUST_MULE_EXTRA_ARGS="${RUST_MULE_EXTRA_ARGS:-}"
 TOKEN_WAIT_TIMEOUT_SEC="${TOKEN_WAIT_TIMEOUT_SEC:-120}"
+RUST_MULE_PID_FILE="${RUST_MULE_PID_FILE:-/tmp/rust-mule.pid}"
+MULE_DOCTOR_PID_FILE="${MULE_DOCTOR_PID_FILE:-/tmp/mule-doctor.pid}"
 
 mkdir -p /data/logs /data/mule-doctor
 mkdir -p "$(dirname "$RUST_MULE_LOG_PATH")"
+mkdir -p "$(dirname "$RUST_MULE_PID_FILE")"
+mkdir -p "$(dirname "$MULE_DOCTOR_PID_FILE")"
 
 if [ ! -x "$RUST_MULE_BIN" ]; then
   echo "rust-mule binary not found or not executable: $RUST_MULE_BIN" >&2
@@ -38,6 +42,7 @@ fi
   --config "$RUST_MULE_CONFIG" \
   "${extra_args[@]}" >>"$RUST_MULE_LOG_PATH" 2>&1 &
 RUST_PID=$!
+printf '%s\n' "$RUST_PID" >"$RUST_MULE_PID_FILE"
 
 cleanup() {
   echo "Shutting down..."
@@ -49,6 +54,7 @@ cleanup() {
     kill "$DOCTOR_PID" >/dev/null 2>&1 || true
     wait "$DOCTOR_PID" || true
   fi
+  rm -f "$RUST_MULE_PID_FILE" "$MULE_DOCTOR_PID_FILE"
 }
 
 trap cleanup INT TERM EXIT
@@ -80,6 +86,7 @@ export RUST_MULE_TOKEN_PATH
 echo "Starting mule-doctor..."
 node /app/dist/index.js &
 DOCTOR_PID=$!
+printf '%s\n' "$DOCTOR_PID" >"$MULE_DOCTOR_PID_FILE"
 
 wait -n "$RUST_PID" "$DOCTOR_PID"
 status=$?
