@@ -258,6 +258,33 @@ This is mule-doctor readiness, not full rust-mule network readiness.
 
 rust-mule readiness semantics are currently evolving toward explicit payload readiness flags rather than HTTP `503`/`504` responses. See [TASK.md](/home/coder/projects/mule-doctor/docs/TASK.md) `Task G` for the planned alignment work.
 
+### Container healthcheck behavior
+
+The container image now includes a Docker `HEALTHCHECK` that verifies:
+
+- the tracked rust-mule PID is still alive
+- the tracked mule-doctor PID is still alive
+- `RUST_MULE_TOKEN_PATH` is readable and non-empty
+- rust-mule responds locally with:
+  - `GET /api/v1/health`
+  - `GET /api/v1/status` where `ready == true`
+  - `GET /api/v1/searches` where `ready == true`
+- when `MULE_DOCTOR_UI_ENABLED=true`, mule-doctor also responds locally with:
+  - `GET /api/health` using `MULE_DOCTOR_UI_AUTH_TOKEN`
+
+Runtime files used by the container healthcheck:
+
+| Path / setting | Purpose |
+| --- | --- |
+| `/tmp/rust-mule.pid` or `RUST_MULE_PID_FILE` | tracked rust-mule process id |
+| `/tmp/mule-doctor.pid` or `MULE_DOCTOR_PID_FILE` | tracked mule-doctor process id |
+| `RUST_MULE_TOKEN_PATH` | rust-mule bearer token used for local health requests |
+
+Operational note:
+
+- the healthcheck treats `status.ready=false` or `searches.ready=false` as unhealthy, even if the HTTP endpoints return `200`
+- this matches the current runtime contract more closely than older `503/504` assumptions
+
 ## Minimum Practical Configurations
 
 ### Local non-container run

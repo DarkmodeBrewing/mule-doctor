@@ -57,6 +57,14 @@ The Docker image follows the architecture runtime layout:
 
 For container defaults, entrypoint variables, and startup behavior, see [docs/configuration.md](/home/coder/projects/mule-doctor/docs/configuration.md).
 
+Container runtime hardening:
+
+- the image now includes a Docker `HEALTHCHECK`
+- it verifies both tracked processes are alive and that rust-mule local readiness has reached:
+  - `/api/v1/status.ready == true`
+  - `/api/v1/searches.ready == true`
+- when the operator console is enabled, it also verifies mule-doctor `GET /api/health`
+
 End-to-end smoke harness:
 
 - `npm run smoke:docker` provisions a disposable temp data directory, starts the stack with `docker compose`, waits for:

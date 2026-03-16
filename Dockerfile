@@ -40,9 +40,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY package*.json ./
 COPY --from=app-builder /app/dist ./dist
+COPY scripts/container-healthcheck.sh /app/scripts/container-healthcheck.sh
 COPY --from=rust-builder /opt/rust-mule /opt/rust-mule
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh /app/scripts/container-healthcheck.sh
 
 RUN groupadd --system mule \
     && useradd --system --gid mule --home-dir /app --shell /usr/sbin/nologin mule \
@@ -64,6 +65,7 @@ ENV MULE_DOCTOR_UI_PORT=18080
 
 VOLUME ["/data"]
 EXPOSE 17835 18080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=150s --retries=3 CMD ["/app/scripts/container-healthcheck.sh"]
 USER mule
 
 CMD ["/entrypoint.sh"]
