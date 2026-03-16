@@ -210,7 +210,7 @@ Preferred nested template shape:
 Supported externally managed fields:
 
 | Template field | Rendered rust-mule config key | Ownership |
-| --- | --- |
+| --- | --- | --- |
 | `sam.host` or `samHost` | `sam.host` | externally managed |
 | `sam.port` or `samPort` | `sam.port` | externally managed |
 | `sam.udpPort` or `samUdpPort` | `sam.udp_port` | externally managed |
