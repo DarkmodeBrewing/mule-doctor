@@ -82,6 +82,7 @@ Operator console (optional):
 - The UI and `/api/*` routes are guarded by `MULE_DOCTOR_UI_AUTH_TOKEN`.
 - JSON endpoints and request/response details are documented in [docs/api.md](/home/coder/projects/mule-doctor/docs/api.md).
 - Live log streaming is available through SSE at `/api/stream/app` and `/api/stream/rust-mule`.
+- The selected-instance panel now shows a compact rust-mule surface summary over searches, shared publish state, shared actions, and downloads, with the raw summary payload still available underneath.
 - Frontend assets are served statically from the built-in operator-console public bundle rather than inline backend HTML templates.
 - Docker compose maps UI port `${MULE_DOCTOR_UI_PORT:-18080}`, but keeps the UI disabled by default.
 - To access the console from the host, explicitly set `MULE_DOCTOR_UI_ENABLED=true`, provide `MULE_DOCTOR_UI_AUTH_TOKEN`, and keep `MULE_DOCTOR_UI_HOST=0.0.0.0` inside the container.
@@ -94,5 +95,5 @@ Operator console (optional):
 - Observer now computes a deterministic network health score (peer count, bucket balance, lookup success, hop efficiency, error rate) and persists it as `lastHealthScore` + history entries.
 - The LLM tool surface is documented in [docs/llm_tools.md](/home/coder/projects/mule-doctor/docs/llm_tools.md).
 - Analyzer records per-call LLM usage logs (`LLM_<timestamp>.log`), aggregates daily/monthly usage in state, and emits one Mattermost usage report per UTC day when usage exists.
-- Periodic Mattermost reports now include compact discoverability and search-health summary attachments when recent history exists.
+- Periodic Mattermost reports now include compact discoverability and search-health summary attachments when recent history exists, and add managed surface diagnostics when the active target is a managed instance.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.
