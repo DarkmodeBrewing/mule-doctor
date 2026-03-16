@@ -293,6 +293,194 @@ Notes:
 - binary files are rejected
 - output is bounded
 
+## rust-mule Runtime and Data-Surface Tools
+
+These tools expose stable rust-mule runtime/data surfaces through bounded mule-doctor adapters.
+
+### `listKeywordSearches`
+
+Purpose:
+
+- returns the current `/api/v1/searches` payload with readiness and active search-thread entries
+
+Arguments:
+
+```json
+{}
+```
+
+Notes:
+
+- directly reflects rust-mule search-thread state
+- includes `/api/v1/searches.ready`
+- useful when the LLM needs the raw search list rather than a derived summary
+
+### `summarizeKeywordSearches`
+
+Purpose:
+
+- returns a mule-doctor summary of current keyword search readiness and search-thread state
+
+Arguments:
+
+```json
+{}
+```
+
+Notes:
+
+- summarizes current search threads without forcing the LLM to interpret raw upstream fields every time
+- keeps active searches distinct from terminal zero-hit searches
+- current fields include:
+  - `ready`
+  - `totalSearches`
+  - `activeSearches`
+  - `stateCounts`
+  - `publishEnabledCount`
+  - `publishAckedCount`
+  - `wantedSearchCount`
+  - `zeroHitTerminalCount`
+
+### `getKeywordSearch`
+
+Purpose:
+
+- returns one `/api/v1/searches/{search_id}` detail payload including current hits
+
+Arguments:
+
+```json
+{
+  "search_id": "feedfacefeedfacefeedfacefeedface"
+}
+```
+
+Notes:
+
+- `search_id` is required
+- intended for inspection of one concrete search thread after the list/summary tools identify it
+
+### `listSharedFiles`
+
+Purpose:
+
+- returns raw shared-library file status from `/api/v1/shared`
+
+Arguments:
+
+```json
+{}
+```
+
+Notes:
+
+- this is the per-file source/publish/activity surface
+- it is not a dedicated active keyword-publish jobs endpoint
+
+### `listSharedActions`
+
+Purpose:
+
+- returns raw shared-library background action status from `/api/v1/shared/actions`
+
+Arguments:
+
+```json
+{}
+```
+
+Notes:
+
+- this covers action jobs like `reindex`, `republish_sources`, and `republish_keywords`
+- it is distinct from per-file publish state and from search threads
+
+### `summarizeSharedLibrary`
+
+Purpose:
+
+- returns a mule-doctor summary that keeps shared-file publish state distinct from shared background actions
+
+Arguments:
+
+```json
+{}
+```
+
+Notes:
+
+- current fields include:
+  - `totalFiles`
+  - `localSourceCachedCount`
+  - `keywordPublishQueuedCount`
+  - `keywordPublishFailedCount`
+  - `keywordPublishAckedCount`
+  - `sourcePublishResponseCount`
+  - `activeTransferFileCount`
+  - `sharedActionCounts`
+  - `sharedActionStateCounts`
+- explicitly exposes `publishJobSurface: "shared_file_status_only"` to document that rust-mule does not currently provide a first-class active keyword-publish jobs endpoint
+
+### `getDownloads`
+
+Purpose:
+
+- returns raw download queue state from `/api/v1/downloads`
+
+Arguments:
+
+```json
+{}
+```
+
+Notes:
+
+- includes queue-level fields and per-download entries
+- useful when the LLM needs one specific download entry verbatim
+
+### `summarizeDownloads`
+
+Purpose:
+
+- returns a mule-doctor summary of download queue state, progress, source availability, and error signals
+
+Arguments:
+
+```json
+{}
+```
+
+Notes:
+
+- current fields include:
+  - `queueLen`
+  - `totalDownloads`
+  - `activeDownloads`
+  - `stateCounts`
+  - `downloadsWithErrors`
+  - `downloadsWithSources`
+  - `avgProgressPct`
+
+### `summarizeSearchPublishDiagnostics`
+
+Purpose:
+
+- returns one combined mule-doctor diagnostic summary that keeps searches, shared-file publish state, shared actions, and downloads distinct
+
+Arguments:
+
+```json
+{}
+```
+
+Notes:
+
+- this is the highest-signal overview tool for Task K style diagnostics
+- it combines:
+  - `summarizeKeywordSearches`
+  - `summarizeSharedLibrary`
+  - `summarizeDownloads`
+- use this when the model needs a compact operational picture before drilling into raw endpoint tools
+
 ### `show_function`
 
 Purpose:
@@ -555,6 +743,15 @@ Always registered:
 - `getRoutingBuckets`
 - `getLookupStats`
 - `getRecentLogs`
+- `listKeywordSearches`
+- `summarizeKeywordSearches`
+- `getKeywordSearch`
+- `listSharedFiles`
+- `listSharedActions`
+- `summarizeSharedLibrary`
+- `getDownloads`
+- `summarizeDownloads`
+- `summarizeSearchPublishDiagnostics`
 - `searchLogs`
 - `triggerBootstrap`
 - `traceLookup`
