@@ -166,19 +166,6 @@ async function main(): Promise<void> {
     model: openaiModel,
     usageTracker,
   });
-  const mattermostClient = new MattermostClient(webhookUrl, analyzer, {
-    discoverabilityResults: discoverabilityLog,
-    searchHealthResults: searchHealthLog,
-  });
-  const patchProposalNotifier = async (proposal: {
-    artifactPath: string;
-    diff: string;
-    bytes: number;
-    lines: number;
-  }) => {
-    await mattermostClient.postPatchProposal(proposal);
-  };
-  toolRegistry.setPatchProposalNotifier(patchProposalNotifier);
   let managedInstances: InstanceManager | undefined;
   const configuredManagedInstances = new InstanceManager({
     dataDir,
@@ -204,6 +191,20 @@ async function main(): Promise<void> {
     managedInstanceDiagnostics
       ? new ManagedInstanceSurfaceDiagnosticsService(managedInstanceDiagnostics)
       : undefined;
+  const mattermostClient = new MattermostClient(webhookUrl, analyzer, {
+    discoverabilityResults: discoverabilityLog,
+    searchHealthResults: searchHealthLog,
+    managedInstanceSurfaceDiagnostics,
+  });
+  const patchProposalNotifier = async (proposal: {
+    artifactPath: string;
+    diff: string;
+    bytes: number;
+    lines: number;
+  }) => {
+    await mattermostClient.postPatchProposal(proposal);
+  };
+  toolRegistry.setPatchProposalNotifier(patchProposalNotifier);
   const managedInstanceAnalysis =
     managedInstances && managedInstanceDiagnostics
       ? new ManagedInstanceAnalysisService({
