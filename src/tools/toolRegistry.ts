@@ -25,6 +25,12 @@ import type {
   ToolResult,
 } from "../types/contracts.js";
 import { summarizeDiscoverabilityResults } from "../discoverability/summary.js";
+import {
+  summarizeDownloads,
+  summarizeKeywordSearches,
+  summarizeSearchPublishDiagnostics,
+  summarizeSharedLibrary,
+} from "../diagnostics/rustMuleSurfaceSummaries.js";
 import { sanitizeSearchHealthRecord } from "../searchHealth/records.js";
 import { summarizeSearchHealthRecords } from "../searchHealth/summary.js";
 import { SourceCodeTools } from "./sourceCodeTools.js";
@@ -428,6 +434,19 @@ export class ToolRegistry {
       {
         type: "function",
         function: {
+          name: "summarizeKeywordSearches",
+          description:
+            "Returns a mule-doctor summary of active keyword search threads and readiness state.",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      async () => summarizeKeywordSearches(await client.getSearches()),
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
           name: "getKeywordSearch",
           description: "Returns one keyword search thread and its current hits.",
           parameters: {
@@ -467,6 +486,25 @@ export class ToolRegistry {
       {
         type: "function",
         function: {
+          name: "summarizeSharedLibrary",
+          description:
+            "Returns a mule-doctor summary of shared-file publish state and shared-library background actions.",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      async () => {
+        const [shared, actions] = await Promise.all([
+          client.getSharedFiles(),
+          client.getSharedActions(),
+        ]);
+        return summarizeSharedLibrary(shared, actions);
+      },
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
           name: "listSharedActions",
           description: "Returns shared-library operator action status like reindex or republish jobs.",
           parameters: { type: "object", properties: {}, required: [] },
@@ -485,6 +523,45 @@ export class ToolRegistry {
         },
       },
       (): Promise<RustMuleDownloadsResponse> => client.getDownloads(),
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
+          name: "summarizeDownloads",
+          description:
+            "Returns a mule-doctor summary of download queue state, progress, sources, and errors.",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      async () => summarizeDownloads(await client.getDownloads()),
+    );
+
+    this.register(
+      {
+        type: "function",
+        function: {
+          name: "summarizeSearchPublishDiagnostics",
+          description:
+            "Returns a combined mule-doctor summary that keeps search threads, shared-file publish state, shared actions, and downloads distinct.",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+      async () => {
+        const [searches, shared, actions, downloads] = await Promise.all([
+          client.getSearches(),
+          client.getSharedFiles(),
+          client.getSharedActions(),
+          client.getDownloads(),
+        ]);
+        return summarizeSearchPublishDiagnostics({
+          searches,
+          shared,
+          actions,
+          downloads,
+        });
+      },
     );
 
     if (options.sourcePath) {

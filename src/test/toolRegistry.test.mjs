@@ -38,7 +38,22 @@ class StubClient {
   async getSearches() {
     return {
       ready: true,
-      searches: [{ search_id_hex: "search-1", keyword_label: "fixture", state: "running" }],
+      searches: [
+        {
+          search_id_hex: "search-1",
+          keyword_label: "fixture",
+          state: "running",
+          want_search: true,
+          publish_enabled: true,
+        },
+        {
+          search_id_hex: "search-2",
+          keyword_label: "fixture-2",
+          state: "completed",
+          hits: 0,
+          got_publish_ack: true,
+        },
+      ],
     };
   }
 
@@ -51,20 +66,51 @@ class StubClient {
 
   async getSharedFiles() {
     return {
-      files: [{ identity: { file_name: "fixture.txt" }, keyword_publish_queued: true }],
+      files: [
+        {
+          identity: { file_name: "fixture.txt" },
+          local_source_cached: true,
+          keyword_publish_queued: true,
+          queued_downloads: 1,
+        },
+        {
+          identity: { file_name: "fixture-2.txt" },
+          keyword_publish_failed: true,
+          keyword_publish_acked: 2,
+          source_publish_response_received: true,
+          inflight_uploads: 1,
+        },
+      ],
     };
   }
 
   async getSharedActions() {
     return {
-      actions: [{ kind: "republish_keywords", state: "running" }],
+      actions: [
+        { kind: "republish_keywords", state: "running" },
+        { kind: "reindex", state: "idle" },
+      ],
     };
   }
 
   async getDownloads() {
     return {
-      queue_len: 1,
-      downloads: [{ file_name: "fixture.txt", state: "queued" }],
+      queue_len: 2,
+      downloads: [
+        {
+          file_name: "fixture.txt",
+          state: "queued",
+          source_count: 0,
+          progress_pct: 0,
+        },
+        {
+          file_name: "fixture-2.txt",
+          state: "running",
+          source_count: 3,
+          progress_pct: 45,
+          last_error: "timeout",
+        },
+      ],
     };
   }
 }
@@ -353,6 +399,44 @@ test("ToolRegistry exposes keyword search, shared, and download investigation to
   assert.equal(sharedActions.data.actions[0].kind, "republish_keywords");
   assert.equal(downloads.success, true);
   assert.equal(downloads.data.downloads[0].state, "queued");
+});
+
+test("ToolRegistry exposes summarized search, shared, and download diagnostics", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher());
+
+  const searchSummary = await registry.invoke("summarizeKeywordSearches", {});
+  const sharedSummary = await registry.invoke("summarizeSharedLibrary", {});
+  const downloadSummary = await registry.invoke("summarizeDownloads", {});
+  const combinedSummary = await registry.invoke("summarizeSearchPublishDiagnostics", {});
+
+  assert.equal(searchSummary.success, true);
+  assert.equal(searchSummary.data.totalSearches, 2);
+  assert.equal(searchSummary.data.activeSearches, 1);
+  assert.equal(searchSummary.data.publishEnabledCount, 1);
+  assert.equal(searchSummary.data.publishAckedCount, 1);
+  assert.equal(searchSummary.data.zeroHitTerminalCount, 1);
+
+  assert.equal(sharedSummary.success, true);
+  assert.equal(sharedSummary.data.totalFiles, 2);
+  assert.equal(sharedSummary.data.keywordPublishQueuedCount, 1);
+  assert.equal(sharedSummary.data.keywordPublishFailedCount, 1);
+  assert.equal(sharedSummary.data.keywordPublishAckedCount, 1);
+  assert.equal(sharedSummary.data.activeTransferFileCount, 2);
+  assert.equal(sharedSummary.data.sharedActionCounts.republish_keywords, 1);
+  assert.equal(sharedSummary.data.publishJobSurface, "shared_file_status_only");
+
+  assert.equal(downloadSummary.success, true);
+  assert.equal(downloadSummary.data.queueLen, 2);
+  assert.equal(downloadSummary.data.totalDownloads, 2);
+  assert.equal(downloadSummary.data.activeDownloads, 2);
+  assert.equal(downloadSummary.data.downloadsWithErrors, 1);
+  assert.equal(downloadSummary.data.downloadsWithSources, 1);
+  assert.equal(downloadSummary.data.avgProgressPct, 22.5);
+
+  assert.equal(combinedSummary.success, true);
+  assert.equal(combinedSummary.data.searches.totalSearches, 2);
+  assert.equal(combinedSummary.data.sharedLibrary.totalFiles, 2);
+  assert.equal(combinedSummary.data.downloads.totalDownloads, 2);
 });
 
 test("ToolRegistry enables source tools only when sourcePath is configured", async () => {
