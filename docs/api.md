@@ -104,6 +104,7 @@ Common status codes:
 | `GET` | `/api/instances/{id}` | Get one managed instance |
 | `GET` | `/api/instances/{id}/logs` | Tail managed-instance rust-mule log |
 | `GET` | `/api/instances/{id}/diagnostics` | Get diagnostics snapshot |
+| `GET` | `/api/instances/{id}/surface_diagnostics` | Get per-instance search/shared/download summary |
 | `POST` | `/api/instances/{id}/analyze` | Run one-shot analysis |
 | `POST` | `/api/instances/{id}/start` | Start instance |
 | `POST` | `/api/instances/{id}/stop` | Stop instance |
@@ -532,6 +533,53 @@ Response:
       "score": 72,
       "components": {
         "peers": 20
+      }
+    }
+  }
+}
+```
+
+### `GET /api/instances/{id}/surface_diagnostics`
+
+Returns a mule-doctor-owned summary over the stable rust-mule surfaces for one managed instance:
+
+- `/api/v1/searches`
+- `/api/v1/shared`
+- `/api/v1/shared/actions`
+- `/api/v1/downloads`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "diagnostics": {
+    "instanceId": "a",
+    "observedAt": "2026-03-16T09:00:00.000Z",
+    "summary": {
+      "searches": {
+        "ready": true,
+        "totalSearches": 2,
+        "activeSearches": 1,
+        "stateCounts": {
+          "running": 1,
+          "completed": 1
+        }
+      },
+      "sharedLibrary": {
+        "totalFiles": 4,
+        "keywordPublishQueuedCount": 1,
+        "keywordPublishFailedCount": 0,
+        "keywordPublishAckedCount": 3
+      },
+      "downloads": {
+        "queueLen": 2,
+        "totalDownloads": 2,
+        "activeDownloads": 1,
+        "stateCounts": {
+          "queued": 1,
+          "completed": 1
+        }
       }
     }
   }
@@ -1020,6 +1068,7 @@ Subsystem-gated routes:
   - `/api/instances/{id}/restart`
 - managed diagnostics:
   - `/api/instances/{id}/diagnostics`
+  - `/api/instances/{id}/surface_diagnostics`
   - `/api/instances/compare`
 - managed analysis:
   - `/api/instances/{id}/analyze`

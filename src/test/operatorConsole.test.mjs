@@ -173,6 +173,51 @@ class StubManagedInstanceDiagnostics {
   }
 }
 
+class StubManagedInstanceSurfaceDiagnostics {
+  async getSummary(id) {
+    if (id !== "a" && id !== "b") {
+      throw new Error(`Managed instance not found: ${id}`);
+    }
+    return {
+      instanceId: id,
+      observedAt: "2026-03-08T02:04:00.000Z",
+      summary: {
+        searches: {
+          ready: true,
+          totalSearches: 2,
+          activeSearches: 1,
+          stateCounts: { running: 1, completed: 1 },
+          publishEnabledCount: 1,
+          publishAckedCount: 1,
+          wantedSearchCount: 1,
+          zeroHitTerminalCount: 1,
+        },
+        sharedLibrary: {
+          totalFiles: 1,
+          localSourceCachedCount: 1,
+          keywordPublishQueuedCount: 1,
+          keywordPublishFailedCount: 0,
+          keywordPublishAckedCount: 0,
+          sourcePublishResponseCount: 1,
+          activeTransferFileCount: 1,
+          sharedActionCounts: { reindex: 1 },
+          sharedActionStateCounts: { idle: 1 },
+          publishJobSurface: "shared_file_status_only",
+        },
+        downloads: {
+          queueLen: 1,
+          totalDownloads: 1,
+          activeDownloads: 1,
+          stateCounts: { queued: 1 },
+          downloadsWithErrors: 0,
+          downloadsWithSources: 1,
+          avgProgressPct: 50,
+        },
+      },
+    };
+  }
+}
+
 class StubManagedInstanceAnalysis {
   async analyze(id) {
     if (id !== "a") {
@@ -1738,6 +1783,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
       rustMuleStreamPollMs: 25,
       managedInstances: new StubManagedInstances(),
       managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
+      managedInstanceSurfaceDiagnostics: new StubManagedInstanceSurfaceDiagnostics(),
       managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
       operatorEvents: operatorEventsStore,
     });
@@ -1824,6 +1870,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(instancesModuleRes.status, 200);
     const instancesModule = await instancesModuleRes.text();
     assert.match(instancesModule, /confirmAction/);
+    assert.match(instancesModule, /surface_diagnostics/);
 
     const instanceViewsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/instanceViews.js`, {
       headers: { Cookie: cookie },
@@ -1901,6 +1948,7 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /operator-view-runs/);
     assert.match(rootHtml, /selected-instance-feedback/);
     assert.match(rootHtml, /selected-instance-action-summary/);
+    assert.match(rootHtml, /instance-runtime-diagnostics/);
     assert.match(rootHtml, /refresh-discoverability-results/);
     assert.match(rootHtml, /discoverability-results/);
     assert.match(rootHtml, /discoverability-summary/);
@@ -1947,6 +1995,17 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     const instanceLogs = await instanceLogsRes.json();
     assert.equal(Array.isArray(instanceLogs.lines), true);
     assert.equal("logPath" in instanceLogs.instance, false);
+
+    const instanceSurfaceDiagnosticsRes = await fetch(
+      `${baseUrl}/api/instances/a/surface_diagnostics`,
+      {
+        headers: { Cookie: cookie },
+      },
+    );
+    assert.equal(instanceSurfaceDiagnosticsRes.status, 200);
+    const instanceSurfaceDiagnostics = await instanceSurfaceDiagnosticsRes.json();
+    assert.equal(instanceSurfaceDiagnostics.diagnostics.instanceId, "a");
+    assert.equal(instanceSurfaceDiagnostics.diagnostics.summary.searches.totalSearches, 2);
 
     const invalidLinesRes = await fetch(`${baseUrl}/api/instances/a/logs?lines=not-a-number`, {
       headers: { Cookie: cookie },
