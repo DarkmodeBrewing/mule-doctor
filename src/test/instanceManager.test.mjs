@@ -373,6 +373,52 @@ test("InstanceManager renders configured rust-mule template values", async () =>
   }
 });
 
+test("InstanceManager accepts nested rust-mule template sections and writes ownership comments", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      apiPortStart: 19000,
+      apiPortEnd: 19010,
+      rustMuleConfigTemplate: {
+        sam: {
+          host: "10.99.0.20",
+          forwardHost: "10.99.0.10",
+        },
+        general: {
+          logLevel: "debug",
+        },
+        api: {
+          authMode: "local_ui",
+        },
+        sharing: {
+          extraShareRoots: ["/srv/nested-fixtures"],
+        },
+        sessionNamePrefix: "nested",
+      },
+    });
+    await manager.initialize();
+
+    const created = await manager.createPlannedInstance({ id: "nested-a", apiPort: 19004 });
+    const configRaw = await readFile(created.runtime.configPath, "utf8");
+
+    assert.match(configRaw, /# mule-doctor-owned keys are generated per instance:/);
+    assert.match(configRaw, /# externally supplied template keys may set shared rust-mule defaults:/);
+    assert.match(configRaw, /session_name = "nested-nested-a"/);
+    assert.match(configRaw, /host = "10.99.0.20"/);
+    assert.match(configRaw, /forward_host = "10.99.0.10"/);
+    assert.match(configRaw, /log_level = "debug"/);
+    assert.match(configRaw, /auth_mode = "local_ui"/);
+    assert.match(
+      configRaw,
+      /share_roots = \["[^"]*\/shared", "\/srv\/nested-fixtures"\]/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("InstanceManager rejects invalid numeric template values", async () => {
   const tmp = await makeTempDir();
   try {
