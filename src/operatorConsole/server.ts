@@ -100,7 +100,11 @@ export class OperatorConsoleServer {
   private readonly searchHealthResults:
     | OperatorConsoleConfig["searchHealthResults"]
     | undefined;
+  private readonly llmInvocationResults:
+    | OperatorConsoleConfig["llmInvocationResults"]
+    | undefined;
   private readonly humanInvocationGate: LlmInvocationGate | undefined;
+  private readonly invocationAudit: OperatorConsoleConfig["invocationAudit"] | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -135,7 +139,9 @@ export class OperatorConsoleServer {
     this.operatorEvents = config.operatorEvents;
     this.discoverabilityResults = config.discoverabilityResults;
     this.searchHealthResults = config.searchHealthResults;
+    this.llmInvocationResults = config.llmInvocationResults;
     this.humanInvocationGate = config.humanInvocationGate;
+    this.invocationAudit = config.invocationAudit;
     this.startedAt = new Date().toISOString();
   }
 
@@ -318,6 +324,16 @@ export class OperatorConsoleServer {
       return;
     }
 
+    if (path === "/api/llm/invocations") {
+      await this.handleLlmInvocationResults(req, url, res);
+      return;
+    }
+
+    if (path === "/api/llm/invocations/summary") {
+      await this.handleLlmInvocationSummary(req, url, res);
+      return;
+    }
+
     if (path === "/api/instances/compare") {
       await this.handleInstanceComparison(req, url, res);
       return;
@@ -469,6 +485,19 @@ export class OperatorConsoleServer {
       { key: "human_llm:observer_run", cooldownMs: 300_000 },
     ]);
     if (decision && !decision.ok) {
+      const recordedAt = new Date().toISOString();
+      await this.appendInvocationAudit({
+        surface: "manual_observer_run",
+        trigger: "human",
+        startedAt: recordedAt,
+        completedAt: recordedAt,
+        durationMs: 0,
+        toolCalls: 0,
+        toolRounds: 0,
+        finishReason: "rate_limited",
+        rateLimitReason: decision.reason,
+        retryAfterSec: decision.retryAfterSec,
+      });
       sendJson(res, 429, {
         ok: false,
         error: `observer run is rate-limited (${decision.reason})`,
@@ -754,6 +783,42 @@ export class OperatorConsoleServer {
     sendJson(res, 200, { ok: true, summary });
   }
 
+  private async handleLlmInvocationResults(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.llmInvocationResults) {
+      sendJson(res, 501, { ok: false, error: "llm invocation history unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
+    const results = await this.llmInvocationResults.listRecent(limit);
+    sendJson(res, 200, { ok: true, results });
+  }
+
+  private async handleLlmInvocationSummary(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.llmInvocationResults) {
+      sendJson(res, 501, { ok: false, error: "llm invocation summary unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
+    const summary = await this.llmInvocationResults.summarizeRecent(limit);
+    sendJson(res, 200, { ok: true, summary });
+  }
+
   private async handleInstancesCollection(
     req: IncomingMessage,
     res: ServerResponse,
@@ -1009,6 +1074,20 @@ export class OperatorConsoleServer {
         { key: `human_llm:operator_analyze:instance:${instanceGateKeyPart}`, cooldownMs: 300_000 },
       ]);
       if (decision && !decision.ok) {
+        const recordedAt = new Date().toISOString();
+        await this.appendInvocationAudit({
+          surface: "managed_instance_analysis",
+          trigger: "human",
+          target: { kind: "managed_instance", instanceId: id },
+          startedAt: recordedAt,
+          completedAt: recordedAt,
+          durationMs: 0,
+          toolCalls: 0,
+          toolRounds: 0,
+          finishReason: "rate_limited",
+          rateLimitReason: decision.reason,
+          retryAfterSec: decision.retryAfterSec,
+        });
         sendJson(res, 429, {
           ok: false,
           error: `managed instance analysis is rate-limited (${decision.reason})`,
@@ -1380,6 +1459,42 @@ export class OperatorConsoleServer {
     this.streamCleanups.add(finalize);
     req.on("close", finalize);
     res.on("close", finalize);
+  }
+
+  private async appendInvocationAudit(record: {
+    surface: "managed_instance_analysis" | "manual_observer_run";
+    trigger: "human";
+    target?: DiagnosticTargetRef;
+    startedAt: string;
+    completedAt: string;
+    durationMs: number;
+    toolCalls: number;
+    toolRounds: number;
+    finishReason: "rate_limited";
+    rateLimitReason?: "cooldown" | "in_flight";
+    retryAfterSec?: number;
+  }): Promise<void> {
+    if (!this.invocationAudit) {
+      return;
+    }
+    try {
+      await this.invocationAudit.append({
+        recordedAt: record.completedAt,
+        surface: record.surface,
+        trigger: record.trigger,
+        target: record.target,
+        startedAt: record.startedAt,
+        completedAt: record.completedAt,
+        durationMs: record.durationMs,
+        toolCalls: record.toolCalls,
+        toolRounds: record.toolRounds,
+        finishReason: record.finishReason,
+        rateLimitReason: record.rateLimitReason,
+        retryAfterSec: record.retryAfterSec,
+      });
+    } catch (err) {
+      log("warn", "operatorConsole", `Failed to append invocation audit: ${String(err)}`);
+    }
   }
 }
 

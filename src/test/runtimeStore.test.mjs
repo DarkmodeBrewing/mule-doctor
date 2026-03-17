@@ -345,3 +345,38 @@ test("RuntimeStore enforces search health retention limit", async () => {
     await tmp.cleanup();
   }
 });
+
+test("RuntimeStore enforces LLM invocation audit retention limit", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const store = new RuntimeStore({ dataDir: tmp.dir, llmInvocationsLimit: 2 });
+    await store.initialize();
+
+    for (let i = 1; i <= 4; i++) {
+      await store.appendLlmInvocationRecord({
+        recordedAt: `t-${i}`,
+        surface: "mattermost_command",
+        trigger: "human",
+        model: "gpt-5-mini",
+        startedAt: `t-${i}`,
+        completedAt: `t-${i}`,
+        durationMs: i,
+        toolCalls: i,
+        toolRounds: 1,
+        finishReason: i === 4 ? "rate_limited" : "completed",
+        command: "analyze",
+      });
+    }
+
+    const records = await store.loadLlmInvocationRecords();
+    assert.equal(records.length, 2);
+    assert.deepEqual(
+      records.map((entry) => entry.recordedAt),
+      ["t-3", "t-4"],
+    );
+    assert.equal(records[1].finishReason, "rate_limited");
+  } finally {
+    await tmp.cleanup();
+  }
+});

@@ -250,6 +250,60 @@ class StubManagedInstanceAnalysisUnavailable {
   }
 }
 
+class CapturingInvocationAudit {
+  constructor() {
+    this.records = [];
+  }
+
+  async append(record) {
+    this.records.push(record);
+  }
+}
+
+class StubLlmInvocationResults {
+  async listRecent(limit = 10) {
+    return Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
+      recordedAt: `2026-03-17T15:0${i}:00.000Z`,
+      surface: i === 0 ? "mattermost_command" : "observer_cycle",
+      trigger: i === 0 ? "human" : "scheduled",
+      model: "gpt-5-mini",
+      startedAt: `2026-03-17T15:0${i}:00.000Z`,
+      completedAt: `2026-03-17T15:0${i}:01.000Z`,
+      durationMs: 1000,
+      toolCalls: i + 1,
+      toolRounds: 1,
+      finishReason: i === 0 ? "completed" : "rate_limited",
+      command: i === 0 ? "analyze" : undefined,
+      retryAfterSec: i === 1 ? 30 : undefined,
+    }));
+  }
+
+  async summarizeRecent(limit = 10) {
+    return {
+      windowSize: limit,
+      totalInvocations: 2,
+      finishReasonCounts: {
+        completed: 1,
+        tool_round_limit: 0,
+        tool_call_limit: 0,
+        duration_limit: 0,
+        failed: 0,
+        rate_limited: 1,
+      },
+      surfaceCounts: {
+        mattermost_command: 1,
+        observer_cycle: 1,
+      },
+      humanTriggeredCount: 1,
+      scheduledCount: 1,
+      rateLimitedCount: 1,
+      latestRecordedAt: "2026-03-17T15:01:00.000Z",
+      latestSurface: "observer_cycle",
+      latestFinishReason: "rate_limited",
+    };
+  }
+}
+
 class FastResetObserverControl {
   constructor() {
     this.status = {
@@ -1297,6 +1351,76 @@ test("OperatorConsoleServer returns search health summary", async () => {
   }
 });
 
+test("OperatorConsoleServer returns LLM invocation audit results", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      llmInvocationResults: new StubLlmInvocationResults(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/llm/invocations?limit=5`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.results.length, 2);
+    assert.equal(body.results[0].surface, "mattermost_command");
+    assert.equal(body.results[1].finishReason, "rate_limited");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer returns LLM invocation audit summary", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      llmInvocationResults: new StubLlmInvocationResults(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/llm/invocations/summary?limit=5`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.summary.totalInvocations, 2);
+    assert.equal(body.summary.rateLimitedCount, 1);
+    assert.equal(body.summary.latestSurface, "observer_cycle");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("OperatorConsoleServer gets and sets the active diagnostic target", async () => {
   const tmp = await makeTempDir();
   try {
@@ -1677,6 +1801,7 @@ test("OperatorConsoleServer rate-limits managed instance analysis", async () => 
   try {
     const rustLogPath = join(tmp.dir, "rust-mule.log");
     await writeFile(rustLogPath, "", "utf8");
+    const audit = new CapturingInvocationAudit();
 
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
@@ -1689,6 +1814,7 @@ test("OperatorConsoleServer rate-limits managed instance analysis", async () => 
       subscribeToAppLogs: () => () => {},
       managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
       humanInvocationGate: new LlmInvocationGate(),
+      invocationAudit: audit,
     });
     await server.start();
 
@@ -1708,6 +1834,9 @@ test("OperatorConsoleServer rate-limits managed instance analysis", async () => 
     assert.equal(payload.ok, false);
     assert.match(payload.error, /rate-limited/);
     assert.equal(typeof payload.retryAfterSec, "number");
+    assert.equal(audit.records.length, 1);
+    assert.equal(audit.records[0].surface, "managed_instance_analysis");
+    assert.equal(audit.records[0].finishReason, "rate_limited");
 
     await server.stop();
   } finally {
@@ -1759,6 +1888,7 @@ test("OperatorConsoleServer rate-limits manual observer run requests", async () 
   try {
     const rustLogPath = join(tmp.dir, "rust-mule.log");
     await writeFile(rustLogPath, "", "utf8");
+    const audit = new CapturingInvocationAudit();
 
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
@@ -1773,6 +1903,7 @@ test("OperatorConsoleServer rate-limits manual observer run requests", async () 
       operatorEvents: new StubOperatorEvents(),
       diagnosticTarget: new StubDiagnosticTargetControl(),
       humanInvocationGate: new LlmInvocationGate(),
+      invocationAudit: audit,
     });
     await server.start();
 
@@ -1801,6 +1932,9 @@ test("OperatorConsoleServer rate-limits manual observer run requests", async () 
     const payload = await second.json();
     assert.equal(payload.ok, false);
     assert.match(payload.error, /rate-limited/);
+    assert.equal(audit.records.length, 1);
+    assert.equal(audit.records[0].surface, "manual_observer_run");
+    assert.equal(audit.records[0].finishReason, "rate_limited");
 
     await server.stop();
   } finally {
@@ -2097,6 +2231,8 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(discoverabilityModule, /discoverability-summary/);
     assert.match(discoverabilityModule, /search-health-results/);
     assert.match(discoverabilityModule, /search-health-summary/);
+    assert.match(discoverabilityModule, /llm-invocation-results/);
+    assert.match(discoverabilityModule, /llm-invocation-summary/);
 
     const constantsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/constants.js`, {
       headers: { Cookie: cookie },
@@ -2133,6 +2269,9 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /refresh-search-health-results/);
     assert.match(rootHtml, /search-health-results/);
     assert.match(rootHtml, /search-health-summary/);
+    assert.match(rootHtml, /refresh-llm-invocations/);
+    assert.match(rootHtml, /llm-invocation-results/);
+    assert.match(rootHtml, /llm-invocation-summary/);
 
     const authorizedIndexHtmlRes = await fetch(`${baseUrl}/static/operatorConsole/index.html`, {
       headers: { Cookie: cookie },

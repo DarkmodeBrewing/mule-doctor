@@ -201,6 +201,23 @@ class StubRuntimeStore {
       },
     }));
   }
+
+  async getRecentLlmInvocationRecords(n) {
+    return Array.from({ length: Math.min(2, n) }, (_, i) => ({
+      recordedAt: `2026-03-17T15:0${i}:00.000Z`,
+      surface: i === 0 ? "mattermost_command" : "observer_cycle",
+      trigger: i === 0 ? "human" : "scheduled",
+      model: "gpt-5-mini",
+      startedAt: `2026-03-17T15:0${i}:00.000Z`,
+      completedAt: `2026-03-17T15:0${i}:01.000Z`,
+      durationMs: 1000,
+      toolCalls: i + 1,
+      toolRounds: 1,
+      finishReason: i === 0 ? "completed" : "rate_limited",
+      command: i === 0 ? "analyze" : undefined,
+      retryAfterSec: i === 1 ? 30 : undefined,
+    }));
+  }
 }
 
 async function makeTempSourceDir() {
@@ -297,6 +314,30 @@ test("ToolRegistry getSearchHealthSummary returns derived lifecycle totals", asy
   assert.equal(result.data.latestPair.publisherInstanceId, "publisher");
 });
 
+test("ToolRegistry getLlmInvocationResults returns recent audit metadata", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore());
+
+  const result = await registry.invoke("getLlmInvocationResults", { n: 10 });
+
+  assert.equal(result.success, true);
+  assert.equal(result.data.length, 2);
+  assert.equal(result.data[0].surface, "mattermost_command");
+  assert.equal(result.data[1].finishReason, "rate_limited");
+});
+
+test("ToolRegistry getLlmInvocationSummary returns aggregated audit totals", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore());
+
+  const result = await registry.invoke("getLlmInvocationSummary", { n: 10 });
+
+  assert.equal(result.success, true);
+  assert.equal(result.data.totalInvocations, 2);
+  assert.equal(result.data.finishReasonCounts.completed, 1);
+  assert.equal(result.data.finishReasonCounts.rate_limited, 1);
+  assert.equal(result.data.humanTriggeredCount, 1);
+  assert.equal(result.data.scheduledCount, 1);
+});
+
 test("ToolRegistry does not expose getHistory when runtime store is unavailable", async () => {
   const registry = new ToolRegistry(new StubClient(), new StubLogWatcher());
 
@@ -310,11 +351,15 @@ test("ToolRegistry does not expose getHistory when runtime store is unavailable"
   );
   const hasSearchHealth = defs.some((def) => def.function.name === "getSearchHealthResults");
   const hasSearchHealthSummary = defs.some((def) => def.function.name === "getSearchHealthSummary");
+  const hasLlmInvocationResults = defs.some((def) => def.function.name === "getLlmInvocationResults");
+  const hasLlmInvocationSummary = defs.some((def) => def.function.name === "getLlmInvocationSummary");
   assert.equal(hasGetHistory, false);
   assert.equal(hasDiscoverability, false);
   assert.equal(hasDiscoverabilitySummary, false);
   assert.equal(hasSearchHealth, false);
   assert.equal(hasSearchHealthSummary, false);
+  assert.equal(hasLlmInvocationResults, false);
+  assert.equal(hasLlmInvocationSummary, false);
 
   const result = await registry.invoke("getHistory", { n: 5 });
   assert.deepEqual(result, {
@@ -349,6 +394,20 @@ test("ToolRegistry does not expose getHistory when runtime store is unavailable"
     tool: "getSearchHealthSummary",
     success: false,
     error: "Unknown tool: getSearchHealthSummary",
+  });
+
+  const llmInvocationResults = await registry.invoke("getLlmInvocationResults", { n: 5 });
+  assert.deepEqual(llmInvocationResults, {
+    tool: "getLlmInvocationResults",
+    success: false,
+    error: "Unknown tool: getLlmInvocationResults",
+  });
+
+  const llmInvocationSummary = await registry.invoke("getLlmInvocationSummary", { n: 5 });
+  assert.deepEqual(llmInvocationSummary, {
+    tool: "getLlmInvocationSummary",
+    success: false,
+    error: "Unknown tool: getLlmInvocationSummary",
   });
 });
 

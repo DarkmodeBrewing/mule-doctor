@@ -84,6 +84,8 @@ Common status codes:
 | `GET` | `/api/discoverability/summary` | Read compact recent discoverability summary |
 | `GET` | `/api/search-health/results` | List recent persisted search lifecycle records |
 | `GET` | `/api/search-health/summary` | Read compact recent search health summary |
+| `GET` | `/api/llm/invocations` | List recent bounded LLM invocation audit records |
+| `GET` | `/api/llm/invocations/summary` | Read compact recent LLM invocation summary |
 | `GET` | `/api/stream/app` | SSE app-log stream |
 | `GET` | `/api/stream/rust-mule` | SSE rust-mule-log stream |
 
@@ -946,6 +948,84 @@ Notes:
 - this is the compact derived summary above recent search-health records
 - used by the operator console, LLM tooling, and Mattermost periodic reporting
 - unavailable search-health storage returns `501`
+
+### `GET /api/llm/invocations?limit={n}`
+
+Query parameters:
+
+- `limit`: optional integer, default `20`, min `1`, max `200`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "results": [
+    {
+      "recordedAt": "2026-03-17T15:35:00.000Z",
+      "surface": "mattermost_command",
+      "trigger": "human",
+      "model": "gpt-5-mini",
+      "startedAt": "2026-03-17T15:35:00.000Z",
+      "completedAt": "2026-03-17T15:35:01.200Z",
+      "durationMs": 1200,
+      "toolCalls": 2,
+      "toolRounds": 1,
+      "finishReason": "completed",
+      "command": "analyze"
+    }
+  ]
+}
+```
+
+Notes:
+
+- records are bounded operational metadata only; prompts and raw tool payloads are not persisted here
+- `finishReason` may be `completed`, `tool_round_limit`, `tool_call_limit`, `duration_limit`, `failed`, or `rate_limited`
+- `target` is present when the invocation was scoped to a diagnostic target
+
+### `GET /api/llm/invocations/summary?limit={n}`
+
+Query parameters:
+
+- `limit`: optional integer, default `20`, min `1`, max `200`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "summary": {
+    "windowSize": 20,
+    "totalInvocations": 7,
+    "finishReasonCounts": {
+      "completed": 5,
+      "tool_round_limit": 0,
+      "tool_call_limit": 0,
+      "duration_limit": 0,
+      "failed": 1,
+      "rate_limited": 1
+    },
+    "surfaceCounts": {
+      "observer_cycle": 3,
+      "mattermost_command": 2,
+      "managed_instance_analysis": 1,
+      "manual_observer_run": 1
+    },
+    "humanTriggeredCount": 4,
+    "scheduledCount": 3,
+    "rateLimitedCount": 1,
+    "latestRecordedAt": "2026-03-17T15:35:00.000Z",
+    "latestSurface": "mattermost_command",
+    "latestFinishReason": "completed"
+  }
+}
+```
+
+Notes:
+
+- this is a compact operational audit view over recent LLM usage and boundary hits
+- unavailable invocation-audit storage returns `501`
 
 ## Managed Preset Endpoints
 

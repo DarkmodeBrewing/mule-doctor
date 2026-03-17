@@ -9,6 +9,7 @@ import { RustMuleClient } from "./api/rustMuleClient.js";
 import { LogWatcher } from "./logs/logWatcher.js";
 import { ToolRegistry } from "./tools/toolRegistry.js";
 import { Analyzer } from "./llm/analyzer.js";
+import { LlmInvocationAuditLog } from "./llm/invocationAuditLog.js";
 import { UsageTracker } from "./llm/usageTracker.js";
 import { LlmInvocationGate } from "./llm/invocationGate.js";
 import { MattermostClient } from "./integrations/mattermost.js";
@@ -163,10 +164,12 @@ async function main(): Promise<void> {
     inputCostPer1k,
     outputCostPer1k,
   });
+  const invocationAudit = new LlmInvocationAuditLog(runtimeStore);
   const humanInvocationGate = new LlmInvocationGate();
   const analyzer = new Analyzer(openaiKey, toolRegistry, {
     model: openaiModel,
     usageTracker,
+    invocationAudit,
   });
   const mattermostToolRegistry = new ToolRegistry(rustMuleClient, logWatcher, runtimeStore, {
     toolProfile: "mattermost_command",
@@ -174,6 +177,7 @@ async function main(): Promise<void> {
   const mattermostAnalyzer = new Analyzer(openaiKey, mattermostToolRegistry, {
     model: openaiModel,
     usageTracker,
+    invocationAudit,
   });
   let managedInstances: InstanceManager | undefined;
   const configuredManagedInstances = new InstanceManager({
@@ -204,6 +208,7 @@ async function main(): Promise<void> {
     discoverabilityResults: discoverabilityLog,
     searchHealthResults: searchHealthLog,
     humanInvocationGate,
+    invocationAudit,
     managedInstanceSurfaceDiagnostics,
   });
   const patchProposalNotifier = async (proposal: {
@@ -223,6 +228,7 @@ async function main(): Promise<void> {
           diagnostics: managedInstanceDiagnostics,
           model: openaiModel,
           usageTracker,
+          invocationAudit,
           sourcePath,
           proposalDir,
           patchProposalNotifier,
@@ -268,6 +274,7 @@ async function main(): Promise<void> {
       return new Analyzer(openaiKey, targetTools, {
         model: openaiModel,
         usageTracker,
+        invocationAudit,
       });
     },
     eventLog: operatorEventLog,
@@ -296,7 +303,9 @@ async function main(): Promise<void> {
       operatorEvents: operatorEventLog,
       discoverabilityResults: discoverabilityLog,
       searchHealthResults: searchHealthLog,
+      llmInvocationResults: invocationAudit,
       humanInvocationGate,
+      invocationAudit,
     });
     try {
       await operatorConsole.start();

@@ -87,6 +87,30 @@ function renderSearchHealthSummary(summary) {
   element.textContent = parts.join(" • ");
 }
 
+function renderLlmInvocationSummary(summary) {
+  const element = document.getElementById("llm-invocation-summary");
+  if (!summary || typeof summary.totalInvocations !== "number" || summary.totalInvocations === 0) {
+    element.textContent = "No LLM invocation audit history available yet.";
+    return;
+  }
+
+  const parts = [
+    `Window: ${summary.windowSize} recent invocations`,
+    `Completed ${summary.finishReasonCounts?.completed ?? 0}, failed ${summary.finishReasonCounts?.failed ?? 0}, rate-limited ${summary.rateLimitedCount ?? 0}`,
+    `Human ${summary.humanTriggeredCount ?? 0}, scheduled ${summary.scheduledCount ?? 0}`,
+  ];
+  if (summary.latestSurface) {
+    parts.push(`Latest surface: ${summary.latestSurface}`);
+  }
+  if (summary.latestFinishReason) {
+    parts.push(`Latest outcome: ${summary.latestFinishReason}`);
+  }
+  if (summary.latestRecordedAt) {
+    parts.push(`Latest at: ${formatRecordedAt(summary.latestRecordedAt)}`);
+  }
+  element.textContent = parts.join(" • ");
+}
+
 function renderDiscoverabilityItem(record) {
   const item = document.createElement("li");
   const line = document.createElement("div");
@@ -148,6 +172,48 @@ function renderSearchHealthItem(record) {
   detail.textContent =
     `${record.query}${fixtureName ? ` via ${fixtureName}` : ""} • final state ${finalState} • ` +
     `${record.transportAtDispatch?.searcher?.peerCount ?? 0} searcher peers • recorded ${formatRecordedAt(record.recordedAt)}`;
+
+  item.appendChild(line);
+  item.appendChild(detail);
+  return item;
+}
+
+function renderLlmInvocationItem(record) {
+  const item = document.createElement("li");
+  const line = document.createElement("div");
+  line.className = "event-line";
+
+  const title = document.createElement("strong");
+  title.textContent = record.surface || "unknown surface";
+  line.appendChild(title);
+
+  const badges = document.createElement("div");
+  badges.className = "event-badges";
+  badges.appendChild(createBadge(record.finishReason || "unknown"));
+  badges.appendChild(createBadge(record.trigger || "unknown trigger", "instance"));
+  if (typeof record.toolCalls === "number") {
+    badges.appendChild(createBadge(`${record.toolCalls} tools`));
+  }
+  line.appendChild(badges);
+
+  const detail = document.createElement("div");
+  detail.className = "event-detail";
+  const target =
+    record.target?.kind === "managed_instance" && record.target?.instanceId
+      ? `${record.target.kind}:${record.target.instanceId}`
+      : record.target?.kind;
+  const extras = [
+    record.model ? `model ${record.model}` : undefined,
+    typeof record.durationMs === "number" ? `${record.durationMs}ms` : undefined,
+    target ? `target ${target}` : undefined,
+    record.command ? `command ${record.command}` : undefined,
+    record.rateLimitReason ? `rate-limit ${record.rateLimitReason}` : undefined,
+    typeof record.retryAfterSec === "number" ? `retry ${record.retryAfterSec}s` : undefined,
+    `recorded ${formatRecordedAt(record.recordedAt)}`,
+  ]
+    .filter((value) => Boolean(value))
+    .join(" • ");
+  detail.textContent = extras;
 
   item.appendChild(line);
   item.appendChild(detail);
@@ -219,8 +285,40 @@ export function createDiscoverabilityController(fetchJson) {
     }
   }
 
+  async function refreshLlmInvocationResults() {
+    const list = document.getElementById("llm-invocation-results");
+    list.replaceChildren();
+    try {
+      const summaryData = await fetchJson("/api/llm/invocations/summary?limit=12");
+      renderLlmInvocationSummary(summaryData.summary);
+    } catch {
+      renderLlmInvocationSummary(undefined);
+    }
+
+    try {
+      const data = await fetchJson("/api/llm/invocations?limit=12");
+      const results = Array.isArray(data.results) ? [...data.results].reverse() : [];
+      if (!results.length) {
+        const item = document.createElement("li");
+        item.className = "muted";
+        item.textContent = "No LLM invocation history recorded yet.";
+        list.appendChild(item);
+        return;
+      }
+      for (const record of results) {
+        list.appendChild(renderLlmInvocationItem(record));
+      }
+    } catch (err) {
+      const item = document.createElement("li");
+      item.className = "muted";
+      item.textContent = `Failed to load LLM invocation history: ${String(err)}`;
+      list.appendChild(item);
+    }
+  }
+
   return {
     refreshDiscoverabilityResults,
     refreshSearchHealthResults,
+    refreshLlmInvocationResults,
   };
 }

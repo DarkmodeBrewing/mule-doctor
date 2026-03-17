@@ -1,6 +1,7 @@
 import type { SearchPublishDiagnosticsSummary } from "../diagnostics/rustMuleSurfaceSummaries.js";
+import type { LlmInvocationAuditSink } from "../llm/invocationAuditLog.js";
 import type { LlmInvocationGate } from "../llm/invocationGate.js";
-import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary, SearchHealthRecord, SearchHealthSummary } from "../types/contracts.js";
+import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary, SearchHealthRecord, SearchHealthSummary, LlmInvocationRecord, LlmInvocationSummary } from "../types/contracts.js";
 
 export interface ListedFile {
   name: string;
@@ -103,6 +104,11 @@ export interface SearchHealthResultsStore {
   appendControlledDiscoverability(result: ManagedDiscoverabilityCheckResult): Promise<void>;
 }
 
+export interface LlmInvocationResultsStore {
+  listRecent(limit?: number): Promise<LlmInvocationRecord[]>;
+  summarizeRecent(limit?: number): Promise<LlmInvocationSummary>;
+}
+
 export interface DiagnosticTargetControl {
   getActiveTarget(): Promise<DiagnosticTargetRef>;
   setActiveTarget(target: DiagnosticTargetRef): Promise<DiagnosticTargetRef>;
@@ -160,7 +166,9 @@ export interface OperatorConsoleConfig {
   operatorEvents?: OperatorEventsStore;
   discoverabilityResults?: DiscoverabilityResultsStore;
   searchHealthResults?: SearchHealthResultsStore;
+  llmInvocationResults?: LlmInvocationResultsStore;
   humanInvocationGate?: LlmInvocationGate;
+  invocationAudit?: LlmInvocationAuditSink;
 }
 
 export interface SafeReadResult {
