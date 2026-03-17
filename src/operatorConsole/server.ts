@@ -69,6 +69,7 @@ import type {
   ObserverControl,
 } from "./types.js";
 import type { LlmInvocationGate } from "../llm/invocationGate.js";
+import { normalizeInvocationKeyPart } from "../llm/invocationGate.js";
 
 export class OperatorConsoleServer {
   private readonly authToken: string | undefined;
@@ -1001,10 +1002,11 @@ export class OperatorConsoleServer {
         sendJson(res, 501, { ok: false, error: "managed instance analysis unavailable" });
         return;
       }
+      const instanceGateKeyPart = normalizeInvocationKeyPart(id, { maxLength: 48 }) ?? "unknown";
       const decision = this.humanInvocationGate?.tryAcquire([
         { key: "human_llm:global", cooldownMs: 30_000 },
         { key: "human_llm:operator_analyze", cooldownMs: 60_000 },
-        { key: `human_llm:operator_analyze:instance:${id}`, cooldownMs: 300_000 },
+        { key: `human_llm:operator_analyze:instance:${instanceGateKeyPart}`, cooldownMs: 300_000 },
       ]);
       if (decision && !decision.ok) {
         sendJson(res, 429, {
@@ -1018,7 +1020,7 @@ export class OperatorConsoleServer {
       try {
         analysis = await handleManagedInstanceErrors(() => this.managedInstanceAnalysis!.analyze(id));
       } finally {
-        decision?.lease.release();
+        decision?.lease.release({ cooldown: analysis?.available !== false });
       }
       sendJson(res, 200, { ok: true, analysis });
       return;

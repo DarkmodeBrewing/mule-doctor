@@ -31,10 +31,14 @@ export class LlmInvocationGate {
 
   tryAcquire(inputs: InvocationGuardInput[]): InvocationDecision {
     const now = Date.now();
+    this.pruneExpiredEntries(now);
     let rejection: InvocationRejection | undefined;
 
     for (const input of inputs) {
-      const entry = this.ensureEntry(input.key);
+      const entry = this.entries.get(input.key);
+      if (!entry) {
+        continue;
+      }
       if (entry.inFlight) {
         rejection = pickStrongerRejection(rejection, {
           ok: false,
@@ -80,11 +84,21 @@ export class LlmInvocationGate {
             entry.inFlight = false;
             if (applyCooldown) {
               entry.nextAllowedAt = Math.max(entry.nextAllowedAt, now + input.cooldownMs);
+            } else if (entry.nextAllowedAt <= now) {
+              this.entries.delete(input.key);
             }
           }
         },
       },
     };
+  }
+
+  private pruneExpiredEntries(now: number): void {
+    for (const [key, entry] of this.entries) {
+      if (!entry.inFlight && entry.nextAllowedAt <= now) {
+        this.entries.delete(key);
+      }
+    }
   }
 
   private ensureEntry(key: string): GateEntry {
@@ -99,6 +113,18 @@ export class LlmInvocationGate {
     this.entries.set(key, created);
     return created;
   }
+}
+
+export function normalizeInvocationKeyPart(
+  value: string | undefined,
+  options: { maxLength?: number } = {},
+): string | undefined {
+  const trimmed = value?.trim().toLowerCase();
+  if (!trimmed) {
+    return undefined;
+  }
+  const maxLength = options.maxLength ?? 64;
+  return trimmed.slice(0, maxLength);
 }
 
 function pickStrongerRejection(

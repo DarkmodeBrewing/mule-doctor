@@ -50,7 +50,7 @@ export interface ObserverRunNowResult {
   reason?: string;
 }
 
-interface ObserverCycleContext {
+export interface ObserverCycleContext {
   targetLabel: string;
   nodeInfo: Record<string, unknown>;
   peerCount: number;

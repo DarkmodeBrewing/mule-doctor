@@ -30,3 +30,20 @@ test("LlmInvocationGate enforces cooldown after release", async () => {
   assert.equal(third.ok, true);
   third.lease.release();
 });
+
+test("LlmInvocationGate does not retain rejected unknown keys", () => {
+  const gate = new LlmInvocationGate();
+
+  const decision = gate.tryAcquire([{ key: "known", cooldownMs: 1000 }]);
+  assert.equal(decision.ok, true);
+
+  const blocked = gate.tryAcquire([
+    { key: "known", cooldownMs: 1000 },
+    { key: "random-attacker-key", cooldownMs: 1000 },
+  ]);
+  assert.equal(blocked.ok, false);
+  assert.equal(gate.entries.size, 1);
+
+  decision.lease.release({ cooldown: false });
+  assert.equal(gate.entries.size, 0);
+});

@@ -6,6 +6,7 @@
 
 import type { Analyzer } from "../llm/analyzer.js";
 import type { LlmInvocationGate } from "../llm/invocationGate.js";
+import { normalizeInvocationKeyPart } from "../llm/invocationGate.js";
 import type { UsageSummary } from "../llm/usageTracker.js";
 import type { SearchPublishDiagnosticsSummary } from "../diagnostics/rustMuleSurfaceSummaries.js";
 import type {
@@ -287,11 +288,12 @@ export class MattermostClient {
       return;
     }
 
+    const normalizedTriggeredBy = normalizeInvocationKeyPart(ctx.triggeredBy);
     const decision = this.humanInvocationGate?.tryAcquire([
       { key: "human_llm:global", cooldownMs: 30_000 },
       { key: "human_llm:mattermost", cooldownMs: 60_000 },
-      ...(ctx.triggeredBy
-        ? [{ key: `human_llm:mattermost:user:${ctx.triggeredBy}`, cooldownMs: 60_000 }]
+      ...(normalizedTriggeredBy
+        ? [{ key: `human_llm:mattermost:user:${normalizedTriggeredBy}`, cooldownMs: 60_000 }]
         : []),
     ]);
     if (decision && !decision.ok) {
