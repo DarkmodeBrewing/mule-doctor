@@ -13,6 +13,8 @@ import { type UsageSummary, type UsageTracker } from "./usageTracker.js";
 
 const DEFAULT_MODEL = "gpt-5-mini";
 const MAX_TOOL_ROUNDS = 5;
+const MAX_TOTAL_TOOL_CALLS = 12;
+const MAX_ANALYSIS_DURATION_MS = 20_000;
 
 type Message = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 type ToolCall = OpenAI.Chat.Completions.ChatCompletionMessageToolCall;
@@ -55,6 +57,9 @@ Output format:
 export interface AnalyzerConfig {
   model?: string;
   usageTracker?: UsageTracker;
+  maxToolRounds?: number;
+  maxTotalToolCalls?: number;
+  maxDurationMs?: number;
 }
 
 export class Analyzer {
@@ -62,6 +67,9 @@ export class Analyzer {
   private readonly tools: ToolRegistry;
   private readonly model: string;
   private readonly usageTracker: UsageTracker | undefined;
+  private readonly maxToolRounds: number;
+  private readonly maxTotalToolCalls: number;
+  private readonly maxDurationMs: number;
 
   constructor(apiKey: string, tools: ToolRegistry, config: AnalyzerConfig = {}) {
     this.client = new OpenAI({ apiKey });
@@ -69,6 +77,9 @@ export class Analyzer {
     const model = config.model?.trim();
     this.model = model && model.length > 0 ? model : DEFAULT_MODEL;
     this.usageTracker = config.usageTracker;
+    this.maxToolRounds = clampPositiveInt(config.maxToolRounds, MAX_TOOL_ROUNDS);
+    this.maxTotalToolCalls = clampPositiveInt(config.maxTotalToolCalls, MAX_TOTAL_TOOL_CALLS);
+    this.maxDurationMs = clampPositiveInt(config.maxDurationMs, MAX_ANALYSIS_DURATION_MS);
   }
 
   /**
@@ -80,8 +91,15 @@ export class Analyzer {
       { role: "system", content: buildSystemPrompt() },
       { role: "user", content: prompt },
     ];
+    const startedAt = Date.now();
+    let totalToolCalls = 0;
 
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    for (let round = 0; round < this.maxToolRounds; round++) {
+      if (hasExceededDuration(startedAt, this.maxDurationMs)) {
+        return buildIncompleteAnalysisMessage(
+          `analysis duration limit reached after ${this.maxDurationMs}ms`,
+        );
+      }
       const response = await this.chatCompletion(messages);
       if (!response.choices.length) {
         throw new Error("OpenAI response contained no choices");
@@ -97,7 +115,18 @@ export class Analyzer {
 
       // Execute all tool calls requested in this round.
       for (const call of msg.tool_calls) {
+        if (totalToolCalls >= this.maxTotalToolCalls) {
+          return buildIncompleteAnalysisMessage(
+            `total tool call limit reached (${this.maxTotalToolCalls})`,
+          );
+        }
+        if (hasExceededDuration(startedAt, this.maxDurationMs)) {
+          return buildIncompleteAnalysisMessage(
+            `analysis duration limit reached after ${this.maxDurationMs}ms`,
+          );
+        }
         const toolResult = await this.executeToolCall(call);
+        totalToolCalls += 1;
         const result = JSON.stringify(toolResult);
         log(
           "info",
@@ -112,7 +141,7 @@ export class Analyzer {
       }
     }
 
-    return "(analysis incomplete: tool round limit reached)";
+    return buildIncompleteAnalysisMessage(`tool round limit reached (${this.maxToolRounds})`);
   }
 
   private async chatCompletion(messages: Message[]) {
@@ -203,4 +232,19 @@ function readToolCallName(call: ToolCall): string {
     return call.function.name;
   }
   return "unknown";
+}
+
+function clampPositiveInt(value: number | undefined, fallback: number): number {
+  if (!Number.isInteger(value) || (value ?? 0) <= 0) {
+    return fallback;
+  }
+  return value as number;
+}
+
+function hasExceededDuration(startedAt: number, maxDurationMs: number): boolean {
+  return Date.now() - startedAt >= maxDurationMs;
+}
+
+function buildIncompleteAnalysisMessage(reason: string): string {
+  return `(analysis incomplete: ${reason})`;
 }
