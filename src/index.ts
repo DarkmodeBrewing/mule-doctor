@@ -166,6 +166,13 @@ async function main(): Promise<void> {
     model: openaiModel,
     usageTracker,
   });
+  const mattermostToolRegistry = new ToolRegistry(rustMuleClient, logWatcher, runtimeStore, {
+    toolProfile: "mattermost_command",
+  });
+  const mattermostAnalyzer = new Analyzer(openaiKey, mattermostToolRegistry, {
+    model: openaiModel,
+    usageTracker,
+  });
   let managedInstances: InstanceManager | undefined;
   const configuredManagedInstances = new InstanceManager({
     dataDir,
@@ -191,7 +198,7 @@ async function main(): Promise<void> {
     managedInstanceDiagnostics
       ? new ManagedInstanceSurfaceDiagnosticsService(managedInstanceDiagnostics)
       : undefined;
-  const mattermostClient = new MattermostClient(webhookUrl, analyzer, {
+  const mattermostClient = new MattermostClient(webhookUrl, mattermostAnalyzer, {
     discoverabilityResults: discoverabilityLog,
     searchHealthResults: searchHealthLog,
     managedInstanceSurfaceDiagnostics,

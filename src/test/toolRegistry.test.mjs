@@ -469,6 +469,58 @@ test("ToolRegistry enables source tools only when sourcePath is configured", asy
   }
 });
 
+test("ToolRegistry mattermost profile excludes debug and source-oriented tools", async () => {
+  const tmp = await makeTempSourceDir();
+  try {
+    await mkdir(join(tmp.dir, "src"), { recursive: true });
+    await writeFile(join(tmp.dir, "src", "lib.rs"), "pub fn handshake() {}\n", "utf8");
+
+    const registry = new ToolRegistry(
+      new StubClient(),
+      new StubLogWatcher(),
+      new StubRuntimeStore(),
+      {
+        toolProfile: "mattermost_command",
+        sourcePath: tmp.dir,
+      },
+    );
+    const names = registry.getDefinitions().map((definition) => definition.function.name);
+
+    assert.equal(names.includes("getNodeInfo"), true);
+    assert.equal(names.includes("searchLogs"), true);
+    assert.equal(names.includes("summarizeSearchPublishDiagnostics"), true);
+    assert.equal(names.includes("triggerBootstrap"), false);
+    assert.equal(names.includes("traceLookup"), false);
+    assert.equal(names.includes("search_code"), false);
+    assert.equal(names.includes("read_file"), false);
+    assert.equal(names.includes("show_function"), false);
+    assert.equal(names.includes("propose_patch"), false);
+    assert.equal(names.includes("git_blame"), false);
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("ToolRegistry mattermost profile rejects forbidden tools at invoke time", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore(), {
+    toolProfile: "mattermost_command",
+  });
+
+  const bootstrap = await registry.invoke("triggerBootstrap", {});
+  const trace = await registry.invoke("traceLookup", {});
+
+  assert.deepEqual(bootstrap, {
+    tool: "triggerBootstrap",
+    success: false,
+    error: "Unknown tool: triggerBootstrap",
+  });
+  assert.deepEqual(trace, {
+    tool: "traceLookup",
+    success: false,
+    error: "Unknown tool: traceLookup",
+  });
+});
+
 test("ToolRegistry source tools search, read, and show function return structured data", async () => {
   const tmp = await makeTempSourceDir();
   try {

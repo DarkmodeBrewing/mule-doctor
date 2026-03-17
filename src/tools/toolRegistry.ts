@@ -70,7 +70,10 @@ export interface ToolRegistryOptions {
   sourcePath?: string;
   proposalDir?: string;
   patchProposalNotifier?: PatchProposalNotifier;
+  toolProfile?: ToolProfile;
 }
+
+export type ToolProfile = "full" | "mattermost_command";
 
 export class ToolRegistry {
   private readonly handlers = new Map<string, ToolHandler>();
@@ -712,11 +715,32 @@ export class ToolRegistry {
         },
       );
     }
+
+    this.applyToolProfile(options.toolProfile ?? "full");
   }
 
   private register(def: ToolDefinition, handler: ToolHandler): void {
     this.definitions.push(def);
     this.handlers.set(def.function.name, handler);
+  }
+
+  private applyToolProfile(profile: ToolProfile): void {
+    const allowed = getAllowedToolNames(profile);
+    if (!allowed) {
+      return;
+    }
+
+    const filteredDefinitions = this.definitions.filter((definition) =>
+      allowed.has(definition.function.name),
+    );
+    this.definitions.length = 0;
+    this.definitions.push(...filteredDefinitions);
+
+    for (const name of Array.from(this.handlers.keys())) {
+      if (!allowed.has(name)) {
+        this.handlers.delete(name);
+      }
+    }
   }
 
   /** All tool definitions to send to the OpenAI API. */
@@ -758,6 +782,38 @@ export class ToolRegistry {
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
   return Math.min(max, Math.max(min, value));
+}
+
+function getAllowedToolNames(profile: ToolProfile): Set<string> | undefined {
+  switch (profile) {
+    case "full":
+      return undefined;
+    case "mattermost_command":
+      return new Set([
+        "getNodeInfo",
+        "getPeers",
+        "getRoutingBuckets",
+        "getLookupStats",
+        "getRecentLogs",
+        "getHistory",
+        "getDiscoverabilityResults",
+        "getDiscoverabilitySummary",
+        "getSearchHealthResults",
+        "getSearchHealthSummary",
+        "searchLogs",
+        "listKeywordSearches",
+        "summarizeKeywordSearches",
+        "getKeywordSearch",
+        "listSharedFiles",
+        "summarizeSharedLibrary",
+        "listSharedActions",
+        "getDownloads",
+        "summarizeDownloads",
+        "summarizeSearchPublishDiagnostics",
+      ]);
+    default:
+      return undefined;
+  }
 }
 
 function sanitizeDiscoverabilityRecord(

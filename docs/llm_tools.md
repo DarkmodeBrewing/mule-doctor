@@ -756,6 +756,19 @@ Always registered:
 - `triggerBootstrap`
 - `traceLookup`
 
+Surface-specific restriction:
+
+- Mattermost command analysis uses a narrower tool profile
+- that profile keeps routine runtime/history/search/download diagnostics
+- it excludes debug-action tools and all source/patch-oriented tools:
+  - `triggerBootstrap`
+  - `traceLookup`
+  - `search_code`
+  - `read_file`
+  - `show_function`
+  - `propose_patch`
+  - `git_blame`
+
 Conditionally registered:
 
 - `getHistory`
