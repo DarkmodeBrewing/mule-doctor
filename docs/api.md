@@ -400,6 +400,7 @@ Response on acceptance:
 Error behavior:
 
 - returns `409` if a run is already in flight or otherwise not accepted
+- returns `429` when manual observer-triggered LLM work is rate-limited; response includes `retryAfterSec`
 - returns `501` if observer control is unavailable
 
 ## Managed Instance Endpoints
@@ -615,6 +616,12 @@ Response:
   }
 }
 ```
+
+Error behavior:
+
+- returns `429` when human-triggered managed-instance analysis is rate-limited; response includes `retryAfterSec`
+- returns `404` for missing managed instances
+- returns `501` if managed-instance analysis is unavailable
 
 ### `POST /api/instances/{id}/start`
 

@@ -68,6 +68,8 @@ import type {
   OperatorEventsStore,
   ObserverControl,
 } from "./types.js";
+import type { LlmInvocationGate } from "../llm/invocationGate.js";
+import { normalizeInvocationKeyPart } from "../llm/invocationGate.js";
 
 export class OperatorConsoleServer {
   private readonly authToken: string | undefined;
@@ -98,6 +100,7 @@ export class OperatorConsoleServer {
   private readonly searchHealthResults:
     | OperatorConsoleConfig["searchHealthResults"]
     | undefined;
+  private readonly humanInvocationGate: LlmInvocationGate | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -132,6 +135,7 @@ export class OperatorConsoleServer {
     this.operatorEvents = config.operatorEvents;
     this.discoverabilityResults = config.discoverabilityResults;
     this.searchHealthResults = config.searchHealthResults;
+    this.humanInvocationGate = config.humanInvocationGate;
     this.startedAt = new Date().toISOString();
   }
 
@@ -460,11 +464,26 @@ export class OperatorConsoleServer {
       return;
     }
 
+    const decision = this.humanInvocationGate?.tryAcquire([
+      { key: "human_llm:global", cooldownMs: 30_000 },
+      { key: "human_llm:observer_run", cooldownMs: 300_000 },
+    ]);
+    if (decision && !decision.ok) {
+      sendJson(res, 429, {
+        ok: false,
+        error: `observer run is rate-limited (${decision.reason})`,
+        retryAfterSec: decision.retryAfterSec,
+      });
+      return;
+    }
+
     const result = this.observerControl.triggerRunNow();
     if (!result.accepted) {
+      decision?.lease.release({ cooldown: false });
       sendJson(res, 409, { ok: false, error: result.reason ?? "observer run not accepted" });
       return;
     }
+    decision?.lease.release();
     let target: DiagnosticTargetRef | undefined;
     try {
       target = this.diagnosticTarget ? await this.diagnosticTarget.getActiveTarget() : undefined;
@@ -983,9 +1002,26 @@ export class OperatorConsoleServer {
         sendJson(res, 501, { ok: false, error: "managed instance analysis unavailable" });
         return;
       }
-      const analysis = await handleManagedInstanceErrors(() =>
-        this.managedInstanceAnalysis!.analyze(id),
-      );
+      const instanceGateKeyPart = normalizeInvocationKeyPart(id, { maxLength: 48 }) ?? "unknown";
+      const decision = this.humanInvocationGate?.tryAcquire([
+        { key: "human_llm:global", cooldownMs: 30_000 },
+        { key: "human_llm:operator_analyze", cooldownMs: 60_000 },
+        { key: `human_llm:operator_analyze:instance:${instanceGateKeyPart}`, cooldownMs: 300_000 },
+      ]);
+      if (decision && !decision.ok) {
+        sendJson(res, 429, {
+          ok: false,
+          error: `managed instance analysis is rate-limited (${decision.reason})`,
+          retryAfterSec: decision.retryAfterSec,
+        });
+        return;
+      }
+      let analysis;
+      try {
+        analysis = await handleManagedInstanceErrors(() => this.managedInstanceAnalysis!.analyze(id));
+      } finally {
+        decision?.lease.release({ cooldown: analysis?.available !== false });
+      }
       sendJson(res, 200, { ok: true, analysis });
       return;
     }

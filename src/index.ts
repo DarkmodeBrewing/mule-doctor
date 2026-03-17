@@ -10,6 +10,7 @@ import { LogWatcher } from "./logs/logWatcher.js";
 import { ToolRegistry } from "./tools/toolRegistry.js";
 import { Analyzer } from "./llm/analyzer.js";
 import { UsageTracker } from "./llm/usageTracker.js";
+import { LlmInvocationGate } from "./llm/invocationGate.js";
 import { MattermostClient } from "./integrations/mattermost.js";
 import { Observer } from "./observer.js";
 import { RuntimeStore } from "./storage/runtimeStore.js";
@@ -162,7 +163,15 @@ async function main(): Promise<void> {
     inputCostPer1k,
     outputCostPer1k,
   });
+  const humanInvocationGate = new LlmInvocationGate();
   const analyzer = new Analyzer(openaiKey, toolRegistry, {
+    model: openaiModel,
+    usageTracker,
+  });
+  const mattermostToolRegistry = new ToolRegistry(rustMuleClient, logWatcher, runtimeStore, {
+    toolProfile: "mattermost_command",
+  });
+  const mattermostAnalyzer = new Analyzer(openaiKey, mattermostToolRegistry, {
     model: openaiModel,
     usageTracker,
   });
@@ -191,9 +200,10 @@ async function main(): Promise<void> {
     managedInstanceDiagnostics
       ? new ManagedInstanceSurfaceDiagnosticsService(managedInstanceDiagnostics)
       : undefined;
-  const mattermostClient = new MattermostClient(webhookUrl, analyzer, {
+  const mattermostClient = new MattermostClient(webhookUrl, mattermostAnalyzer, {
     discoverabilityResults: discoverabilityLog,
     searchHealthResults: searchHealthLog,
+    humanInvocationGate,
     managedInstanceSurfaceDiagnostics,
   });
   const patchProposalNotifier = async (proposal: {
@@ -286,6 +296,7 @@ async function main(): Promise<void> {
       operatorEvents: operatorEventLog,
       discoverabilityResults: discoverabilityLog,
       searchHealthResults: searchHealthLog,
+      humanInvocationGate,
     });
     try {
       await operatorConsole.start();

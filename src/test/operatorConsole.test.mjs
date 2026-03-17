@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { OperatorConsoleServer } from "../../dist/operatorConsole/server.js";
+import { LlmInvocationGate } from "../../dist/llm/invocationGate.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-console-"));
@@ -234,6 +235,38 @@ class StubManagedInstanceAnalysis {
       available: true,
       summary: "Managed instance is healthy with mild timeout pressure.",
     };
+  }
+}
+
+class StubManagedInstanceAnalysisUnavailable {
+  async analyze(id) {
+    return {
+      instanceId: id,
+      analyzedAt: "2026-03-08T02:05:00.000Z",
+      available: false,
+      reason: "instance is stopped",
+      summary: "instance is stopped",
+    };
+  }
+}
+
+class FastResetObserverControl {
+  constructor() {
+    this.status = {
+      started: true,
+      cycleInFlight: false,
+      intervalMs: 300000,
+      currentCycleStartedAt: undefined,
+      currentCycleTarget: undefined,
+    };
+  }
+
+  getStatus() {
+    return this.status;
+  }
+
+  triggerRunNow() {
+    return { accepted: true };
   }
 }
 
@@ -1632,6 +1665,142 @@ test("OperatorConsoleServer triggers observer run-now and reports scheduler stat
       body: "{}",
     });
     assert.equal(secondRunRes.status, 409);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer rate-limits managed instance analysis", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
+      humanInvocationGate: new LlmInvocationGate(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const first = await fetch(`${server.publicAddress()}/api/instances/a/analyze`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: server.publicAddress() },
+    });
+    assert.equal(first.status, 200);
+
+    const second = await fetch(`${server.publicAddress()}/api/instances/a/analyze`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: server.publicAddress() },
+    });
+    assert.equal(second.status, 429);
+    const payload = await second.json();
+    assert.equal(payload.ok, false);
+    assert.match(payload.error, /rate-limited/);
+    assert.equal(typeof payload.retryAfterSec, "number");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer does not consume analysis cooldown when no LLM work runs", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      managedInstanceAnalysis: new StubManagedInstanceAnalysisUnavailable(),
+      humanInvocationGate: new LlmInvocationGate(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const first = await fetch(`${server.publicAddress()}/api/instances/missing/analyze`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: server.publicAddress() },
+    });
+    assert.equal(first.status, 200);
+
+    const second = await fetch(`${server.publicAddress()}/api/instances/missing/analyze`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: server.publicAddress() },
+    });
+    assert.equal(second.status, 200);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer rate-limits manual observer run requests", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      observerControl: new FastResetObserverControl(),
+      operatorEvents: new StubOperatorEvents(),
+      diagnosticTarget: new StubDiagnosticTargetControl(),
+      humanInvocationGate: new LlmInvocationGate(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const first = await fetch(`${server.publicAddress()}/api/observer/run`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Origin: server.publicAddress(),
+      },
+      body: "{}",
+    });
+    assert.equal(first.status, 202);
+
+    const second = await fetch(`${server.publicAddress()}/api/observer/run`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Origin: server.publicAddress(),
+      },
+      body: "{}",
+    });
+    assert.equal(second.status, 429);
+    const payload = await second.json();
+    assert.equal(payload.ok, false);
+    assert.match(payload.error, /rate-limited/);
 
     await server.stop();
   } finally {
