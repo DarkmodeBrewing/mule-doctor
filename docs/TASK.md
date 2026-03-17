@@ -159,11 +159,68 @@ Acceptance criteria:
 - mule-doctor-owned per-instance values remain isolated and deterministic
 - the config ownership boundary is documented clearly enough that operators know what to set externally and what mule-doctor will always control
 
+## Task M: Harden Human-Triggered LLM Invocation Boundaries
+
+1. Add explicit rate limiting and concurrency guards for all human-triggered LLM entry points:
+   - Mattermost command handling
+   - operator-console managed-instance analysis
+   - any manual observer-trigger path that results in `Analyzer.analyze(...)`
+2. Keep scheduled observer analysis separately governed from human-triggered analysis so operator abuse or mistakes cannot starve normal periodic diagnostics.
+3. Return clear, structured rejection behavior when a limit is hit:
+   - surface-specific cooldown
+   - target-specific cooldown where applicable
+   - `retry_after` style guidance for API/UI clients
+4. Keep each LLM invocation bounded even after it starts:
+   - explicit max tool-call rounds
+   - optional max total tool calls
+   - optional max wall-clock duration
+   - clear incomplete/budget-exhausted outcomes
+5. Harden prompt construction across all LLM invocation surfaces:
+   - replace vague instructions like "use all available tools"
+   - require evidence-based conclusions
+   - distinguish confirmed issues, probable issues, and hypotheses
+   - instruct the model to start from supplied snapshot/context before calling tools
+   - make tool-budget expectations explicit in the prompt itself
+6. Restrict tool exposure by invocation surface:
+   - narrower tool sets for Mattermost status/peer queries
+   - explicit separation between routine runtime analysis tools and source/patch-oriented tools
+   - avoid exposing broader tools where the surface does not need them
+7. Add stronger runtime guards around each invocation:
+   - max wall-clock duration
+   - timeout/cancellation handling
+   - explicit finish reasons for timeout, rate-limit, unavailable target, and budget exhaustion
+8. Improve output handling:
+   - require a more structured response shape
+   - validate or normalize key sections before returning/posting results
+   - redact sensitive content again before sending responses to UI or Mattermost
+9. Add invocation audit metadata:
+   - surface
+   - target
+   - model
+   - prompt/policy version
+   - tool count
+   - completion/finish reason
+   - rate-limit or budget-limit hits
+10. Review prompt inputs and tool outputs for secret/path leakage and reduce what is sent to the model when it is not needed.
+11. Ensure the human-triggered limiter is applied at the invocation boundaries rather than buried inside the analyzer implementation.
+12. Document the active policy and its scope in the runtime/API docs.
+
+Acceptance criteria:
+
+- repeated human-triggered analysis requests cannot spam the OpenAI API
+- the same instance or target cannot be analyzed concurrently through overlapping manual requests
+- a single LLM invocation cannot loop through tool calls indefinitely
+- prompts consistently push the model toward bounded, evidence-based analysis instead of broad exploratory tool use
+- each invocation surface only exposes the tools it actually needs
+- analysis runs end with explicit, inspectable reasons when they time out or hit policy limits
+- returned LLM output is more structured and less likely to leak sensitive context
+- invocation metadata is recorded well enough to audit usage and regressions
+- scheduled observer analysis remains isolated from human-triggered rate limits
+- UI/API and Mattermost users receive clear feedback when analysis is temporarily rate-limited
+
 ## Recommended Next Order
 
-1. Task J: Track Full Search Lifecycle and Search Health Signals
-2. Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
-3. Task L: Formalize Managed rust-mule config.toml Template Ownership
-4. Task D: Operator Console Control Plane Completion
-5. Task E: Runtime and Container Hardening
-6. Task F: Release and CI Hardening
+1. Task M: Harden Human-Triggered LLM Invocation Boundaries
+2. Task D: Operator Console Control Plane Completion
+3. Task E: Runtime and Container Hardening
+4. Task F: Release and CI Hardening
