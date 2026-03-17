@@ -101,6 +101,7 @@ export class OperatorConsoleServer {
     | OperatorConsoleConfig["searchHealthResults"]
     | undefined;
   private readonly humanInvocationGate: LlmInvocationGate | undefined;
+  private readonly invocationAudit: OperatorConsoleConfig["invocationAudit"] | undefined;
   private readonly startedAt: string;
 
   private server: Server | undefined;
@@ -136,6 +137,7 @@ export class OperatorConsoleServer {
     this.discoverabilityResults = config.discoverabilityResults;
     this.searchHealthResults = config.searchHealthResults;
     this.humanInvocationGate = config.humanInvocationGate;
+    this.invocationAudit = config.invocationAudit;
     this.startedAt = new Date().toISOString();
   }
 
@@ -469,6 +471,18 @@ export class OperatorConsoleServer {
       { key: "human_llm:observer_run", cooldownMs: 300_000 },
     ]);
     if (decision && !decision.ok) {
+      await this.appendInvocationAudit({
+        surface: "manual_observer_run",
+        trigger: "human",
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        durationMs: 0,
+        toolCalls: 0,
+        toolRounds: 0,
+        finishReason: "rate_limited",
+        rateLimitReason: decision.reason,
+        retryAfterSec: decision.retryAfterSec,
+      });
       sendJson(res, 429, {
         ok: false,
         error: `observer run is rate-limited (${decision.reason})`,
@@ -1009,6 +1023,19 @@ export class OperatorConsoleServer {
         { key: `human_llm:operator_analyze:instance:${instanceGateKeyPart}`, cooldownMs: 300_000 },
       ]);
       if (decision && !decision.ok) {
+        await this.appendInvocationAudit({
+          surface: "managed_instance_analysis",
+          trigger: "human",
+          target: { kind: "managed_instance", instanceId: id },
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          durationMs: 0,
+          toolCalls: 0,
+          toolRounds: 0,
+          finishReason: "rate_limited",
+          rateLimitReason: decision.reason,
+          retryAfterSec: decision.retryAfterSec,
+        });
         sendJson(res, 429, {
           ok: false,
           error: `managed instance analysis is rate-limited (${decision.reason})`,
@@ -1380,6 +1407,42 @@ export class OperatorConsoleServer {
     this.streamCleanups.add(finalize);
     req.on("close", finalize);
     res.on("close", finalize);
+  }
+
+  private async appendInvocationAudit(record: {
+    surface: "managed_instance_analysis" | "manual_observer_run";
+    trigger: "human";
+    target?: DiagnosticTargetRef;
+    startedAt: string;
+    completedAt: string;
+    durationMs: number;
+    toolCalls: number;
+    toolRounds: number;
+    finishReason: "rate_limited";
+    rateLimitReason?: "cooldown" | "in_flight";
+    retryAfterSec?: number;
+  }): Promise<void> {
+    if (!this.invocationAudit) {
+      return;
+    }
+    try {
+      await this.invocationAudit.append({
+        recordedAt: record.completedAt,
+        surface: record.surface,
+        trigger: record.trigger,
+        target: record.target,
+        startedAt: record.startedAt,
+        completedAt: record.completedAt,
+        durationMs: record.durationMs,
+        toolCalls: record.toolCalls,
+        toolRounds: record.toolRounds,
+        finishReason: record.finishReason,
+        rateLimitReason: record.rateLimitReason,
+        retryAfterSec: record.retryAfterSec,
+      });
+    } catch (err) {
+      log("warn", "operatorConsole", `Failed to append invocation audit: ${String(err)}`);
+    }
   }
 }
 

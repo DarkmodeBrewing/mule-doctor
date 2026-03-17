@@ -250,6 +250,16 @@ class StubManagedInstanceAnalysisUnavailable {
   }
 }
 
+class CapturingInvocationAudit {
+  constructor() {
+    this.records = [];
+  }
+
+  async append(record) {
+    this.records.push(record);
+  }
+}
+
 class FastResetObserverControl {
   constructor() {
     this.status = {
@@ -1677,6 +1687,7 @@ test("OperatorConsoleServer rate-limits managed instance analysis", async () => 
   try {
     const rustLogPath = join(tmp.dir, "rust-mule.log");
     await writeFile(rustLogPath, "", "utf8");
+    const audit = new CapturingInvocationAudit();
 
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
@@ -1689,6 +1700,7 @@ test("OperatorConsoleServer rate-limits managed instance analysis", async () => 
       subscribeToAppLogs: () => () => {},
       managedInstanceAnalysis: new StubManagedInstanceAnalysis(),
       humanInvocationGate: new LlmInvocationGate(),
+      invocationAudit: audit,
     });
     await server.start();
 
@@ -1708,6 +1720,9 @@ test("OperatorConsoleServer rate-limits managed instance analysis", async () => 
     assert.equal(payload.ok, false);
     assert.match(payload.error, /rate-limited/);
     assert.equal(typeof payload.retryAfterSec, "number");
+    assert.equal(audit.records.length, 1);
+    assert.equal(audit.records[0].surface, "managed_instance_analysis");
+    assert.equal(audit.records[0].finishReason, "rate_limited");
 
     await server.stop();
   } finally {
@@ -1759,6 +1774,7 @@ test("OperatorConsoleServer rate-limits manual observer run requests", async () 
   try {
     const rustLogPath = join(tmp.dir, "rust-mule.log");
     await writeFile(rustLogPath, "", "utf8");
+    const audit = new CapturingInvocationAudit();
 
     const server = new OperatorConsoleServer({
       authToken: "ui-secret",
@@ -1773,6 +1789,7 @@ test("OperatorConsoleServer rate-limits manual observer run requests", async () 
       operatorEvents: new StubOperatorEvents(),
       diagnosticTarget: new StubDiagnosticTargetControl(),
       humanInvocationGate: new LlmInvocationGate(),
+      invocationAudit: audit,
     });
     await server.start();
 
@@ -1801,6 +1818,9 @@ test("OperatorConsoleServer rate-limits manual observer run requests", async () 
     const payload = await second.json();
     assert.equal(payload.ok, false);
     assert.match(payload.error, /rate-limited/);
+    assert.equal(audit.records.length, 1);
+    assert.equal(audit.records[0].surface, "manual_observer_run");
+    assert.equal(audit.records[0].finishReason, "rate_limited");
 
     await server.stop();
   } finally {

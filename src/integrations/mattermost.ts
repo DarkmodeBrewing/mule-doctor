@@ -5,6 +5,7 @@
  */
 
 import type { Analyzer } from "../llm/analyzer.js";
+import type { LlmInvocationAuditSink } from "../llm/invocationAuditLog.js";
 import type { LlmInvocationGate } from "../llm/invocationGate.js";
 import { normalizeInvocationKeyPart } from "../llm/invocationGate.js";
 import type { UsageSummary } from "../llm/usageTracker.js";
@@ -61,6 +62,7 @@ export interface MattermostReportSources {
   discoverabilityResults?: DiscoverabilityReportSource;
   searchHealthResults?: SearchHealthReportSource;
   humanInvocationGate?: LlmInvocationGate;
+  invocationAudit?: LlmInvocationAuditSink;
   managedInstanceSurfaceDiagnostics?: {
     getSummary(id: string): Promise<{
       instanceId: string;
@@ -81,6 +83,7 @@ export class MattermostClient {
   private readonly discoverabilityResults: DiscoverabilityReportSource | undefined;
   private readonly searchHealthResults: SearchHealthReportSource | undefined;
   private readonly humanInvocationGate: LlmInvocationGate | undefined;
+  private readonly invocationAudit: LlmInvocationAuditSink | undefined;
   private readonly managedInstanceSurfaceDiagnostics:
     | MattermostReportSources["managedInstanceSurfaceDiagnostics"]
     | undefined;
@@ -109,12 +112,14 @@ export class MattermostClient {
       this.discoverabilityResults = undefined;
       this.searchHealthResults = undefined;
       this.humanInvocationGate = undefined;
+      this.invocationAudit = undefined;
       this.managedInstanceSurfaceDiagnostics = undefined;
       this.requestTimeoutMs = clampTimeout(reportSourcesOrTimeout);
     } else {
       this.discoverabilityResults = reportSourcesOrTimeout?.discoverabilityResults;
       this.searchHealthResults = reportSourcesOrTimeout?.searchHealthResults;
       this.humanInvocationGate = reportSourcesOrTimeout?.humanInvocationGate;
+      this.invocationAudit = reportSourcesOrTimeout?.invocationAudit;
       this.managedInstanceSurfaceDiagnostics =
         reportSourcesOrTimeout?.managedInstanceSurfaceDiagnostics;
       this.requestTimeoutMs = clampTimeout(requestTimeoutMs);
@@ -297,6 +302,19 @@ export class MattermostClient {
         : []),
     ]);
     if (decision && !decision.ok) {
+      await this.appendInvocationAudit({
+        surface: "mattermost_command",
+        trigger: "human",
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        durationMs: 0,
+        toolCalls: 0,
+        toolRounds: 0,
+        finishReason: "rate_limited",
+        command: cmd,
+        rateLimitReason: decision.reason,
+        retryAfterSec: decision.retryAfterSec,
+      });
       await this.post(
         `LLM analysis is temporarily rate-limited (${decision.reason}). Retry in about ${decision.retryAfterSec}s.`,
       );
@@ -304,10 +322,50 @@ export class MattermostClient {
     }
 
     try {
-      const response = await this.analyzer.analyze(prompt);
+      const response = await this.analyzer.analyze(prompt, {
+        surface: "mattermost_command",
+        trigger: "human",
+        command: cmd,
+      });
       await this.post(response);
     } finally {
       decision?.lease.release();
+    }
+  }
+
+  private async appendInvocationAudit(record: {
+    surface: "mattermost_command";
+    trigger: "human";
+    startedAt: string;
+    completedAt: string;
+    durationMs: number;
+    toolCalls: number;
+    toolRounds: number;
+    finishReason: "rate_limited";
+    command?: string;
+    rateLimitReason?: "cooldown" | "in_flight";
+    retryAfterSec?: number;
+  }): Promise<void> {
+    if (!this.invocationAudit) {
+      return;
+    }
+    try {
+      await this.invocationAudit.append({
+        recordedAt: record.completedAt,
+        surface: record.surface,
+        trigger: record.trigger,
+        startedAt: record.startedAt,
+        completedAt: record.completedAt,
+        durationMs: record.durationMs,
+        toolCalls: record.toolCalls,
+        toolRounds: record.toolRounds,
+        finishReason: record.finishReason,
+        command: record.command,
+        rateLimitReason: record.rateLimitReason,
+        retryAfterSec: record.retryAfterSec,
+      });
+    } catch (err) {
+      log("warn", "mattermost", `Failed to append invocation audit: ${String(err)}`);
     }
   }
 

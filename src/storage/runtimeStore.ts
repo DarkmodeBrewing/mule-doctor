@@ -7,6 +7,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from "fs/promises";
 import { dirname } from "path";
 import type {
   HistoryEntry,
+  LlmInvocationRecord,
   ManagedDiscoverabilityRecord,
   OperatorEventEntry,
   RuntimeState,
@@ -19,10 +20,12 @@ const DEFAULT_HISTORY_FILE = "history.json";
 const DEFAULT_EVENTS_FILE = "operator-events.json";
 const DEFAULT_DISCOVERABILITY_FILE = "discoverability-results.json";
 const DEFAULT_SEARCH_HEALTH_FILE = "search-health-results.json";
+const DEFAULT_LLM_INVOCATIONS_FILE = "llm-invocations.json";
 const DEFAULT_HISTORY_LIMIT = 500;
 const DEFAULT_EVENTS_LIMIT = 200;
 const DEFAULT_DISCOVERABILITY_LIMIT = 100;
 const DEFAULT_SEARCH_HEALTH_LIMIT = 100;
+const DEFAULT_LLM_INVOCATIONS_LIMIT = 200;
 
 export interface RuntimeStoreConfig {
   dataDir?: string;
@@ -31,10 +34,12 @@ export interface RuntimeStoreConfig {
   eventsPath?: string;
   discoverabilityPath?: string;
   searchHealthPath?: string;
+  llmInvocationsPath?: string;
   historyLimit?: number;
   eventsLimit?: number;
   discoverabilityLimit?: number;
   searchHealthLimit?: number;
+  llmInvocationsLimit?: number;
 }
 
 export class RuntimeStore {
@@ -43,10 +48,12 @@ export class RuntimeStore {
   private readonly eventsPath: string;
   private readonly discoverabilityPath: string;
   private readonly searchHealthPath: string;
+  private readonly llmInvocationsPath: string;
   private readonly historyLimit: number;
   private readonly eventsLimit: number;
   private readonly discoverabilityLimit: number;
   private readonly searchHealthLimit: number;
+  private readonly llmInvocationsLimit: number;
   private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(config: RuntimeStoreConfig = {}) {
@@ -57,10 +64,13 @@ export class RuntimeStore {
     this.discoverabilityPath =
       config.discoverabilityPath ?? `${dataDir}/${DEFAULT_DISCOVERABILITY_FILE}`;
     this.searchHealthPath = config.searchHealthPath ?? `${dataDir}/${DEFAULT_SEARCH_HEALTH_FILE}`;
+    this.llmInvocationsPath =
+      config.llmInvocationsPath ?? `${dataDir}/${DEFAULT_LLM_INVOCATIONS_FILE}`;
     this.historyLimit = config.historyLimit ?? DEFAULT_HISTORY_LIMIT;
     this.eventsLimit = config.eventsLimit ?? DEFAULT_EVENTS_LIMIT;
     this.discoverabilityLimit = config.discoverabilityLimit ?? DEFAULT_DISCOVERABILITY_LIMIT;
     this.searchHealthLimit = config.searchHealthLimit ?? DEFAULT_SEARCH_HEALTH_LIMIT;
+    this.llmInvocationsLimit = config.llmInvocationsLimit ?? DEFAULT_LLM_INVOCATIONS_LIMIT;
   }
 
   async initialize(): Promise<void> {
@@ -69,6 +79,7 @@ export class RuntimeStore {
     await this.ensureJsonFile(this.eventsPath, "[]\n");
     await this.ensureJsonFile(this.discoverabilityPath, "[]\n");
     await this.ensureJsonFile(this.searchHealthPath, "[]\n");
+    await this.ensureJsonFile(this.llmInvocationsPath, "[]\n");
   }
 
   async loadState(): Promise<RuntimeState> {
@@ -184,6 +195,28 @@ export class RuntimeStore {
     const results = await this.loadSearchHealthResults();
     if (n <= 0) return [];
     return results.slice(-n);
+  }
+
+  async loadLlmInvocationRecords(): Promise<LlmInvocationRecord[]> {
+    const records = await this.readJsonFile<LlmInvocationRecord[]>(this.llmInvocationsPath);
+    return Array.isArray(records) ? records : [];
+  }
+
+  async appendLlmInvocationRecord(entry: LlmInvocationRecord): Promise<void> {
+    await this.enqueueMutation(async () => {
+      const records = await this.loadLlmInvocationRecords();
+      records.push(entry);
+      if (records.length > this.llmInvocationsLimit) {
+        records.splice(0, records.length - this.llmInvocationsLimit);
+      }
+      await this.writeJsonFile(this.llmInvocationsPath, records);
+    });
+  }
+
+  async getRecentLlmInvocationRecords(n = 20): Promise<LlmInvocationRecord[]> {
+    const records = await this.loadLlmInvocationRecords();
+    if (n <= 0) return [];
+    return records.slice(-n);
   }
 
   private async ensureJsonFile(path: string, defaultContent: string): Promise<void> {

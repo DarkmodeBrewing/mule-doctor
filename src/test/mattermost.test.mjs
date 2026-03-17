@@ -45,6 +45,16 @@ class CapturingAnalyzer {
   }
 }
 
+class CapturingInvocationAudit {
+  constructor() {
+    this.records = [];
+  }
+
+  async append(record) {
+    this.records.push(record);
+  }
+}
+
 class StubDiscoverabilityResults {
   async summarizeRecent(limit = 3) {
     return {
@@ -302,8 +312,10 @@ test("MattermostClient rate-limits repeated human-triggered analysis commands", 
   };
 
   const analyzer = new CapturingAnalyzer();
+  const audit = new CapturingInvocationAudit();
   const client = new MattermostClient("https://example.test/hook", analyzer, {
     humanInvocationGate: new LlmInvocationGate(),
+    invocationAudit: audit,
   });
 
   await client.handleCommand({ command: "@mule-doctor analyze", triggeredBy: "alice" });
@@ -312,4 +324,7 @@ test("MattermostClient rate-limits repeated human-triggered analysis commands", 
   assert.equal(analyzer.prompts.length, 1);
   assert.match(calls[0].text, /analysis:1/);
   assert.match(calls[1].text, /temporarily rate-limited/);
+  assert.equal(audit.records.length, 1);
+  assert.equal(audit.records[0].finishReason, "rate_limited");
+  assert.equal(audit.records[0].command, "analyze");
 });

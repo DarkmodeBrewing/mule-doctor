@@ -1,4 +1,5 @@
 import { Analyzer } from "../llm/analyzer.js";
+import type { LlmInvocationAuditSink } from "../llm/invocationAuditLog.js";
 import type { UsageTracker } from "../llm/usageTracker.js";
 import { ToolRegistry, type PatchProposalNotifier } from "../tools/toolRegistry.js";
 import { redactText } from "../logs/redaction.js";
@@ -16,6 +17,7 @@ export interface ManagedInstanceAnalysisServiceConfig {
   diagnostics: ManagedInstanceDiagnosticsService;
   model?: string;
   usageTracker?: UsageTracker;
+  invocationAudit?: LlmInvocationAuditSink;
   sourcePath?: string;
   proposalDir?: string;
   patchProposalNotifier?: PatchProposalNotifier;
@@ -27,6 +29,7 @@ export class ManagedInstanceAnalysisService {
   private readonly diagnostics: ManagedInstanceDiagnosticsService;
   private readonly model: string | undefined;
   private readonly usageTracker: UsageTracker | undefined;
+  private readonly invocationAudit: LlmInvocationAuditSink | undefined;
   private readonly sourcePath: string | undefined;
   private readonly proposalDir: string | undefined;
   private readonly patchProposalNotifier: PatchProposalNotifier | undefined;
@@ -37,6 +40,7 @@ export class ManagedInstanceAnalysisService {
     this.diagnostics = config.diagnostics;
     this.model = config.model;
     this.usageTracker = config.usageTracker;
+    this.invocationAudit = config.invocationAudit;
     this.sourcePath = config.sourcePath;
     this.proposalDir = config.proposalDir;
     this.patchProposalNotifier = config.patchProposalNotifier;
@@ -70,9 +74,14 @@ export class ManagedInstanceAnalysisService {
     const analyzer = new Analyzer(this.apiKey, tools, {
       model: this.model,
       usageTracker: this.usageTracker,
+      invocationAudit: this.invocationAudit,
     });
 
-    const summary = await analyzer.analyze(buildManagedInstanceAnalysisPrompt(snapshot));
+    const summary = await analyzer.analyze(buildManagedInstanceAnalysisPrompt(snapshot), {
+      surface: "managed_instance_analysis",
+      trigger: "human",
+      target: { kind: "managed_instance", instanceId },
+    });
     return {
       instanceId,
       analyzedAt: new Date().toISOString(),

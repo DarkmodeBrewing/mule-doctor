@@ -203,7 +203,11 @@ export class Observer {
       const context = await this.collectAndPersistContext(target);
       const prompt = buildObserverAnalysisPrompt(context);
       const analyzer = target && this.analyzerFactory ? this.analyzerFactory(target) : this.analyzer;
-      const summary = await analyzer.analyze(prompt);
+      const summary = await analyzer.analyze(prompt, {
+        surface: "observer_cycle",
+        trigger: "scheduled",
+        target: targetDescriptor.target,
+      });
       await this.mattermost.postPeriodicReport({
         summary,
         target: targetDescriptor.target,

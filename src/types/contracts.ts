@@ -89,6 +89,39 @@ export interface RuntimeUsageState {
   lastReportDate?: string;
 }
 
+export type LlmInvocationSurface =
+  | "observer_cycle"
+  | "mattermost_command"
+  | "managed_instance_analysis"
+  | "manual_observer_run";
+
+export type LlmInvocationTrigger = "scheduled" | "human";
+
+export type LlmInvocationFinishReason =
+  | "completed"
+  | "tool_round_limit"
+  | "tool_call_limit"
+  | "duration_limit"
+  | "failed"
+  | "rate_limited";
+
+export interface LlmInvocationRecord {
+  recordedAt: string;
+  surface: LlmInvocationSurface;
+  trigger: LlmInvocationTrigger;
+  target?: DiagnosticTargetRef;
+  model?: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  toolCalls: number;
+  toolRounds: number;
+  finishReason: LlmInvocationFinishReason;
+  command?: string;
+  rateLimitReason?: "cooldown" | "in_flight";
+  retryAfterSec?: number;
+}
+
 export type ManagedInstanceStatus = "planned" | "stopped" | "running" | "failed";
 
 export interface ManagedInstanceProcessState {

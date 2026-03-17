@@ -31,6 +31,16 @@ class StubToolRegistry {
   }
 }
 
+class CapturingInvocationAudit {
+  constructor() {
+    this.records = [];
+  }
+
+  async append(record) {
+    this.records.push(record);
+  }
+}
+
 function toolCall(id, name, args = {}) {
   return {
     id,
@@ -152,4 +162,34 @@ test("Analyzer returns explicit message when analysis duration limit is reached"
 
   assert.match(result, /analysis duration limit reached after 5ms/);
   assert.equal(tools.calls.length, 0);
+});
+
+test("Analyzer records invocation audit metadata and finish reason", async () => {
+  const tools = new StubToolRegistry();
+  const audit = new CapturingInvocationAudit();
+  const analyzer = new Analyzer("test-key", tools, {
+    invocationAudit: audit,
+  });
+
+  analyzer.client = {
+    chat: {
+      completions: {
+        create: async () => completion({ content: "all good", tool_calls: [] }, "stop"),
+      },
+    },
+  };
+
+  const result = await analyzer.analyze("diagnose", {
+    surface: "mattermost_command",
+    trigger: "human",
+    command: "status",
+  });
+
+  assert.equal(result, "all good");
+  assert.equal(audit.records.length, 1);
+  assert.equal(audit.records[0].surface, "mattermost_command");
+  assert.equal(audit.records[0].trigger, "human");
+  assert.equal(audit.records[0].command, "status");
+  assert.equal(audit.records[0].finishReason, "completed");
+  assert.equal(audit.records[0].toolCalls, 0);
 });

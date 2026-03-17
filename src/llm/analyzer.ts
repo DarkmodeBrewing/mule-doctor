@@ -8,8 +8,16 @@
 
 import OpenAI from "openai";
 import type { ToolRegistry } from "../tools/toolRegistry.js";
-import type { ToolResult } from "../types/contracts.js";
+import type {
+  DiagnosticTargetRef,
+  LlmInvocationFinishReason,
+  LlmInvocationRecord,
+  LlmInvocationSurface,
+  LlmInvocationTrigger,
+  ToolResult,
+} from "../types/contracts.js";
 import { type UsageSummary, type UsageTracker } from "./usageTracker.js";
+import type { LlmInvocationAuditSink } from "./invocationAuditLog.js";
 
 const DEFAULT_MODEL = "gpt-5-mini";
 const MAX_TOOL_ROUNDS = 5;
@@ -57,9 +65,17 @@ Output format:
 export interface AnalyzerConfig {
   model?: string;
   usageTracker?: UsageTracker;
+  invocationAudit?: LlmInvocationAuditSink;
   maxToolRounds?: number;
   maxTotalToolCalls?: number;
   maxDurationMs?: number;
+}
+
+export interface AnalyzerInvocationMetadata {
+  surface: LlmInvocationSurface;
+  trigger: LlmInvocationTrigger;
+  target?: DiagnosticTargetRef;
+  command?: string;
 }
 
 export class Analyzer {
@@ -67,6 +83,7 @@ export class Analyzer {
   private readonly tools: ToolRegistry;
   private readonly model: string;
   private readonly usageTracker: UsageTracker | undefined;
+  private readonly invocationAudit: LlmInvocationAuditSink | undefined;
   private readonly maxToolRounds: number;
   private readonly maxTotalToolCalls: number;
   private readonly maxDurationMs: number;
@@ -77,6 +94,7 @@ export class Analyzer {
     const model = config.model?.trim();
     this.model = model && model.length > 0 ? model : DEFAULT_MODEL;
     this.usageTracker = config.usageTracker;
+    this.invocationAudit = config.invocationAudit;
     this.maxToolRounds = clampPositiveInt(config.maxToolRounds, MAX_TOOL_ROUNDS);
     this.maxTotalToolCalls = clampPositiveInt(config.maxTotalToolCalls, MAX_TOTAL_TOOL_CALLS);
     this.maxDurationMs = clampPositiveInt(config.maxDurationMs, MAX_ANALYSIS_DURATION_MS);
@@ -86,62 +104,118 @@ export class Analyzer {
    * Run a full agentic diagnostic cycle.
    * The LLM may call tools multiple times before producing a final summary.
    */
-  async analyze(prompt: string): Promise<string> {
+  async analyze(prompt: string, metadata?: AnalyzerInvocationMetadata): Promise<string> {
     const messages: Message[] = [
       { role: "system", content: buildSystemPrompt() },
       { role: "user", content: prompt },
     ];
-    const startedAt = Date.now();
+    const startedAtMs = Date.now();
+    const startedAt = new Date(startedAtMs).toISOString();
     let totalToolCalls = 0;
+    let toolRounds = 0;
 
-    for (let round = 0; round < this.maxToolRounds; round++) {
-      if (hasExceededDuration(startedAt, this.maxDurationMs)) {
-        return buildIncompleteAnalysisMessage(
-          `analysis duration limit reached after ${this.maxDurationMs}ms`,
-        );
-      }
-      const response = await this.chatCompletion(messages);
-      if (!response.choices.length) {
-        throw new Error("OpenAI response contained no choices");
-      }
-      const choice = response.choices[0];
-      const msg = choice.message;
-
-      messages.push({ role: "assistant", content: msg.content, tool_calls: msg.tool_calls });
-
-      if (choice.finish_reason === "stop" || !msg.tool_calls?.length) {
-        return msg.content ?? "(no response)";
-      }
-
-      // Execute all tool calls requested in this round.
-      for (const call of msg.tool_calls) {
-        if (totalToolCalls >= this.maxTotalToolCalls) {
-          return buildIncompleteAnalysisMessage(
-            `total tool call limit reached (${this.maxTotalToolCalls})`,
+    try {
+      for (let round = 0; round < this.maxToolRounds; round++) {
+        if (hasExceededDuration(startedAtMs, this.maxDurationMs)) {
+          return await this.finishAnalysis(
+            buildIncompleteAnalysisMessage(
+              `analysis duration limit reached after ${this.maxDurationMs}ms`,
+            ),
+            "duration_limit",
+            metadata,
+            startedAt,
+            startedAtMs,
+            totalToolCalls,
+            toolRounds,
           );
         }
-        if (hasExceededDuration(startedAt, this.maxDurationMs)) {
-          return buildIncompleteAnalysisMessage(
-            `analysis duration limit reached after ${this.maxDurationMs}ms`,
+        const response = await this.chatCompletion(messages);
+        if (!response.choices.length) {
+          throw new Error("OpenAI response contained no choices");
+        }
+        const choice = response.choices[0];
+        const msg = choice.message;
+
+        messages.push({ role: "assistant", content: msg.content, tool_calls: msg.tool_calls });
+
+        if (choice.finish_reason === "stop" || !msg.tool_calls?.length) {
+          return await this.finishAnalysis(
+            msg.content ?? "(no response)",
+            "completed",
+            metadata,
+            startedAt,
+            startedAtMs,
+            totalToolCalls,
+            toolRounds,
           );
         }
-        const toolResult = await this.executeToolCall(call);
-        totalToolCalls += 1;
-        const result = JSON.stringify(toolResult);
-        log(
-          "info",
-          "analyzer",
-          `Tool ${readToolCallName(call)} completed (success=${toolResult.success})`,
-        );
-        messages.push({
-          role: "tool",
-          tool_call_id: call.id,
-          content: result,
-        });
+
+        toolRounds += 1;
+
+        // Execute all tool calls requested in this round.
+        for (const call of msg.tool_calls) {
+          if (totalToolCalls >= this.maxTotalToolCalls) {
+            return await this.finishAnalysis(
+              buildIncompleteAnalysisMessage(
+                `total tool call limit reached (${this.maxTotalToolCalls})`,
+              ),
+              "tool_call_limit",
+              metadata,
+              startedAt,
+              startedAtMs,
+              totalToolCalls,
+              toolRounds,
+            );
+          }
+          if (hasExceededDuration(startedAtMs, this.maxDurationMs)) {
+            return await this.finishAnalysis(
+              buildIncompleteAnalysisMessage(
+                `analysis duration limit reached after ${this.maxDurationMs}ms`,
+              ),
+              "duration_limit",
+              metadata,
+              startedAt,
+              startedAtMs,
+              totalToolCalls,
+              toolRounds,
+            );
+          }
+          const toolResult = await this.executeToolCall(call);
+          totalToolCalls += 1;
+          const result = JSON.stringify(toolResult);
+          log(
+            "info",
+            "analyzer",
+            `Tool ${readToolCallName(call)} completed (success=${toolResult.success})`,
+          );
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: result,
+          });
+        }
       }
+
+      return await this.finishAnalysis(
+        buildIncompleteAnalysisMessage(`tool round limit reached (${this.maxToolRounds})`),
+        "tool_round_limit",
+        metadata,
+        startedAt,
+        startedAtMs,
+        totalToolCalls,
+        toolRounds,
+      );
+    } catch (err) {
+      await this.recordInvocation({
+        startedAt,
+        startedAtMs,
+        metadata,
+        toolCalls: totalToolCalls,
+        toolRounds,
+        finishReason: "failed",
+      });
+      throw err;
     }
-
-    return buildIncompleteAnalysisMessage(`tool round limit reached (${this.maxToolRounds})`);
   }
 
   private async chatCompletion(messages: Message[]) {
@@ -203,6 +277,59 @@ export class Analyzer {
   async consumeDailyUsageReport(): Promise<UsageSummary | null> {
     if (!this.usageTracker) return null;
     return this.usageTracker.consumeDailyReport();
+  }
+
+  private async finishAnalysis(
+    text: string,
+    finishReason: LlmInvocationFinishReason,
+    metadata: AnalyzerInvocationMetadata | undefined,
+    startedAt: string,
+    startedAtMs: number,
+    toolCalls: number,
+    toolRounds: number,
+  ): Promise<string> {
+    await this.recordInvocation({
+      startedAt,
+      startedAtMs,
+      metadata,
+      toolCalls,
+      toolRounds,
+      finishReason,
+    });
+    return text;
+  }
+
+  private async recordInvocation(input: {
+    startedAt: string;
+    startedAtMs: number;
+    metadata: AnalyzerInvocationMetadata | undefined;
+    toolCalls: number;
+    toolRounds: number;
+    finishReason: LlmInvocationFinishReason;
+  }): Promise<void> {
+    if (!this.invocationAudit || !input.metadata) {
+      return;
+    }
+    const completedAtMs = Date.now();
+    const record: LlmInvocationRecord = {
+      recordedAt: new Date(completedAtMs).toISOString(),
+      surface: input.metadata.surface,
+      trigger: input.metadata.trigger,
+      target: input.metadata.target,
+      model: this.model,
+      startedAt: input.startedAt,
+      completedAt: new Date(completedAtMs).toISOString(),
+      durationMs: Math.max(0, completedAtMs - input.startedAtMs),
+      toolCalls: input.toolCalls,
+      toolRounds: input.toolRounds,
+      finishReason: input.finishReason,
+      command: input.metadata.command,
+    };
+    try {
+      await this.invocationAudit.append(record);
+    } catch (err) {
+      log("warn", "analyzer", `Invocation audit logging failed: ${String(err)}`);
+    }
   }
 }
 
