@@ -1,4 +1,5 @@
 import type { SearchPublishDiagnosticsSummary } from "../diagnostics/rustMuleSurfaceSummaries.js";
+import type { LlmInvocationGate } from "../llm/invocationGate.js";
 import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary, SearchHealthRecord, SearchHealthSummary } from "../types/contracts.js";
 
 export interface ListedFile {
@@ -159,6 +160,7 @@ export interface OperatorConsoleConfig {
   operatorEvents?: OperatorEventsStore;
   discoverabilityResults?: DiscoverabilityResultsStore;
   searchHealthResults?: SearchHealthResultsStore;
+  humanInvocationGate?: LlmInvocationGate;
 }
 
 export interface SafeReadResult {

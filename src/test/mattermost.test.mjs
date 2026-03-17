@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { MattermostClient } from "../../dist/integrations/mattermost.js";
+import { LlmInvocationGate } from "../../dist/llm/invocationGate.js";
 
 const originalFetch = global.fetch;
 
@@ -22,6 +23,21 @@ function makeOkResponse() {
 class StubAnalyzer {
   async analyze() {
     return "ok";
+  }
+
+  async consumeDailyUsageReport() {
+    return null;
+  }
+}
+
+class CapturingAnalyzer {
+  constructor() {
+    this.prompts = [];
+  }
+
+  async analyze(prompt) {
+    this.prompts.push(prompt);
+    return `analysis:${this.prompts.length}`;
   }
 
   async consumeDailyUsageReport() {
@@ -276,4 +292,24 @@ test("MattermostClient fails with timeout when webhook does not respond", async 
 
   const client = new MattermostClient("https://example.test/hook", new StubAnalyzer(), 200);
   await assert.rejects(() => client.post("hello"), /Mattermost webhook timed out after 200ms/);
+});
+
+test("MattermostClient rate-limits repeated human-triggered analysis commands", async () => {
+  const calls = [];
+  global.fetch = async (_url, init) => {
+    calls.push(JSON.parse(init.body));
+    return makeOkResponse();
+  };
+
+  const analyzer = new CapturingAnalyzer();
+  const client = new MattermostClient("https://example.test/hook", analyzer, {
+    humanInvocationGate: new LlmInvocationGate(),
+  });
+
+  await client.handleCommand({ command: "@mule-doctor analyze", triggeredBy: "alice" });
+  await client.handleCommand({ command: "@mule-doctor analyze", triggeredBy: "alice" });
+
+  assert.equal(analyzer.prompts.length, 1);
+  assert.match(calls[0].text, /analysis:1/);
+  assert.match(calls[1].text, /temporarily rate-limited/);
 });

@@ -5,6 +5,7 @@
  */
 
 import type { Analyzer } from "../llm/analyzer.js";
+import type { LlmInvocationGate } from "../llm/invocationGate.js";
 import type { UsageSummary } from "../llm/usageTracker.js";
 import type { SearchPublishDiagnosticsSummary } from "../diagnostics/rustMuleSurfaceSummaries.js";
 import type {
@@ -58,6 +59,7 @@ export interface SearchHealthReportSource {
 export interface MattermostReportSources {
   discoverabilityResults?: DiscoverabilityReportSource;
   searchHealthResults?: SearchHealthReportSource;
+  humanInvocationGate?: LlmInvocationGate;
   managedInstanceSurfaceDiagnostics?: {
     getSummary(id: string): Promise<{
       instanceId: string;
@@ -77,6 +79,7 @@ export class MattermostClient {
   private readonly requestTimeoutMs: number;
   private readonly discoverabilityResults: DiscoverabilityReportSource | undefined;
   private readonly searchHealthResults: SearchHealthReportSource | undefined;
+  private readonly humanInvocationGate: LlmInvocationGate | undefined;
   private readonly managedInstanceSurfaceDiagnostics:
     | MattermostReportSources["managedInstanceSurfaceDiagnostics"]
     | undefined;
@@ -104,11 +107,13 @@ export class MattermostClient {
       }
       this.discoverabilityResults = undefined;
       this.searchHealthResults = undefined;
+      this.humanInvocationGate = undefined;
       this.managedInstanceSurfaceDiagnostics = undefined;
       this.requestTimeoutMs = clampTimeout(reportSourcesOrTimeout);
     } else {
       this.discoverabilityResults = reportSourcesOrTimeout?.discoverabilityResults;
       this.searchHealthResults = reportSourcesOrTimeout?.searchHealthResults;
+      this.humanInvocationGate = reportSourcesOrTimeout?.humanInvocationGate;
       this.managedInstanceSurfaceDiagnostics =
         reportSourcesOrTimeout?.managedInstanceSurfaceDiagnostics;
       this.requestTimeoutMs = clampTimeout(requestTimeoutMs);
@@ -282,8 +287,26 @@ export class MattermostClient {
       return;
     }
 
-    const response = await this.analyzer.analyze(prompt);
-    await this.post(response);
+    const decision = this.humanInvocationGate?.tryAcquire([
+      { key: "human_llm:global", cooldownMs: 30_000 },
+      { key: "human_llm:mattermost", cooldownMs: 60_000 },
+      ...(ctx.triggeredBy
+        ? [{ key: `human_llm:mattermost:user:${ctx.triggeredBy}`, cooldownMs: 60_000 }]
+        : []),
+    ]);
+    if (decision && !decision.ok) {
+      await this.post(
+        `LLM analysis is temporarily rate-limited (${decision.reason}). Retry in about ${decision.retryAfterSec}s.`,
+      );
+      return;
+    }
+
+    try {
+      const response = await this.analyzer.analyze(prompt);
+      await this.post(response);
+    } finally {
+      decision?.lease.release();
+    }
   }
 
   private async buildDiscoverabilityAttachment(): Promise<MattermostAttachment | undefined> {
