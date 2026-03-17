@@ -122,6 +122,20 @@ export interface LlmInvocationRecord {
   retryAfterSec?: number;
 }
 
+export interface LlmInvocationSummary {
+  windowSize: number;
+  totalInvocations: number;
+  finishReasonCounts: Record<LlmInvocationFinishReason, number>;
+  surfaceCounts: Partial<Record<LlmInvocationSurface, number>>;
+  humanTriggeredCount: number;
+  scheduledCount: number;
+  rateLimitedCount: number;
+  latestRecordedAt?: string;
+  latestSurface?: LlmInvocationSurface;
+  latestFinishReason?: LlmInvocationFinishReason;
+  latestTarget?: DiagnosticTargetRef;
+}
+
 export type ManagedInstanceStatus = "planned" | "stopped" | "running" | "failed";
 
 export interface ManagedInstanceProcessState {

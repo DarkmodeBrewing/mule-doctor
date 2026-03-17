@@ -1,5 +1,6 @@
-import type { LlmInvocationRecord } from "../types/contracts.js";
+import type { LlmInvocationRecord, LlmInvocationSummary } from "../types/contracts.js";
 import type { RuntimeStore } from "../storage/runtimeStore.js";
+import { summarizeLlmInvocationRecords } from "./invocationAuditSummary.js";
 
 const DEFAULT_LLM_INVOCATION_LIMIT = 50;
 
@@ -26,5 +27,10 @@ export class LlmInvocationAuditLog implements LlmInvocationAuditSink {
       return [];
     }
     return this.runtimeStore.getRecentLlmInvocationRecords(limit);
+  }
+
+  async summarizeRecent(limit = DEFAULT_LLM_INVOCATION_LIMIT): Promise<LlmInvocationSummary> {
+    const records = await this.listRecent(limit);
+    return summarizeLlmInvocationRecords(records, limit);
   }
 }

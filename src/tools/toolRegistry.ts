@@ -20,6 +20,8 @@ import type {
   ManagedDiscoverabilityRecord,
   ManagedDiscoverabilitySummary,
   ManagedDiscoverabilitySummaryResult,
+  LlmInvocationRecord,
+  LlmInvocationSummary,
   SearchHealthRecord,
   SearchHealthSummary,
   ToolResult,
@@ -31,6 +33,7 @@ import {
   summarizeSearchPublishDiagnostics,
   summarizeSharedLibrary,
 } from "../diagnostics/rustMuleSurfaceSummaries.js";
+import { summarizeLlmInvocationRecords } from "../llm/invocationAuditSummary.js";
 import { sanitizeSearchHealthRecord } from "../searchHealth/records.js";
 import { summarizeSearchHealthRecords } from "../searchHealth/summary.js";
 import { SourceCodeTools } from "./sourceCodeTools.js";
@@ -182,6 +185,57 @@ export class ToolRegistry {
         async (args): Promise<HistoryEntry[]> => {
           const n = clampInt(args["n"], 50, 1, 1000);
           return runtimeStore.getRecentHistory(n);
+        },
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "getLlmInvocationResults",
+            description:
+              "Returns recent bounded LLM invocation audit records recorded by mule-doctor.",
+            parameters: {
+              type: "object",
+              properties: {
+                n: {
+                  type: "number",
+                  description: "Number of recent invocation records to return (default 10).",
+                },
+              },
+              required: [],
+            },
+          },
+        },
+        async (args): Promise<LlmInvocationRecord[]> => {
+          const n = clampInt(args["n"], 10, 1, 100);
+          return runtimeStore.getRecentLlmInvocationRecords(n);
+        },
+      );
+
+      this.register(
+        {
+          type: "function",
+          function: {
+            name: "getLlmInvocationSummary",
+            description:
+              "Returns a compact summary over recent mule-doctor LLM invocation audit records.",
+            parameters: {
+              type: "object",
+              properties: {
+                n: {
+                  type: "number",
+                  description: "Number of recent invocation records to summarize (default 20).",
+                },
+              },
+              required: [],
+            },
+          },
+        },
+        async (args): Promise<LlmInvocationSummary> => {
+          const n = clampInt(args["n"], 20, 1, 100);
+          const records = await runtimeStore.getRecentLlmInvocationRecords(n);
+          return summarizeLlmInvocationRecords(records, n);
         },
       );
 

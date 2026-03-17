@@ -303,6 +303,7 @@ async function main(): Promise<void> {
       operatorEvents: operatorEventLog,
       discoverabilityResults: discoverabilityLog,
       searchHealthResults: searchHealthLog,
+      llmInvocationResults: invocationAudit,
       humanInvocationGate,
       invocationAudit,
     });

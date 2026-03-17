@@ -100,6 +100,9 @@ export class OperatorConsoleServer {
   private readonly searchHealthResults:
     | OperatorConsoleConfig["searchHealthResults"]
     | undefined;
+  private readonly llmInvocationResults:
+    | OperatorConsoleConfig["llmInvocationResults"]
+    | undefined;
   private readonly humanInvocationGate: LlmInvocationGate | undefined;
   private readonly invocationAudit: OperatorConsoleConfig["invocationAudit"] | undefined;
   private readonly startedAt: string;
@@ -136,6 +139,7 @@ export class OperatorConsoleServer {
     this.operatorEvents = config.operatorEvents;
     this.discoverabilityResults = config.discoverabilityResults;
     this.searchHealthResults = config.searchHealthResults;
+    this.llmInvocationResults = config.llmInvocationResults;
     this.humanInvocationGate = config.humanInvocationGate;
     this.invocationAudit = config.invocationAudit;
     this.startedAt = new Date().toISOString();
@@ -317,6 +321,16 @@ export class OperatorConsoleServer {
 
     if (path === "/api/search-health/summary") {
       await this.handleSearchHealthSummary(req, url, res);
+      return;
+    }
+
+    if (path === "/api/llm/invocations") {
+      await this.handleLlmInvocationResults(req, url, res);
+      return;
+    }
+
+    if (path === "/api/llm/invocations/summary") {
+      await this.handleLlmInvocationSummary(req, url, res);
       return;
     }
 
@@ -765,6 +779,42 @@ export class OperatorConsoleServer {
       200,
     );
     const summary = await this.searchHealthResults.summarizeRecent(limit);
+    sendJson(res, 200, { ok: true, summary });
+  }
+
+  private async handleLlmInvocationResults(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.llmInvocationResults) {
+      sendJson(res, 501, { ok: false, error: "llm invocation history unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
+    const results = await this.llmInvocationResults.listRecent(limit);
+    sendJson(res, 200, { ok: true, results });
+  }
+
+  private async handleLlmInvocationSummary(
+    req: IncomingMessage,
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.llmInvocationResults) {
+      sendJson(res, 501, { ok: false, error: "llm invocation summary unavailable" });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
+    const summary = await this.llmInvocationResults.summarizeRecent(limit);
     sendJson(res, 200, { ok: true, summary });
   }
 

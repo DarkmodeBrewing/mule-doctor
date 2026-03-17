@@ -197,6 +197,67 @@ Notes:
   - `latestSource`
   - `latestPair`
 
+### `getLlmInvocationResults`
+
+Purpose:
+
+- returns recent bounded mule-doctor LLM invocation audit records
+
+Arguments:
+
+```json
+{
+  "n": 10
+}
+```
+
+Notes:
+
+- only available when a runtime store is configured
+- `n` is optional
+- default `10`
+- bounded to `1..100`
+- returns operational audit metadata only, not prompts or raw tool payloads
+- useful fields include:
+  - `surface`
+  - `trigger`
+  - `target`
+  - `model`
+  - `durationMs`
+  - `toolCalls`
+  - `toolRounds`
+  - `finishReason`
+  - optional `command`, `rateLimitReason`, `retryAfterSec`
+
+### `getLlmInvocationSummary`
+
+Purpose:
+
+- returns a compact summary of recent mule-doctor LLM invocation audit records
+
+Arguments:
+
+```json
+{
+  "n": 20
+}
+```
+
+Notes:
+
+- only available when a runtime store is configured
+- `n` is optional
+- default `20`
+- bounded to `1..100`
+- summarizes finish reasons and invocation surfaces so the LLM does not need to derive those trends from raw records each time
+- current fields include:
+  - `finishReasonCounts`
+  - `surfaceCounts`
+  - `humanTriggeredCount`
+  - `scheduledCount`
+  - `rateLimitedCount`
+  - latest surface / finish reason
+
 ### `searchLogs`
 
 Purpose:
