@@ -302,11 +302,12 @@ export class MattermostClient {
         : []),
     ]);
     if (decision && !decision.ok) {
+      const recordedAt = new Date().toISOString();
       await this.appendInvocationAudit({
         surface: "mattermost_command",
         trigger: "human",
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
+        startedAt: recordedAt,
+        completedAt: recordedAt,
         durationMs: 0,
         toolCalls: 0,
         toolRounds: 0,

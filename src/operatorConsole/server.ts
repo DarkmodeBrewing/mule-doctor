@@ -485,11 +485,12 @@ export class OperatorConsoleServer {
       { key: "human_llm:observer_run", cooldownMs: 300_000 },
     ]);
     if (decision && !decision.ok) {
+      const recordedAt = new Date().toISOString();
       await this.appendInvocationAudit({
         surface: "manual_observer_run",
         trigger: "human",
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
+        startedAt: recordedAt,
+        completedAt: recordedAt,
         durationMs: 0,
         toolCalls: 0,
         toolRounds: 0,
@@ -1073,12 +1074,13 @@ export class OperatorConsoleServer {
         { key: `human_llm:operator_analyze:instance:${instanceGateKeyPart}`, cooldownMs: 300_000 },
       ]);
       if (decision && !decision.ok) {
+        const recordedAt = new Date().toISOString();
         await this.appendInvocationAudit({
           surface: "managed_instance_analysis",
           trigger: "human",
           target: { kind: "managed_instance", instanceId: id },
-          startedAt: new Date().toISOString(),
-          completedAt: new Date().toISOString(),
+          startedAt: recordedAt,
+          completedAt: recordedAt,
           durationMs: 0,
           toolCalls: 0,
           toolRounds: 0,
