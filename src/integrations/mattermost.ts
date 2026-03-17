@@ -274,26 +274,12 @@ export class MattermostClient {
       .toLowerCase();
     log("info", "mattermost", `Handling command: ${cmd}`);
 
-    let prompt: string;
-    switch (cmd) {
-      case "status":
-        prompt = "Provide a brief (3–5 bullet point) status summary of the rust-mule node.";
-        break;
-      case "analyze":
-        prompt =
-          "Perform a thorough diagnostic analysis of the rust-mule node. " +
-          "Use all available tools and report any issues, anomalies, or recommendations.";
-        break;
-      case "peers":
-        prompt =
-          "Summarize the current peer list: total count, geographic spread if known, " +
-          "any peers with high latency or connectivity issues.";
-        break;
-      default:
-        await this.post(
-          `Unknown command: \`${cmd}\`.\n` + "Available commands: `status`, `analyze`, `peers`",
-        );
-        return;
+    const prompt = buildMattermostCommandPrompt(cmd);
+    if (!prompt) {
+      await this.post(
+        `Unknown command: \`${cmd}\`.\n` + "Available commands: `status`, `analyze`, `peers`",
+      );
+      return;
     }
 
     const response = await this.analyzer.analyze(prompt);
@@ -419,6 +405,33 @@ export class MattermostClient {
       );
       return undefined;
     }
+  }
+}
+
+export function buildMattermostCommandPrompt(cmd: string): string | undefined {
+  switch (cmd) {
+    case "status":
+      return [
+        "Provide a brief rust-mule status summary in 3 to 5 bullets.",
+        "Use tools only if needed to verify an important uncertainty.",
+        "Focus on current health, readiness, and any clearly visible issues.",
+      ].join(" ");
+    case "analyze":
+      return [
+        "Perform a focused diagnostic analysis of the rust-mule node.",
+        "Start from currently available context.",
+        "Use tools only to verify important uncertainties or fill missing evidence gaps.",
+        "Do not use all tools by default.",
+        "Return: overall status, confirmed issues, probable issues or risks, hypotheses or unknowns, supporting evidence, and recommended next steps.",
+      ].join(" ");
+    case "peers":
+      return [
+        "Summarize the current peer situation.",
+        "Focus on total peer count, obvious connectivity concerns, and any evidence of degraded peer health.",
+        "Use tools only if needed to confirm missing evidence.",
+      ].join(" ");
+    default:
+      return undefined;
   }
 }
 

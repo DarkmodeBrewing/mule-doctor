@@ -201,7 +201,7 @@ export class Observer {
       }
 
       const context = await this.collectAndPersistContext(target);
-      const prompt = this.buildPrompt(context);
+      const prompt = buildObserverAnalysisPrompt(context);
       const analyzer = target && this.analyzerFactory ? this.analyzerFactory(target) : this.analyzer;
       const summary = await analyzer.analyze(prompt);
       await this.mattermost.postPeriodicReport({
@@ -305,18 +305,6 @@ export class Observer {
       log("warn", "observer", `Context persistence failed: ${String(err)}`);
       return undefined;
     }
-  }
-
-  private buildPrompt(context: ObserverCycleContext | undefined): string {
-    if (!context) {
-      return "Run a full diagnostic check on the rust-mule node and provide a concise status report.";
-    }
-
-    return (
-      `Run a full diagnostic check on ${context.targetLabel} and provide a concise status report. ` +
-      "Use this latest observer snapshot as baseline context, then verify through tools.\n\n" +
-      JSON.stringify(context)
-    );
   }
 
   private async resolveTarget(): Promise<ObserverTargetRuntime | undefined> {
@@ -481,6 +469,40 @@ export class Observer {
       }),
     );
   }
+}
+
+export function buildObserverAnalysisPrompt(context: ObserverCycleContext | undefined): string {
+  if (!context) {
+    return [
+      "Analyze the current rust-mule target and provide a focused diagnostic report.",
+      "Use tools only if you need to verify a material uncertainty or fill a missing evidence gap.",
+      "Do not broad-scan by default. Keep tool use bounded and evidence-based.",
+      "Return:",
+      "1. Overall status",
+      "2. Confirmed issues",
+      "3. Probable issues or risks",
+      "4. Hypotheses or unknowns",
+      "5. Supporting evidence",
+      "6. Recommended next steps",
+    ].join("\n");
+  }
+
+  return [
+    `Analyze ${context.targetLabel} using the provided observer snapshot as the baseline context.`,
+    "Inspect the snapshot first.",
+    "Only call tools if you need to verify a suspected issue, refresh stale information, or fill a material evidence gap.",
+    "Do not re-fetch everything by default. Keep tool use bounded and evidence-based.",
+    "Return:",
+    "1. Overall status",
+    "2. Confirmed issues",
+    "3. Probable issues or risks",
+    "4. Hypotheses or unknowns",
+    "5. Supporting evidence",
+    "6. Recommended next steps",
+    "",
+    "Observer snapshot:",
+    JSON.stringify(context),
+  ].join("\n");
 }
 
 function buildCycleStatePatch(config: {

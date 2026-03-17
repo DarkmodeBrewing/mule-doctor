@@ -72,7 +72,7 @@ export class ManagedInstanceAnalysisService {
       usageTracker: this.usageTracker,
     });
 
-    const summary = await analyzer.analyze(buildPrompt(snapshot));
+    const summary = await analyzer.analyze(buildManagedInstanceAnalysisPrompt(snapshot));
     return {
       instanceId,
       analyzedAt: new Date().toISOString(),
@@ -83,10 +83,23 @@ export class ManagedInstanceAnalysisService {
   }
 }
 
-function buildPrompt(snapshot: ManagedInstanceDiagnosticSnapshot): string {
-  return (
-    `Analyze managed rust-mule instance ${snapshot.instanceId}. ` +
-    "Use the available tools to verify the current state, review recent logs, and produce a concise diagnostic summary.\n\n" +
-    JSON.stringify(snapshot)
-  );
+export function buildManagedInstanceAnalysisPrompt(
+  snapshot: ManagedInstanceDiagnosticSnapshot,
+): string {
+  return [
+    `Analyze managed rust-mule instance ${snapshot.instanceId}.`,
+    "Use the provided managed-instance snapshot as baseline context.",
+    "Inspect the snapshot first and only call tools if the snapshot or recent logs leave an important uncertainty.",
+    "Do not perform redundant tool calls. Keep tool use bounded and evidence-based.",
+    "Return:",
+    "1. Instance status",
+    "2. Confirmed issues",
+    "3. Probable issues or risks",
+    "4. Hypotheses or unknowns",
+    "5. Supporting evidence",
+    "6. Recommended next steps",
+    "",
+    "Managed-instance snapshot:",
+    JSON.stringify(snapshot),
+  ].join("\n");
 }
