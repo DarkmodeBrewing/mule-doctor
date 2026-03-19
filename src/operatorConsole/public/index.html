@@ -12,7 +12,7 @@
       <div class="hero-top">
         <div>
           <h1>mule-doctor operator console</h1>
-          <p>Observe process health, stream logs live, and inspect proposed patches without leaving the browser. This view is read-only and secured by an operator token.</p>
+          <p>Observe process health, stream logs live, inspect proposed patches, and operate managed instances without leaving the browser. This view is secured by an operator token.</p>
         </div>
         <div class="controls">
           <button id="refresh-all">Refresh all</button>
@@ -166,6 +166,72 @@
           </div>
           <div id="instance-runtime-highlights" class="preset-help muted">
             No runtime surface highlights loaded.
+          </div>
+          <div class="subsection">
+            <div class="row">
+              <h3>Shared Content</h3>
+              <div class="controls">
+                <button id="selected-instance-refresh-shared" type="button">Refresh shared</button>
+                <button id="selected-instance-create-fixture" type="button">Create fixture</button>
+                <button id="selected-instance-reindex" type="button">Reindex</button>
+                <button id="selected-instance-republish-sources" type="button">Republish sources</button>
+                <button id="selected-instance-republish-keywords" type="button">Republish keywords</button>
+              </div>
+            </div>
+            <p id="selected-instance-shared-feedback" class="muted">
+              No shared-content action recorded.
+            </p>
+            <div id="selected-instance-shared-summary" class="preset-help muted">
+              No shared-content overview loaded.
+            </div>
+            <pre id="instance-shared" class="muted"></pre>
+          </div>
+          <div class="subsection">
+            <div class="row">
+              <h3>Discoverability Check</h3>
+              <div class="controls">
+                <button id="selected-instance-refresh-discoverability" type="button">
+                  Refresh discoverability views
+                </button>
+              </div>
+            </div>
+            <form id="instance-discoverability-form" class="instance-form">
+              <select id="discoverability-publisher" name="publisherInstanceId"></select>
+              <select id="discoverability-searcher" name="searcherInstanceId"></select>
+              <input
+                id="discoverability-fixture-id"
+                name="fixtureId"
+                type="text"
+                placeholder="fixture id (optional)"
+                maxlength="64"
+              />
+              <div class="inline-fields">
+                <input
+                  id="discoverability-timeout-ms"
+                  name="timeoutMs"
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  placeholder="timeout ms"
+                />
+                <input
+                  id="discoverability-poll-ms"
+                  name="pollIntervalMs"
+                  type="number"
+                  min="100"
+                  step="50"
+                  placeholder="poll ms"
+                />
+              </div>
+              <button id="run-discoverability-check" type="submit">Run discoverability check</button>
+            </form>
+            <p id="selected-instance-discoverability-feedback" class="muted">
+              No discoverability check recorded.
+            </p>
+            <div id="selected-instance-discoverability-summary" class="preset-help muted">
+              No discoverability result loaded.
+            </div>
+            <pre id="instance-discoverability-result" class="muted"></pre>
           </div>
           <pre id="instance-detail" class="muted"></pre>
           <pre id="instance-diagnostics" class="muted"></pre>

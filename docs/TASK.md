@@ -24,6 +24,7 @@ The following major slices are already landed on `main`:
    - operator event timeline
    - cluster/group/compare navigation shortcuts
    - timeline context feedback
+   - selected-instance shared-content and discoverability controls
 3. Managed local instance support:
    - `InstanceManager`
    - managed-instance diagnostics and analysis
@@ -227,7 +228,7 @@ Acceptance criteria:
 
 ## Recommended Next Order
 
-1. Task M: Harden Human-Triggered LLM Invocation Boundaries
-2. Task D: Operator Console Control Plane Completion
-3. Task E: Runtime and Container Hardening
-4. Task F: Release and CI Hardening
+1. Task D: Operator Console Control Plane Completion
+2. Task E: Runtime and Container Hardening
+3. Task F: Release and CI Hardening
+4. Task J: Track Full Search Lifecycle and Search Health Signals

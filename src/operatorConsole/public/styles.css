@@ -108,6 +108,12 @@ label {
   margin-bottom: 12px;
 }
 
+.inline-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
 .toggle-row {
   display: inline-flex;
   align-items: center;
@@ -255,6 +261,10 @@ label {
   color: var(--muted);
   line-height: 1.5;
   margin-bottom: 8px;
+}
+
+.subsection pre {
+  margin: 0;
 }
 
 .control-feedback.pending {

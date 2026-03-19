@@ -111,6 +111,11 @@ Common status codes:
 | `POST` | `/api/instances/{id}/start` | Start instance |
 | `POST` | `/api/instances/{id}/stop` | Stop instance |
 | `POST` | `/api/instances/{id}/restart` | Restart instance |
+| `GET` | `/api/instances/{id}/shared` | Get managed shared-content overview |
+| `POST` | `/api/instances/{id}/shared/fixtures` | Create or refresh a managed discoverability fixture |
+| `POST` | `/api/instances/{id}/shared/reindex` | Trigger shared-library reindex |
+| `POST` | `/api/instances/{id}/shared/republish_sources` | Trigger source republish |
+| `POST` | `/api/instances/{id}/shared/republish_keywords` | Trigger keyword republish |
 | `GET` | `/api/instances/compare?left={id}&right={id}` | Compare two managed instances |
 | `POST` | `/api/discoverability/check` | Run a controlled discoverability check between managed instances |
 
