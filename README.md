@@ -4,11 +4,11 @@ Observability and diagnostic agent for `rust-mule` nodes.
 
 ## Docs
 
-- Configuration reference: [docs/configuration.md](/home/coder/projects/mule-doctor/docs/configuration.md)
-- Operator console HTTP API: [docs/api.md](/home/coder/projects/mule-doctor/docs/api.md)
-- LLM tool capability reference: [docs/llm_tools.md](/home/coder/projects/mule-doctor/docs/llm_tools.md)
-- Architecture: [docs/architecture/mule-doctor.md](/home/coder/projects/mule-doctor/docs/architecture/mule-doctor.md)
-- Backlog / implementation plan: [docs/TASK.md](/home/coder/projects/mule-doctor/docs/TASK.md)
+- Configuration reference: [docs/configuration.md](docs/configuration.md)
+- Operator console HTTP API: [docs/api.md](docs/api.md)
+- LLM tool capability reference: [docs/llm_tools.md](docs/llm_tools.md)
+- Architecture: [docs/architecture/mule-doctor.md](docs/architecture/mule-doctor.md)
+- Backlog / implementation plan: [docs/TASK.md](docs/TASK.md)
 
 ## What it does
 
@@ -30,7 +30,7 @@ Minimum required variables:
 - `OPENAI_API_KEY`
 - `MATTERMOST_WEBHOOK_URL`
 
-For the full runtime contract, including optional env vars, container entrypoint variables, managed-instance settings, and config ownership, see [docs/configuration.md](/home/coder/projects/mule-doctor/docs/configuration.md).
+For the full runtime contract, including optional env vars, container entrypoint variables, managed-instance settings, and config ownership, see [docs/configuration.md](docs/configuration.md).
 
 ## Scripts
 
@@ -55,7 +55,7 @@ The Docker image follows the architecture runtime layout:
 - `/data` – runtime volume (state, logs, token, config)
 - runtime image includes `git`; bundled `/opt/rust-mule` keeps local `.git` history for read-only operations like `git_blame`, with `origin` remote removed to prevent accidental pushes
 
-For container defaults, entrypoint variables, and startup behavior, see [docs/configuration.md](/home/coder/projects/mule-doctor/docs/configuration.md).
+For container defaults, entrypoint variables, and startup behavior, see [docs/configuration.md](docs/configuration.md).
 
 Container runtime hardening:
 
@@ -82,13 +82,13 @@ End-to-end smoke harness:
   - `mule-doctor/operator-events.json`
 - by default the temp work directory is deleted on success and preserved on failure with captured compose logs for debugging
 
-Note: rust-mule readiness handling is being aligned with the newer `200 + ready: true/false` contract in code and tests, but the broader observer/search workflow work is still tracked in [docs/TASK.md](/home/coder/projects/mule-doctor/docs/TASK.md).
+Note: rust-mule readiness handling is being aligned with the newer `200 + ready: true/false` contract in code and tests, but the broader observer/search workflow work is still tracked in [docs/TASK.md](docs/TASK.md).
 
 Operator console (optional):
 
 - `GET /` serves a read-only UI for operator inspection.
 - The UI and `/api/*` routes are guarded by `MULE_DOCTOR_UI_AUTH_TOKEN`.
-- JSON endpoints and request/response details are documented in [docs/api.md](/home/coder/projects/mule-doctor/docs/api.md).
+- JSON endpoints and request/response details are documented in [docs/api.md](docs/api.md).
 - Live log streaming is available through SSE at `/api/stream/app` and `/api/stream/rust-mule`.
 - The selected-instance panel now shows a compact rust-mule surface summary over searches, shared publish state, shared actions, and downloads, with the raw summary payload still available underneath.
 - Frontend assets are served statically from the built-in operator-console public bundle rather than inline backend HTML templates.
@@ -101,7 +101,7 @@ Operator console (optional):
 - `getRoutingBuckets` uses `/api/v1/debug/routing/buckets` and sends `X-Debug-Token` when `RUST_MULE_DEBUG_TOKEN_FILE` is configured. If debug endpoints are unavailable (403/404/501), mule-doctor logs a warning and continues with empty bucket data.
 - Runtime persistence auto-creates state/history files and appends one history snapshot per observer cycle.
 - Observer now computes a deterministic network health score (peer count, bucket balance, lookup success, hop efficiency, error rate) and persists it as `lastHealthScore` + history entries.
-- The LLM tool surface is documented in [docs/llm_tools.md](/home/coder/projects/mule-doctor/docs/llm_tools.md).
+- The LLM tool surface is documented in [docs/llm_tools.md](docs/llm_tools.md).
 - Analyzer records per-call LLM usage logs (`LLM_<timestamp>.log`), aggregates daily/monthly usage in state, and emits one Mattermost usage report per UTC day when usage exists.
 - Periodic Mattermost reports now include compact discoverability and search-health summary attachments when recent history exists, and add managed surface diagnostics when the active target is a managed instance.
 - Current slash/mention command handling is implemented in code, but this repo does not yet expose an inbound HTTP command endpoint.

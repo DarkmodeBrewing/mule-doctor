@@ -4,8 +4,8 @@ This document describes the tool surface that mule-doctor exposes to the LLM dur
 
 Source of truth:
 
-- [toolRegistry.ts](/home/coder/projects/mule-doctor/src/tools/toolRegistry.ts)
-- [sourceCodeTools.ts](/home/coder/projects/mule-doctor/src/tools/sourceCodeTools.ts)
+- [toolRegistry.ts](../src/tools/toolRegistry.ts)
+- [sourceCodeTools.ts](../src/tools/sourceCodeTools.ts)
 
 ## Overview
 

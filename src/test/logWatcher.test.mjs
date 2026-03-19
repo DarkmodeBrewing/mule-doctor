@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -40,7 +40,7 @@ test("LogWatcher tail updates offset and reads appended lines", async () => {
   }
 });
 
-test("LogWatcher preserves offset when a read fails", async () => {
+test("LogWatcher preserves offset when a read fails", async (t) => {
   const tmp = await makeTempDir();
   try {
     const logPath = join(tmp.dir, "rust-mule.log");
@@ -53,6 +53,13 @@ test("LogWatcher preserves offset when a read fails", async () => {
 
     await writeFile(logPath, "first\nsecond\n", "utf8");
     await chmod(logPath, 0o000);
+    try {
+      await readFile(logPath, "utf8");
+      t.skip("filesystem does not enforce chmod-based read denial in this environment");
+      return;
+    } catch {
+      // expected on filesystems that honor chmod-based read denial
+    }
     await watcher.tail();
     assert.equal(watcher.getOffset(), initialOffset);
 

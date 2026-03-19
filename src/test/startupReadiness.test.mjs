@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -119,7 +120,7 @@ test("validateStartupReadiness rejects invalid custom state path parents", async
   }
 });
 
-test("validateStartupReadiness rejects existing read-only state files", async () => {
+test("validateStartupReadiness rejects existing read-only state files", async (t) => {
   const tmp = await makeTempDir();
   try {
     const statePath = join(tmp.dir, "mule-doctor", "state.json");
@@ -128,6 +129,13 @@ test("validateStartupReadiness rejects existing read-only state files", async ()
     await mkdir(join(tmp.dir, "mule-doctor"), { recursive: true });
     await writeFile(statePath, "{}\n", "utf8");
     await chmod(statePath, 0o400);
+    try {
+      await access(statePath, constants.W_OK);
+      t.skip("filesystem reports chmod 0400 files as writable in this environment");
+      return;
+    } catch {
+      // expected on filesystems that honor chmod-based write denial
+    }
 
     await assert.rejects(
       validateStartupReadiness(

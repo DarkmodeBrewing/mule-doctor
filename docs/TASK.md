@@ -42,6 +42,11 @@ The following major slices are already landed on `main`:
    - controlled discoverability checks between managed instances
    - discoverability persistence, summary, operator-console visibility, and Mattermost reporting
    - bounded LLM tools for discoverability, searches, shared content, and downloads
+6. Human-triggered LLM hardening:
+   - bounded prompt policy and evidence-first output shape
+   - human-triggered rate limiting and concurrency guards
+   - tool-round, tool-count, and duration budgets
+   - invocation audit metadata and operator-console visibility
 
 ## Goals
 
@@ -160,6 +165,8 @@ Acceptance criteria:
 - the config ownership boundary is documented clearly enough that operators know what to set externally and what mule-doctor will always control
 
 ## Task M: Harden Human-Triggered LLM Invocation Boundaries
+
+Status: substantially landed on `main` on 2026-03-17. Remaining follow-up should be treated as refinement and doc alignment rather than a greenfield feature slice.
 
 1. Add explicit rate limiting and concurrency guards for all human-triggered LLM entry points:
    - Mattermost command handling

@@ -3,13 +3,21 @@
 ## Branch
 
 - `main`
-- PR: #57 (merged)
-- Last updated: 2026-03-11
+- Latest merged PR at time of update: #91
+- Last updated: 2026-03-19
 
 ## Status
 
-- Managed-instance diagnostics/cache hardening, operator-console navigation shortcuts, timeline-context feedback, and the first frontend modularization pass are now landed on `main`.
-- Next highest-value operator-console task: break down `src/operatorConsole/server.ts` by extracting types/interfaces and separating oversized route/helper logic into focused modules.
+- Recent work landed on `main` includes LLM invocation hardening and auditability:
+  - prompt hardening
+  - human-triggered rate limits
+  - analyzer tool/time budgets
+  - invocation audit storage and operator-console surfaces
+- Managed-instance diagnostics/cache hardening, operator-console navigation shortcuts, timeline-context feedback, and frontend modularization are also landed on `main`.
+- Next highest-value work remains:
+  - continue operator-console control-plane completion
+  - tighten runtime/container validation
+  - expand CI beyond the current `npm run check` path
 
 ## Completed Work
 
