@@ -22,8 +22,8 @@ Not in scope:
 
 Authentication:
 
-- If `MULE_DOCTOR_UI_AUTH_TOKEN` is unset, the operator console is effectively unauthenticated.
-- If `MULE_DOCTOR_UI_AUTH_TOKEN` is set, all API and protected UI routes require one of:
+- When `MULE_DOCTOR_UI_ENABLED=true`, `MULE_DOCTOR_UI_AUTH_TOKEN` is required at startup.
+- Once the console is enabled, all API and protected UI routes require one of:
   - cookie `mule_doctor_ui_token`
   - `Authorization: Bearer <token>`
   - `X-Operator-Token: <token>`

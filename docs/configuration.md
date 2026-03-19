@@ -11,10 +11,10 @@ It covers:
 
 Primary implementation sources:
 
-- [index.ts](/home/coder/projects/mule-doctor/src/index.ts)
-- [entrypoint.sh](/home/coder/projects/mule-doctor/entrypoint.sh)
-- [instanceManager.ts](/home/coder/projects/mule-doctor/src/instances/instanceManager.ts)
-- [rustMuleConfig.ts](/home/coder/projects/mule-doctor/src/instances/rustMuleConfig.ts)
+- [index.ts](../src/index.ts)
+- [entrypoint.sh](../entrypoint.sh)
+- [instanceManager.ts](../src/instances/instanceManager.ts)
+- [rustMuleConfig.ts](../src/instances/rustMuleConfig.ts)
 
 ## Configuration Layers
 
@@ -31,7 +31,7 @@ These layers overlap, but they are not the same thing.
 
 ## 1. mule-doctor Application Environment
 
-These variables are read directly by [index.ts](/home/coder/projects/mule-doctor/src/index.ts).
+These variables are read directly by [index.ts](../src/index.ts).
 
 ### Required
 
@@ -113,7 +113,7 @@ Notes:
 
 ## 2. Container Entrypoint Environment
 
-These variables are read by [entrypoint.sh](/home/coder/projects/mule-doctor/entrypoint.sh).
+These variables are read by [entrypoint.sh](../entrypoint.sh).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -179,7 +179,7 @@ These are generated or enforced per managed instance:
 
 ### Base/template-supplied values
 
-These can be supplied through the managed rust-mule config template object used by [InstanceManager](/home/coder/projects/mule-doctor/src/instances/instanceManager.ts).
+These can be supplied through the managed rust-mule config template object used by [InstanceManager](../src/instances/instanceManager.ts).
 
 The input contract supports:
 
@@ -260,7 +260,7 @@ mule-doctor startup readiness currently validates:
 
 This is mule-doctor readiness, not full rust-mule network readiness.
 
-rust-mule readiness semantics are currently evolving toward explicit payload readiness flags rather than HTTP `503`/`504` responses. See [TASK.md](/home/coder/projects/mule-doctor/docs/TASK.md) `Task G` for the planned alignment work.
+rust-mule readiness semantics are currently evolving toward explicit payload readiness flags rather than HTTP `503`/`504` responses. The remaining runtime/container alignment work is tracked in [TASK.md](TASK.md) under `Task E`.
 
 ### Container healthcheck behavior
 
