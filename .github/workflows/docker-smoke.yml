@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    env:
+      COMPOSE_PROJECT_NAME: mule_doctor_ci
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,18 +49,20 @@ jobs:
       - name: Capture Built Image Reference
         id: image
         run: |
-          image_id="$(docker compose images -q mule-doctor)"
+          image_ref="${COMPOSE_PROJECT_NAME}-mule-doctor"
+          image_id="$(docker image inspect --format '{{ .Id }}' "$image_ref" 2>/dev/null || true)"
           if [ -z "$image_id" ]; then
-            echo "failed to resolve built mule-doctor image" >&2
+            echo "failed to resolve built mule-doctor image: $image_ref" >&2
             exit 1
           fi
+          echo "image_ref=$image_ref" >>"$GITHUB_OUTPUT"
           echo "image_id=$image_id" >>"$GITHUB_OUTPUT"
 
       - name: Validate Runtime Image Layout
         env:
-          IMAGE_ID: ${{ steps.image.outputs.image_id }}
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
         run: |
-          docker run --rm --entrypoint bash "$IMAGE_ID" -lc '
+          docker run --rm --entrypoint bash "$IMAGE_REF" -lc '
             set -euo pipefail
 
             test -x /entrypoint.sh
