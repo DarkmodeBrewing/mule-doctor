@@ -797,82 +797,95 @@ Accuracy is more important than verbosity.
 ```
 /opt/rust-mule     source + compiled binary
 /app               mule-doctor code
-/data              runtime state
+/data              runtime volume
 /data/token
 /data/logs
-/data/instances    future managed rust-mule test instances
+/data/mule-doctor
+/data/instances    managed rust-mule test instances
 ```
 
 ---
 
-# Example Dockerfile
+# Container Runtime Contract
 
-```
-FROM node:20-bookworm-slim
+The current container runtime uses a multi-stage Docker build:
 
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    jq \
-    build-essential \
-    pkg-config \
-    libssl-dev \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+- a Rust builder stage compiles `rust-mule`
+- a Node builder stage compiles mule-doctor
+- a slim runtime stage bundles:
+  - `/opt/rust-mule`
+  - `/app/dist`
+  - `/entrypoint.sh`
+  - `/app/scripts/container-healthcheck.sh`
 
-# install rust
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
+The runtime image defaults to:
 
-WORKDIR /opt
+- `RUST_MULE_API_URL=http://127.0.0.1:17835`
+- `RUST_MULE_TOKEN_PATH=/data/token`
+- `RUST_MULE_LOG_PATH=/data/logs/rust-mule.log`
+- `RUST_MULE_SOURCE_PATH=/opt/rust-mule`
+- `MULE_DOCTOR_DATA_DIR=/data/mule-doctor`
+- `MULE_DOCTOR_UI_ENABLED=false`
+- `MULE_DOCTOR_UI_HOST=127.0.0.1`
+- `MULE_DOCTOR_UI_PORT=18080`
 
-RUN git clone --depth 1 https://github.com/DarkmodeBrewing/rust-mule.git
+It also declares:
 
-WORKDIR /opt/rust-mule
-RUN cargo fetch
-RUN cargo build --release
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-COPY entrypoint.sh /
-RUN chmod +x /entrypoint.sh
-
-CMD ["/entrypoint.sh"]
-```
+- `VOLUME ["/data"]`
+- `EXPOSE 17835 18080`
+- a Docker `HEALTHCHECK`
+- `USER mule`
+- `CMD ["/entrypoint.sh"]`
 
 ---
 
-# Example Entrypoint
+# Entrypoint Contract
 
-```
-#!/usr/bin/env bash
-set -e
+The container entrypoint is responsible for rust-mule bootstrap, not just mule-doctor startup.
 
-echo "Starting rust-mule..."
+At startup it:
 
-/opt/rust-mule/target/release/rust-mule \
-  --config /data/config.toml &
+1. creates runtime directories for logs and pid files
+2. validates the rust-mule binary and config file
+3. launches rust-mule
+4. waits for the token file at `RUST_MULE_TOKEN_PATH`
+5. exports `RUST_MULE_TOKEN_PATH`
+6. launches mule-doctor
+7. exits non-zero if either managed process exits unexpectedly
 
-RUST_PID=$!
+---
 
-echo "Waiting for API token..."
+# Readiness Layers
 
-while [ ! -f /data/token ]; do
-  sleep 1
-done
+mule-doctor runtime readiness is intentionally split into layers:
 
-echo "Starting mule-doctor..."
+- `entrypoint.sh` handles process bootstrap and token-file wait semantics
+- `src/startup/readiness.ts` validates mule-doctor runtime prerequisites such as:
+  - readable token files
+  - accessible rust-mule log parent directory
+  - writable mule-doctor persistence and artifact directories
+- the container `HEALTHCHECK` verifies steady-state process liveness and local HTTP readiness
+- `scripts/smoke-compose.sh` is the canonical end-to-end validation path for the composed stack
 
-node /app/dist/index.js
+This split is deliberate:
 
-wait $RUST_PID
-```
+- bootstrap concerns stay in the shell/container boundary
+- mule-doctor validates only the prerequisites it directly depends on
+- ongoing health is handled by the Docker healthcheck and smoke harness, not by startup validation alone
+
+---
+
+# Operational Validation
+
+- `npm run smoke:docker` is the canonical container-stack validation path.
+
+That smoke run should prove:
+
+- the image builds successfully
+- the entrypoint launches rust-mule and mule-doctor in the expected order
+- rust-mule reaches local readiness with `status.ready=true` and `searches.ready=true`
+- the operator console responds with authenticated `GET /api/health` when enabled
+- runtime artifacts are persisted under `/data`
 
 ---
 

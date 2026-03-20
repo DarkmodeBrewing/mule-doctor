@@ -145,6 +145,15 @@ Important distinction:
 - `entrypoint.sh` validates file existence and token creation
 - mule-doctor's own startup readiness validation separately checks its runtime prerequisites
 
+Runtime contract summary:
+
+- the image provides defaults for `/opt/rust-mule`, `/app`, `/data`, and the bundled healthcheck script
+- `entrypoint.sh` owns rust-mule process bootstrap inside the container
+- mule-doctor process startup only begins after the token file exists at `RUST_MULE_TOKEN_PATH`
+- mule-doctor then performs its own readiness validation before wiring runtime services
+- the Docker `HEALTHCHECK` is a steady-state probe, not a bootstrap mechanism
+- `npm run smoke:docker` is the canonical end-to-end validation path for the composed container stack
+
 ## 3. Managed rust-mule config.toml Generation
 
 For mule-doctor-managed local instances, mule-doctor generates a dedicated `config.toml` per instance.
@@ -260,6 +269,13 @@ mule-doctor startup readiness currently validates:
 
 This is mule-doctor readiness, not full rust-mule network readiness.
 
+Specifically, mule-doctor readiness does not:
+
+- launch rust-mule
+- wait for token creation
+- verify rust-mule HTTP readiness flags
+- verify container process supervision
+
 rust-mule readiness semantics are currently evolving toward explicit payload readiness flags rather than HTTP `503`/`504` responses. The remaining runtime/container alignment work is tracked in [TASK.md](TASK.md) under `Task E`.
 
 ### Container healthcheck behavior
@@ -294,6 +310,31 @@ Operational note:
 
 - the healthcheck treats `status.ready=false` or `searches.ready=false` as unhealthy, even if the HTTP endpoints return `200`
 - this matches the current runtime contract more closely than older `503/504` assumptions
+
+### Smoke validation path
+
+`npm run smoke:docker` uses [scripts/smoke-compose.sh](../scripts/smoke-compose.sh) as the canonical runtime-stack validation flow.
+
+It validates all three runtime layers together:
+
+- image + entrypoint startup through `docker compose up --build`
+- rust-mule token creation and local HTTP readiness
+- mule-doctor authenticated `/api/health` when the UI is enabled
+
+It also verifies persisted runtime artifacts under the mounted `/data` tree, including:
+
+- `config.toml`
+- `logs/rust-mule.log`
+- `mule-doctor/state.json`
+- `mule-doctor/history.json`
+- `mule-doctor/operator-events.json`
+
+Operational constraints:
+
+- Docker with `docker compose` is required
+- the requested host ports must be available
+- the harness injects placeholder `OPENAI_API_KEY` and `MATTERMOST_WEBHOOK_URL` unless you override them
+- if `RUST_MULE_TOKEN_PATH` is overridden for smoke use, it must remain under `/data`
 
 ## Minimum Practical Configurations
 
