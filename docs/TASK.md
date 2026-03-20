@@ -106,6 +106,12 @@ Acceptance criteria:
 - Regression detection happens before merge for the critical runtime paths.
 - Release validation is repeatable rather than ad hoc.
 
+Current status:
+
+- PRs now run the existing Docker smoke harness in a dedicated workflow instead of leaving container validation entirely manual
+- smoke failures preserve the harness work directory and upload artifacts from the GitHub runner for debugging
+- remaining Task F work should focus on release-oriented validation and any additional high-value integration coverage beyond `npm run check` plus smoke
+
 ## Task J: Track Full Search Lifecycle and Search Health Signals
 
 1. Add explicit search-lifecycle tracking around rust-mule keyword searches, including:

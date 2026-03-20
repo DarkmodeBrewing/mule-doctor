@@ -43,8 +43,8 @@ For the full runtime contract, including optional env vars, container entrypoint
 - `npm run format` – run Prettier and write formatting changes
 - `npm run format:check` – verify formatting without writing changes
 - `npm test` – build + run basic smoke tests
-- `npm run smoke:docker` – build the Docker stack, wait for rust-mule + mule-doctor readiness, and validate persisted runtime artifacts under a disposable temp `/data`
-- `npm run check` – CI-friendly verification (`typecheck` + `lint` + `test`)
+- `npm run smoke:docker` – build the Docker stack, wait for rust-mule + mule-doctor readiness, and validate persisted runtime artifacts under a disposable temp `/data`; this is the same end-to-end path now exercised by the dedicated PR smoke workflow
+- `npm run check` – fast CI verification (`typecheck` + `lint` + `test`)
 
 ## Container Runtime
 
