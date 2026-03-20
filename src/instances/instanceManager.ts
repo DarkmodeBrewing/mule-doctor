@@ -3,7 +3,8 @@
  * Plans, persists, and manages mule-doctor-owned local rust-mule instances.
  */
 
-import { access, constants, mkdir, rm, writeFile } from "fs/promises";
+import { constants } from "fs";
+import { access, mkdir, rm, writeFile } from "fs/promises";
 import { delimiter, resolve } from "path";
 import { InstanceCatalog, type InstanceCatalogConfig } from "./instanceCatalog.js";
 import type {

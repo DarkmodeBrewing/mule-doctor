@@ -66,9 +66,10 @@ if [ -n "$RUST_MULE_TOKEN_PATH" ]; then
     if ! kill -0 "$RUST_PID" >/dev/null 2>&1; then
       echo "rust-mule exited before token file became available" >&2
       wait "$RUST_PID"
+      exit "$?"
     fi
 
-    if [ -r "$RUST_MULE_TOKEN_PATH" ] && [ -s "$RUST_MULE_TOKEN_PATH" ]; then
+    if [ -f "$RUST_MULE_TOKEN_PATH" ] && [ -r "$RUST_MULE_TOKEN_PATH" ] && [ -s "$RUST_MULE_TOKEN_PATH" ]; then
       break
     fi
 
