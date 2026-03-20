@@ -188,8 +188,7 @@ The operator console is a built-in web surface served by mule-doctor.
 
 Current phase:
 
-- read-only browser UI
-- token-protected access
+- token-protected browser UI and API
 - JSON API for health, logs, and proposal artifacts
 - SSE streams for live app-log and rust-mule-log viewing
 - bounded managed-instance controls for mule-doctor-owned local test instances:
@@ -197,7 +196,8 @@ Current phase:
   - start / stop / restart instance
   - apply preset
   - start / stop / restart preset group
-  - inspect diagnostics / analysis / compare views
+  - selected-instance diagnostics / analysis / compare views
+  - selected-instance shared-content and discoverability actions
   - set active diagnostic target
 
 Implementation note:

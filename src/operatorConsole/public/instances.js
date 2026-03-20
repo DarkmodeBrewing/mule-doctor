@@ -2,8 +2,10 @@
 
 import {
   INSTANCE_ANALYSIS_PLACEHOLDER,
+  INSTANCE_DISCOVERABILITY_PLACEHOLDER,
   INSTANCE_DIAGNOSTICS_PLACEHOLDER,
   INSTANCE_LOGS_PLACEHOLDER,
+  INSTANCE_SHARED_PLACEHOLDER,
   LOG_LINE_LIMIT,
 } from "./constants.js";
 import { createInstanceCompareController } from "./instanceCompare.js";
@@ -18,6 +20,8 @@ export function createInstancesController({
   fetchJson,
   postJson,
   refreshOperatorEvents,
+  refreshDiscoverabilityResults,
+  refreshSearchHealthResults,
 }) {
   const compare = createInstanceCompareController({ fetchJson, setText });
   const presets = createInstancePresetsController({ state });
@@ -33,6 +37,14 @@ export function createInstancesController({
     views.renderInstanceList(state.currentManagedInstances);
     views.renderInstanceGroups(state.currentManagedInstances);
     views.renderSelectedInstanceTimelineControls();
+    renderSelectedControlAvailability();
+  }
+
+  function getSelectedManagedInstance() {
+    if (!state.selectedInstanceId) {
+      return undefined;
+    }
+    return state.currentManagedInstances.find((instance) => instance.id === state.selectedInstanceId);
   }
 
   function buildControlState(entry) {
@@ -68,6 +80,18 @@ export function createInstancesController({
 
   function setInstanceFeedback(text, isError = false) {
     const element = document.getElementById("instance-feedback");
+    element.textContent = text;
+    element.className = isError ? "status" : "muted";
+  }
+
+  function setSelectedSharedFeedback(text, isError = false) {
+    const element = document.getElementById("selected-instance-shared-feedback");
+    element.textContent = text;
+    element.className = isError ? "status" : "muted";
+  }
+
+  function setSelectedDiscoverabilityFeedback(text, isError = false) {
+    const element = document.getElementById("selected-instance-discoverability-feedback");
     element.textContent = text;
     element.className = isError ? "status" : "muted";
   }
@@ -117,9 +141,152 @@ export function createInstancesController({
     return `${label}: ${items.join(" • ")}`;
   }
 
+  function renderSharedSummary(shared) {
+    const element = document.getElementById("selected-instance-shared-summary");
+    if (!shared) {
+      element.textContent = "No shared-content overview loaded.";
+      element.className = "preset-help muted";
+      return;
+    }
+
+    const parts = [
+      `Instance: ${shared.instanceId}`,
+      `${shared.files?.length ?? 0} shared files`,
+      `${shared.actions?.length ?? 0} shared actions`,
+      `${shared.downloads?.length ?? 0} downloads`,
+    ];
+    const firstFile = shared.files?.[0]?.identity?.file_name;
+    if (firstFile) {
+      parts.push(`Sample file: ${firstFile}`);
+    }
+    element.textContent = parts.join(" • ");
+    element.className = "preset-help";
+  }
+
+  function renderDiscoverabilitySummary(result) {
+    const element = document.getElementById("selected-instance-discoverability-summary");
+    if (!result) {
+      element.textContent = "No discoverability result loaded.";
+      element.className = "preset-help muted";
+      return;
+    }
+
+    const parts = [
+      `${result.publisherInstanceId} -> ${result.searcherInstanceId}`,
+      `Outcome: ${result.outcome}`,
+      `Results: ${result.resultCount}`,
+      `Search ID: ${result.searchId}`,
+    ];
+    if (result.fixture?.fileName) {
+      parts.push(`Fixture: ${result.fixture.fileName}`);
+    }
+    element.textContent = parts.join(" • ");
+    element.className = "preset-help";
+  }
+
+  function renderDiscoverabilityOptions(instances) {
+    const publisher = document.getElementById("discoverability-publisher");
+    const searcher = document.getElementById("discoverability-searcher");
+    const previousPublisher = publisher.value;
+    const previousSearcher = searcher.value;
+    const candidates = instances.filter((instance) => typeof instance.id === "string");
+
+    publisher.replaceChildren();
+    searcher.replaceChildren();
+
+    if (!candidates.length) {
+      for (const select of [publisher, searcher]) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "No managed instances available";
+        select.appendChild(option);
+        select.disabled = true;
+      }
+      return;
+    }
+
+    publisher.disabled = false;
+    searcher.disabled = false;
+    for (const instance of candidates) {
+      const label = `${instance.id} (${instance.status})`;
+      for (const select of [publisher, searcher]) {
+        const option = document.createElement("option");
+        option.value = instance.id;
+        option.textContent = label;
+        select.appendChild(option);
+      }
+    }
+
+    const selectedId = state.selectedInstanceId;
+    publisher.value =
+      candidates.some((instance) => instance.id === previousPublisher)
+        ? previousPublisher
+        : selectedId && candidates.some((instance) => instance.id === selectedId)
+          ? selectedId
+          : candidates[0].id;
+    const defaultSearcher = candidates.find((instance) => instance.id !== publisher.value)?.id;
+    searcher.value =
+      candidates.some((instance) => instance.id === previousSearcher)
+        ? previousSearcher
+        : defaultSearcher ?? candidates[0].id;
+  }
+
+  function renderSelectedControlAvailability() {
+    const selected = getSelectedManagedInstance();
+    const hasSelection = Boolean(selected);
+    const pendingAction = selected
+      ? state.instanceControlState.instances[selected.id]?.pendingAction
+      : undefined;
+    const disabled = !hasSelection || Boolean(pendingAction);
+    const isScheduledTarget =
+      selected &&
+      state.currentScheduledTarget?.kind === "managed_instance" &&
+      state.currentScheduledTarget.instanceId === selected.id;
+    const meta = document.getElementById("selected-instance-meta");
+    if (!selected) {
+      meta.textContent = "Select a managed instance to inspect and operate it from this control pane.";
+      meta.className = "preset-help muted";
+    } else {
+      const parts = [
+        `${selected.id} (${selected.status})`,
+        `${selected.apiHost}:${selected.apiPort}`,
+        selected.currentProcess ? `pid ${selected.currentProcess.pid}` : "",
+        selected.preset ? `preset ${selected.preset.prefix}/${selected.preset.presetId}` : "",
+        isScheduledTarget ? "scheduled target" : "",
+        selected.lastExit?.reason ? `last exit ${selected.lastExit.reason}` : "",
+      ].filter((part) => Boolean(part));
+      meta.textContent = parts.join(" • ");
+      meta.className = "preset-help";
+    }
+    document.getElementById("selected-instance-refresh").disabled = !hasSelection;
+    document.getElementById("selected-instance-analyze").disabled = disabled;
+    document.getElementById("selected-instance-use-target").disabled = disabled || Boolean(isScheduledTarget);
+    document.getElementById("selected-instance-start").disabled = disabled || selected?.status === "running";
+    document.getElementById("selected-instance-stop").disabled = disabled || selected?.status !== "running";
+    document.getElementById("selected-instance-restart").disabled = disabled || selected?.status !== "running";
+    for (const id of [
+      "selected-instance-refresh-shared",
+      "selected-instance-create-fixture",
+      "selected-instance-reindex",
+      "selected-instance-republish-sources",
+      "selected-instance-republish-keywords",
+      "run-discoverability-check",
+    ]) {
+      document.getElementById(id).disabled = disabled;
+    }
+  }
+
+  async function loadSelectedInstanceShared(id) {
+    const response = await fetchJson(`/api/instances/${encodeURIComponent(id)}/shared`);
+    renderSharedSummary(response.shared);
+    setText("instance-shared", JSON.stringify(response.shared, null, 2));
+    return response.shared;
+  }
+
   async function inspectInstance(id) {
     state.selectedInstanceId = id;
     views.renderSelectedInstanceTimelineControls();
+    renderSelectedControlAvailability();
     try {
       const surfaceDiagnostics = await fetchJson(
         `/api/instances/${encodeURIComponent(id)}/surface_diagnostics`,
@@ -135,6 +302,12 @@ export function createInstancesController({
       highlightsElement.textContent = `Failed to load runtime surface highlights: ${String(err)}`;
       highlightsElement.className = "preset-help muted";
       setText("instance-runtime-diagnostics", `Failed to load runtime diagnostics: ${String(err)}`);
+    }
+    try {
+      await loadSelectedInstanceShared(id);
+    } catch (err) {
+      renderSharedSummary(undefined);
+      setText("instance-shared", `Failed to load shared-content overview: ${String(err)}`);
     }
     try {
       const [detail, diagnostics, logs] = await Promise.all([
@@ -155,6 +328,7 @@ export function createInstancesController({
   async function analyzeInstance(id) {
     state.selectedInstanceId = id;
     views.renderSelectedInstanceTimelineControls();
+    renderSelectedControlAvailability();
     setControlState("instances", id, {
       message: "Analysis in progress...",
       tone: "pending",
@@ -195,6 +369,30 @@ export function createInstancesController({
     } catch (err) {
       setInstanceFeedback(String(err), true);
     }
+  }
+
+  async function refreshSelectedInstance() {
+    if (!state.selectedInstanceId) {
+      setInstanceFeedback("Select an instance first.", true);
+      return;
+    }
+    await inspectInstance(state.selectedInstanceId);
+  }
+
+  async function analyzeSelectedInstance() {
+    if (!state.selectedInstanceId) {
+      setInstanceFeedback("Select an instance first.", true);
+      return;
+    }
+    await analyzeInstance(state.selectedInstanceId);
+  }
+
+  async function useSelectedInstanceAsTarget() {
+    if (!state.selectedInstanceId) {
+      setInstanceFeedback("Select an instance first.", true);
+      return;
+    }
+    await updateObserverTarget({ kind: "managed_instance", instanceId: state.selectedInstanceId });
   }
 
   async function mutateInstance(id, action) {
@@ -241,6 +439,14 @@ export function createInstancesController({
     }
   }
 
+  async function mutateSelectedInstance(action) {
+    if (!state.selectedInstanceId) {
+      setInstanceFeedback("Select an instance first.", true);
+      return;
+    }
+    await mutateInstance(state.selectedInstanceId, action);
+  }
+
   async function createInstance(event) {
     event.preventDefault();
     const form = document.getElementById("instance-create-form");
@@ -266,6 +472,125 @@ export function createInstancesController({
       await inspectInstance(data.instance.id);
     } catch (err) {
       setInstanceFeedback(String(err), true);
+    }
+  }
+
+  async function refreshSelectedInstanceShared() {
+    if (!state.selectedInstanceId) {
+      setSelectedSharedFeedback("Select an instance first.", true);
+      return;
+    }
+    try {
+      await loadSelectedInstanceShared(state.selectedInstanceId);
+      setSelectedSharedFeedback(`loaded shared-content overview for ${state.selectedInstanceId}`);
+    } catch (err) {
+      setSelectedSharedFeedback(String(err), true);
+    }
+  }
+
+  async function createSelectedInstanceFixture() {
+    if (!state.selectedInstanceId) {
+      setSelectedSharedFeedback("Select an instance first.", true);
+      return;
+    }
+    const fixtureInput = document.getElementById("discoverability-fixture-id");
+    const fixtureId = String(fixtureInput.value || "").trim();
+    try {
+      const result = await postJson(
+        `/api/instances/${encodeURIComponent(state.selectedInstanceId)}/shared/fixtures`,
+        fixtureId ? { fixtureId } : {},
+      );
+      setSelectedSharedFeedback(
+        `created fixture ${result.fixture.fileName} for ${state.selectedInstanceId}`,
+      );
+      await loadSelectedInstanceShared(state.selectedInstanceId);
+      setText("instance-discoverability-result", JSON.stringify(result.fixture, null, 2));
+      renderDiscoverabilitySummary(undefined);
+      await refreshOperatorEvents();
+    } catch (err) {
+      setSelectedSharedFeedback(String(err), true);
+    }
+  }
+
+  async function mutateSelectedInstanceShared(action) {
+    if (!state.selectedInstanceId) {
+      setSelectedSharedFeedback("Select an instance first.", true);
+      return;
+    }
+    try {
+      const result = await postJson(
+        `/api/instances/${encodeURIComponent(state.selectedInstanceId)}/shared/${action}`,
+      );
+      await loadSelectedInstanceShared(state.selectedInstanceId);
+      setText("instance-shared", JSON.stringify(result.shared, null, 2));
+      setSelectedSharedFeedback(`${action} completed for ${state.selectedInstanceId}`);
+      await refreshOperatorEvents();
+    } catch (err) {
+      setSelectedSharedFeedback(String(err), true);
+    }
+  }
+
+  async function refreshDiscoverabilityViews() {
+    try {
+      await Promise.all([refreshDiscoverabilityResults(), refreshSearchHealthResults()]);
+      setSelectedDiscoverabilityFeedback("discoverability and search-health views refreshed");
+    } catch (err) {
+      setSelectedDiscoverabilityFeedback(String(err), true);
+    }
+  }
+
+  async function runDiscoverabilityCheck(event) {
+    event.preventDefault();
+    const runButton = document.getElementById("run-discoverability-check");
+    const publisherSelect = document.getElementById("discoverability-publisher");
+    const searcherSelect = document.getElementById("discoverability-searcher");
+    const publisherInstanceId = document.getElementById("discoverability-publisher").value;
+    const searcherInstanceId = document.getElementById("discoverability-searcher").value;
+    const fixtureId = String(document.getElementById("discoverability-fixture-id").value || "").trim();
+    const timeoutMsRaw = String(document.getElementById("discoverability-timeout-ms").value || "").trim();
+    const pollIntervalMsRaw = String(document.getElementById("discoverability-poll-ms").value || "").trim();
+    const payload = {
+      publisherInstanceId,
+      searcherInstanceId,
+    };
+    if (fixtureId) {
+      payload.fixtureId = fixtureId;
+    }
+    if (timeoutMsRaw) {
+      payload.timeoutMs = Number(timeoutMsRaw);
+    }
+    if (pollIntervalMsRaw) {
+      payload.pollIntervalMs = Number(pollIntervalMsRaw);
+    }
+
+    try {
+      runButton.disabled = true;
+      publisherSelect.disabled = true;
+      searcherSelect.disabled = true;
+      setSelectedDiscoverabilityFeedback("running controlled discoverability check...");
+      const result = await postJson("/api/discoverability/check", payload);
+      renderDiscoverabilitySummary(result.result);
+      setText("instance-discoverability-result", JSON.stringify(result.result, null, 2));
+      setSelectedDiscoverabilityFeedback(
+        `discoverability outcome ${result.result.outcome} for ${publisherInstanceId} -> ${searcherInstanceId}`,
+      );
+      await Promise.all([
+        refreshDiscoverabilityResults(),
+        refreshSearchHealthResults(),
+        refreshOperatorEvents(),
+      ]);
+      if (state.selectedInstanceId === publisherInstanceId || state.selectedInstanceId === searcherInstanceId) {
+        await inspectInstance(state.selectedInstanceId);
+      }
+    } catch (err) {
+      setSelectedDiscoverabilityFeedback(String(err), true);
+      setText(
+        "instance-discoverability-result",
+        `Failed to run discoverability check: ${String(err)}`,
+      );
+    } finally {
+      renderDiscoverabilityOptions(state.currentManagedInstances);
+      renderSelectedControlAvailability();
     }
   }
 
@@ -399,6 +724,7 @@ export function createInstancesController({
       const data = await fetchJson("/api/instances");
       state.currentManagedInstances = data.instances;
       clearStaleControlState(data.instances);
+      renderDiscoverabilityOptions(data.instances);
       views.renderInstanceList(data.instances);
       views.renderInstanceGroups(data.instances);
       timeline.populateOperatorEventFilters();
@@ -413,8 +739,13 @@ export function createInstancesController({
           setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
           setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
           setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
+          setText("instance-shared", INSTANCE_SHARED_PLACEHOLDER);
+          setText("instance-discoverability-result", INSTANCE_DISCOVERABILITY_PLACEHOLDER);
+          renderSharedSummary(undefined);
+          renderDiscoverabilitySummary(undefined);
         }
       }
+      renderSelectedControlAvailability();
     } catch (err) {
       state.currentManagedInstances = [];
       state.selectedInstanceId = null;
@@ -425,24 +756,35 @@ export function createInstancesController({
       views.renderInstanceGroups([]);
       views.renderInstanceList([]);
       views.renderSelectedInstanceTimelineControls();
+      renderDiscoverabilityOptions([]);
+      renderSelectedControlAvailability();
       setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
       statusCards.renderTargetStatusCard();
     }
   }
 
   return {
+    analyzeSelectedInstance,
     analyzeInstance,
     applyInstancePreset,
     createInstance,
+    createSelectedInstanceFixture,
     inspectInstance,
+    mutateSelectedInstanceShared,
+    mutateSelectedInstance,
     refreshInstanceCompare: compare.refreshInstanceCompare,
+    refreshDiscoverabilityViews,
     refreshInstancePresets,
     refreshInstances,
+    refreshSelectedInstance,
+    refreshSelectedInstanceShared,
     renderCompareTimelineControls: compare.renderCompareTimelineControls,
     renderInstancePresets: presets.renderInstancePresets,
     renderSelectedInstanceTimelineControls: views.renderSelectedInstanceTimelineControls,
     renderSelectedPresetHelp: presets.renderSelectedPresetHelp,
+    runDiscoverabilityCheck,
     setInstanceFeedback,
     updateObserverTarget,
+    useSelectedInstanceAsTarget,
   };
 }

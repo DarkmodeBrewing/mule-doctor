@@ -6,6 +6,10 @@ export const INSTANCE_ANALYSIS_PLACEHOLDER =
   "Run on-demand analysis for the selected managed instance.";
 export const INSTANCE_LOGS_PLACEHOLDER =
   "Select an instance to inspect per-instance rust-mule logs.";
+export const INSTANCE_SHARED_PLACEHOLDER =
+  "Select an instance to inspect and manage shared content.";
+export const INSTANCE_DISCOVERABILITY_PLACEHOLDER =
+  "Run a controlled discoverability check between managed instances.";
 export const OBSERVER_TARGET_PLACEHOLDER = "Loading active diagnostic target...";
 export const INSTANCE_PRESET_PLACEHOLDER = "Loading instance presets...";
 export const INSTANCE_PRESET_HELP_PLACEHOLDER =

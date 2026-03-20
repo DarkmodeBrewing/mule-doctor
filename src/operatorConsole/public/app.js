@@ -3,9 +3,11 @@
 import {
   INSTANCE_ANALYSIS_PLACEHOLDER,
   INSTANCE_DETAIL_PLACEHOLDER,
+  INSTANCE_DISCOVERABILITY_PLACEHOLDER,
   INSTANCE_DIAGNOSTICS_PLACEHOLDER,
   INSTANCE_LOGS_PLACEHOLDER,
   INSTANCE_PRESET_PLACEHOLDER,
+  INSTANCE_SHARED_PLACEHOLDER,
   LOG_LINE_LIMIT,
   OBSERVER_TARGET_PLACEHOLDER,
 } from "./constants.js";
@@ -42,6 +44,8 @@ const instances = createInstancesController({
   fetchJson,
   postJson,
   refreshOperatorEvents,
+  refreshDiscoverabilityResults: discoverability.refreshDiscoverabilityResults,
+  refreshSearchHealthResults: discoverability.refreshSearchHealthResults,
 });
 
 async function refreshHealth() {
@@ -129,6 +133,8 @@ setText("instance-detail", INSTANCE_DETAIL_PLACEHOLDER);
 setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
 setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
 setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
+setText("instance-shared", INSTANCE_SHARED_PLACEHOLDER);
+setText("instance-discoverability-result", INSTANCE_DISCOVERABILITY_PLACEHOLDER);
 setText("observer-target", OBSERVER_TARGET_PLACEHOLDER);
 instances.renderInstancePresets([], INSTANCE_PRESET_PLACEHOLDER);
 setText("instance-compare", "Select two managed instances to compare.");
@@ -223,8 +229,45 @@ document.getElementById("run-observer-now").onclick = () => {
 };
 document.getElementById("instance-create-form").onsubmit = instances.createInstance;
 document.getElementById("instance-preset-form").onsubmit = instances.applyInstancePreset;
+document.getElementById("instance-discoverability-form").onsubmit = instances.runDiscoverabilityCheck;
 document.getElementById("use-external-target").onclick = () => {
   void instances.updateObserverTarget({ kind: "external" });
+};
+document.getElementById("selected-instance-refresh").onclick = () => {
+  void instances.refreshSelectedInstance();
+};
+document.getElementById("selected-instance-analyze").onclick = () => {
+  void instances.analyzeSelectedInstance();
+};
+document.getElementById("selected-instance-use-target").onclick = () => {
+  void instances.useSelectedInstanceAsTarget();
+};
+document.getElementById("selected-instance-start").onclick = () => {
+  void instances.mutateSelectedInstance("start");
+};
+document.getElementById("selected-instance-stop").onclick = () => {
+  void instances.mutateSelectedInstance("stop");
+};
+document.getElementById("selected-instance-restart").onclick = () => {
+  void instances.mutateSelectedInstance("restart");
+};
+document.getElementById("selected-instance-refresh-shared").onclick = () => {
+  void instances.refreshSelectedInstanceShared();
+};
+document.getElementById("selected-instance-create-fixture").onclick = () => {
+  void instances.createSelectedInstanceFixture();
+};
+document.getElementById("selected-instance-reindex").onclick = () => {
+  void instances.mutateSelectedInstanceShared("reindex");
+};
+document.getElementById("selected-instance-republish-sources").onclick = () => {
+  void instances.mutateSelectedInstanceShared("republish_sources");
+};
+document.getElementById("selected-instance-republish-keywords").onclick = () => {
+  void instances.mutateSelectedInstanceShared("republish_keywords");
+};
+document.getElementById("selected-instance-refresh-discoverability").onclick = () => {
+  void instances.refreshDiscoverabilityViews();
 };
 
 refreshAll().finally(() => {
