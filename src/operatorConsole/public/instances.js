@@ -541,6 +541,9 @@ export function createInstancesController({
 
   async function runDiscoverabilityCheck(event) {
     event.preventDefault();
+    const runButton = document.getElementById("run-discoverability-check");
+    const publisherSelect = document.getElementById("discoverability-publisher");
+    const searcherSelect = document.getElementById("discoverability-searcher");
     const publisherInstanceId = document.getElementById("discoverability-publisher").value;
     const searcherInstanceId = document.getElementById("discoverability-searcher").value;
     const fixtureId = String(document.getElementById("discoverability-fixture-id").value || "").trim();
@@ -561,6 +564,9 @@ export function createInstancesController({
     }
 
     try {
+      runButton.disabled = true;
+      publisherSelect.disabled = true;
+      searcherSelect.disabled = true;
       setSelectedDiscoverabilityFeedback("running controlled discoverability check...");
       const result = await postJson("/api/discoverability/check", payload);
       renderDiscoverabilitySummary(result.result);
@@ -582,6 +588,9 @@ export function createInstancesController({
         "instance-discoverability-result",
         `Failed to run discoverability check: ${String(err)}`,
       );
+    } finally {
+      renderDiscoverabilityOptions(state.currentManagedInstances);
+      renderSelectedControlAvailability();
     }
   }
 
@@ -718,7 +727,6 @@ export function createInstancesController({
       renderDiscoverabilityOptions(data.instances);
       views.renderInstanceList(data.instances);
       views.renderInstanceGroups(data.instances);
-      renderSelectedControlAvailability();
       timeline.populateOperatorEventFilters();
       timeline.applyOperatorEventFilters();
       statusCards.renderTargetStatusCard();

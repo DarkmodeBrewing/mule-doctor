@@ -205,14 +205,23 @@
               </div>
             </div>
             <form id="instance-discoverability-form" class="instance-form">
-              <select id="discoverability-publisher" name="publisherInstanceId"></select>
-              <select id="discoverability-searcher" name="searcherInstanceId"></select>
+              <select
+                id="discoverability-publisher"
+                name="publisherInstanceId"
+                aria-label="Publisher instance"
+              ></select>
+              <select
+                id="discoverability-searcher"
+                name="searcherInstanceId"
+                aria-label="Searcher instance"
+              ></select>
               <input
                 id="discoverability-fixture-id"
                 name="fixtureId"
                 type="text"
                 placeholder="fixture id (optional)"
                 maxlength="64"
+                aria-label="Fixture ID"
               />
               <div class="inline-fields">
                 <input
@@ -222,6 +231,7 @@
                   min="1000"
                   step="1000"
                   placeholder="timeout ms"
+                  aria-label="Discoverability timeout milliseconds"
                 />
                 <input
                   id="discoverability-poll-ms"
@@ -230,6 +240,7 @@
                   min="100"
                   step="50"
                   placeholder="poll ms"
+                  aria-label="Discoverability poll interval milliseconds"
                 />
               </div>
               <button id="run-discoverability-check" type="submit">Run discoverability check</button>
