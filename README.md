@@ -45,6 +45,7 @@ For the full runtime contract, including optional env vars, container entrypoint
 - `npm test` – build + run basic smoke tests
 - `npm run smoke:docker` – build the Docker stack, wait for rust-mule + mule-doctor readiness, and validate persisted runtime artifacts under a disposable temp `/data`; this remains a local or environment-specific check because rust-mule needs a working SAM/I2P dependency to come fully up
 - `npm run check` – fast CI verification (`typecheck` + `lint` + `test`)
+- PR CI also validates the Docker image build, rendered compose config, and packaged runtime layout inside the built image
 
 ## Container Runtime
 

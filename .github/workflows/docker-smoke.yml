@@ -38,5 +38,63 @@ jobs:
           docker version
           docker compose version
 
+      - name: Render Compose Config
+        run: docker compose config
+
       - name: Build Docker Image Through Compose
         run: docker compose build --pull
+
+      - name: Capture Built Image Reference
+        id: image
+        run: |
+          image_id="$(docker compose images -q mule-doctor)"
+          if [ -z "$image_id" ]; then
+            echo "failed to resolve built mule-doctor image" >&2
+            exit 1
+          fi
+          echo "image_id=$image_id" >>"$GITHUB_OUTPUT"
+
+      - name: Validate Runtime Image Layout
+        env:
+          IMAGE_ID: ${{ steps.image.outputs.image_id }}
+        run: |
+          docker run --rm --entrypoint bash "$IMAGE_ID" -lc '
+            set -euo pipefail
+
+            test -x /entrypoint.sh
+            test -d /app/dist
+            test -f /app/package.json
+            test -x /app/scripts/container-healthcheck.sh
+            test -d /opt/rust-mule
+            test -x /opt/rust-mule/target/release/rust-mule
+            test -d /data
+            test -d /data/logs
+            test -d /data/mule-doctor
+
+            [ "$NODE_ENV" = "production" ]
+            [ "$RUST_MULE_API_URL" = "http://127.0.0.1:17835" ]
+            [ "$RUST_MULE_TOKEN_PATH" = "/data/token" ]
+            [ "$RUST_MULE_LOG_PATH" = "/data/logs/rust-mule.log" ]
+            [ "$RUST_MULE_SOURCE_PATH" = "/opt/rust-mule" ]
+            [ "$MULE_DOCTOR_DATA_DIR" = "/data/mule-doctor" ]
+            [ "$MULE_DOCTOR_STATE_PATH" = "/data/mule-doctor/state.json" ]
+            [ "$MULE_DOCTOR_HISTORY_PATH" = "/data/mule-doctor/history.json" ]
+            [ "$MULE_DOCTOR_LLM_LOG_DIR" = "/data/mule-doctor" ]
+            [ "$MULE_DOCTOR_UI_ENABLED" = "false" ]
+            [ "$MULE_DOCTOR_UI_HOST" = "127.0.0.1" ]
+            [ "$MULE_DOCTOR_UI_PORT" = "18080" ]
+          '
+
+      - name: Validate Docker Image Metadata
+        env:
+          IMAGE_ID: ${{ steps.image.outputs.image_id }}
+        run: |
+          workdir="$(docker image inspect "$IMAGE_ID" --format '{{ .Config.WorkingDir }}')"
+          user="$(docker image inspect "$IMAGE_ID" --format '{{ .Config.User }}')"
+          cmd="$(docker image inspect "$IMAGE_ID" --format '{{ json .Config.Cmd }}')"
+          healthcheck="$(docker image inspect "$IMAGE_ID" --format '{{ json .Config.Healthcheck.Test }}')"
+
+          [ "$workdir" = "/app" ]
+          [ "$user" = "mule" ]
+          [ "$cmd" = '["/entrypoint.sh"]' ]
+          [ "$healthcheck" = '["CMD","/app/scripts/container-healthcheck.sh"]' ]
