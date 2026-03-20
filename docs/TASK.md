@@ -108,9 +108,9 @@ Acceptance criteria:
 
 Current status:
 
-- PRs now run the existing Docker smoke harness in a dedicated workflow instead of leaving container validation entirely manual
-- smoke failures preserve the harness work directory and upload artifacts from the GitHub runner for debugging
-- remaining Task F work should focus on release-oriented validation and any additional high-value integration coverage beyond `npm run check` plus smoke
+- PRs now validate the Docker/compose build path in a dedicated workflow so container regressions surface before merge
+- full `npm run smoke:docker` runtime validation remains environment-specific because rust-mule needs an available SAM/I2P dependency and is not portable to GitHub-hosted runners
+- remaining Task F work should focus on release-oriented validation and any additional high-value integration coverage beyond `npm run check` plus Docker build validation
 
 ## Task J: Track Full Search Lifecycle and Search Health Signals
 

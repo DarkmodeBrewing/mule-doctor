@@ -1,4 +1,4 @@
-name: Docker Smoke
+name: Docker Build
 
 on:
   pull_request:
@@ -15,14 +15,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: docker-smoke-${{ github.event.pull_request.number || github.ref }}
+  group: docker-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  smoke:
-    name: Docker Smoke Validation
+  build:
+    name: Docker Build Validation
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
@@ -38,14 +38,5 @@ jobs:
           docker version
           docker compose version
 
-      - name: Run Docker Smoke Validation
-        run: npm run smoke:docker
-
-      - name: Upload Smoke Artifacts On Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-smoke-artifacts
-          path: /tmp/mule-doctor-smoke.*
-          if-no-files-found: ignore
-          retention-days: 7
+      - name: Build Docker Image Through Compose
+        run: docker compose build --pull
