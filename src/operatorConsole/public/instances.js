@@ -40,6 +40,13 @@ export function createInstancesController({
     renderSelectedControlAvailability();
   }
 
+  function getSelectedManagedInstance() {
+    if (!state.selectedInstanceId) {
+      return undefined;
+    }
+    return state.currentManagedInstances.find((instance) => instance.id === state.selectedInstanceId);
+  }
+
   function buildControlState(entry) {
     return {
       ...entry,
@@ -225,12 +232,38 @@ export function createInstancesController({
   }
 
   function renderSelectedControlAvailability() {
-    const hasSelection =
-      typeof state.selectedInstanceId === "string" && state.selectedInstanceId.length > 0;
-    const pendingAction = hasSelection
-      ? state.instanceControlState.instances[state.selectedInstanceId]?.pendingAction
+    const selected = getSelectedManagedInstance();
+    const hasSelection = Boolean(selected);
+    const pendingAction = selected
+      ? state.instanceControlState.instances[selected.id]?.pendingAction
       : undefined;
     const disabled = !hasSelection || Boolean(pendingAction);
+    const isScheduledTarget =
+      selected &&
+      state.currentScheduledTarget?.kind === "managed_instance" &&
+      state.currentScheduledTarget.instanceId === selected.id;
+    const meta = document.getElementById("selected-instance-meta");
+    if (!selected) {
+      meta.textContent = "Select a managed instance to inspect and operate it from this control pane.";
+      meta.className = "preset-help muted";
+    } else {
+      const parts = [
+        `${selected.id} (${selected.status})`,
+        `${selected.apiHost}:${selected.apiPort}`,
+        selected.currentProcess ? `pid ${selected.currentProcess.pid}` : "",
+        selected.preset ? `preset ${selected.preset.prefix}/${selected.preset.presetId}` : "",
+        isScheduledTarget ? "scheduled target" : "",
+        selected.lastExit?.reason ? `last exit ${selected.lastExit.reason}` : "",
+      ].filter((part) => Boolean(part));
+      meta.textContent = parts.join(" • ");
+      meta.className = "preset-help";
+    }
+    document.getElementById("selected-instance-refresh").disabled = !hasSelection;
+    document.getElementById("selected-instance-analyze").disabled = disabled;
+    document.getElementById("selected-instance-use-target").disabled = disabled || Boolean(isScheduledTarget);
+    document.getElementById("selected-instance-start").disabled = disabled || selected?.status === "running";
+    document.getElementById("selected-instance-stop").disabled = disabled || selected?.status !== "running";
+    document.getElementById("selected-instance-restart").disabled = disabled || selected?.status !== "running";
     for (const id of [
       "selected-instance-refresh-shared",
       "selected-instance-create-fixture",
@@ -338,6 +371,30 @@ export function createInstancesController({
     }
   }
 
+  async function refreshSelectedInstance() {
+    if (!state.selectedInstanceId) {
+      setInstanceFeedback("Select an instance first.", true);
+      return;
+    }
+    await inspectInstance(state.selectedInstanceId);
+  }
+
+  async function analyzeSelectedInstance() {
+    if (!state.selectedInstanceId) {
+      setInstanceFeedback("Select an instance first.", true);
+      return;
+    }
+    await analyzeInstance(state.selectedInstanceId);
+  }
+
+  async function useSelectedInstanceAsTarget() {
+    if (!state.selectedInstanceId) {
+      setInstanceFeedback("Select an instance first.", true);
+      return;
+    }
+    await updateObserverTarget({ kind: "managed_instance", instanceId: state.selectedInstanceId });
+  }
+
   async function mutateInstance(id, action) {
     try {
       if (
@@ -380,6 +437,14 @@ export function createInstancesController({
       });
       setInstanceFeedback(String(err), true);
     }
+  }
+
+  async function mutateSelectedInstance(action) {
+    if (!state.selectedInstanceId) {
+      setInstanceFeedback("Select an instance first.", true);
+      return;
+    }
+    await mutateInstance(state.selectedInstanceId, action);
   }
 
   async function createInstance(event) {
@@ -672,6 +737,7 @@ export function createInstancesController({
           renderDiscoverabilitySummary(undefined);
         }
       }
+      renderSelectedControlAvailability();
     } catch (err) {
       state.currentManagedInstances = [];
       state.selectedInstanceId = null;
@@ -690,16 +756,19 @@ export function createInstancesController({
   }
 
   return {
+    analyzeSelectedInstance,
     analyzeInstance,
     applyInstancePreset,
     createInstance,
     createSelectedInstanceFixture,
     inspectInstance,
     mutateSelectedInstanceShared,
+    mutateSelectedInstance,
     refreshInstanceCompare: compare.refreshInstanceCompare,
     refreshDiscoverabilityViews,
     refreshInstancePresets,
     refreshInstances,
+    refreshSelectedInstance,
     refreshSelectedInstanceShared,
     renderCompareTimelineControls: compare.renderCompareTimelineControls,
     renderInstancePresets: presets.renderInstancePresets,
@@ -708,5 +777,6 @@ export function createInstancesController({
     runDiscoverabilityCheck,
     setInstanceFeedback,
     updateObserverTarget,
+    useSelectedInstanceAsTarget,
   };
 }

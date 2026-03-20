@@ -153,6 +153,12 @@
           <div class="row">
             <h3>Selected Instance</h3>
             <div class="controls">
+              <button id="selected-instance-refresh" type="button">Refresh selected</button>
+              <button id="selected-instance-analyze" type="button">Analyze</button>
+              <button id="selected-instance-use-target" type="button">Use as target</button>
+              <button id="selected-instance-start" type="button">Start</button>
+              <button id="selected-instance-stop" type="button">Stop</button>
+              <button id="selected-instance-restart" type="button">Restart</button>
               <button id="view-selected-instance-events" type="button">View selected events</button>
               <button id="view-selected-instance-failures" type="button">View selected failures</button>
             </div>
@@ -160,6 +166,9 @@
           <p id="selected-instance-feedback" class="muted">No instance selected.</p>
           <div id="selected-instance-action-summary" class="action-summary muted">
             No control action recorded.
+          </div>
+          <div id="selected-instance-meta" class="preset-help muted">
+            Select a managed instance to inspect and operate it from this control pane.
           </div>
           <div id="instance-runtime-summary" class="preset-help muted">
             No runtime surface summary loaded.

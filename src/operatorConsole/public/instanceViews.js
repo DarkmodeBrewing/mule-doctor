@@ -94,9 +94,7 @@ export function createInstanceViewsController({
     const title = document.createElement("strong");
     const controls = document.createElement("div");
     const meta = document.createElement("div");
-    const inspect = document.createElement("button");
-    const analyze = document.createElement("button");
-    const useAsTarget = document.createElement("button");
+    const select = document.createElement("button");
     const events = document.createElement("button");
     const failures = document.createElement("button");
     const controlState = state.instanceControlState.instances[instance.id];
@@ -104,6 +102,7 @@ export function createInstanceViewsController({
     const isScheduledTarget =
       state.currentScheduledTarget?.kind === "managed_instance" &&
       state.currentScheduledTarget.instanceId === instance.id;
+    const isSelected = state.selectedInstanceId === instance.id;
 
     wrapper.className = "group-member";
     header.className = "instance-header";
@@ -112,23 +111,24 @@ export function createInstanceViewsController({
     title.textContent = `${instance.id} (${instance.status})`;
     meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}${instance.lastExit?.reason ? ` • last exit ${instance.lastExit.reason}` : ""}`;
 
-    inspect.textContent = "Inspect";
-    analyze.textContent = "Analyze";
-    useAsTarget.textContent = "Use as target";
+    select.textContent = isSelected ? "Selected" : "Select";
     events.textContent = "View events";
     failures.textContent = "View failures";
-    inspect.onclick = () => actions.inspectInstance(instance.id);
-    analyze.onclick = () => actions.analyzeInstance(instance.id);
-    useAsTarget.onclick = () =>
-      actions.updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
+    select.onclick = () => actions.inspectInstance(instance.id);
     events.onclick = () => timeline.focusOperatorTimelineForInstance(instance.id, { view: "all" });
     failures.onclick = () =>
       timeline.focusOperatorTimelineForInstance(instance.id, { view: "failures" });
-    if (isScheduledTarget) {
-      useAsTarget.disabled = true;
+    if (isSelected) {
+      select.disabled = true;
     }
 
     header.appendChild(title);
+    if (isSelected) {
+      const selectedPill = document.createElement("span");
+      selectedPill.className = "pill";
+      selectedPill.textContent = "selected";
+      header.appendChild(selectedPill);
+    }
     if (isScheduledTarget) {
       const targetPill = document.createElement("span");
       targetPill.className = "pill target";
@@ -141,9 +141,7 @@ export function createInstanceViewsController({
       degradedPill.textContent = "unavailable";
       header.appendChild(degradedPill);
     }
-    controls.appendChild(inspect);
-    controls.appendChild(analyze);
-    controls.appendChild(useAsTarget);
+    controls.appendChild(select);
     controls.appendChild(events);
     controls.appendChild(failures);
     wrapper.appendChild(header);
@@ -151,14 +149,13 @@ export function createInstanceViewsController({
     wrapper.appendChild(controls);
     appendActionContext(wrapper, [
       "managed locally",
+      isSelected ? "selected in control pane" : "",
       isScheduledTarget ? "already the scheduled target" : "",
       pendingAction ? `${pendingAction} in progress` : "",
     ]);
     appendControlFeedback(wrapper, controlState);
     if (pendingAction) {
-      inspect.disabled = true;
-      analyze.disabled = true;
-      useAsTarget.disabled = true;
+      select.disabled = true;
     }
     return wrapper;
   }
@@ -311,12 +308,7 @@ export function createInstanceViewsController({
       const title = document.createElement("strong");
       const meta = document.createElement("span");
       const controls = document.createElement("div");
-      const start = document.createElement("button");
-      const stop = document.createElement("button");
-      const restart = document.createElement("button");
-      const inspect = document.createElement("button");
-      const analyze = document.createElement("button");
-      const useAsTarget = document.createElement("button");
+      const select = document.createElement("button");
       const events = document.createElement("button");
       const failures = document.createElement("button");
       const controlState = state.instanceControlState.instances[instance.id];
@@ -329,25 +321,15 @@ export function createInstanceViewsController({
       meta.className = "file-meta";
       meta.textContent = `${instance.apiHost}:${instance.apiPort}${instance.currentProcess ? ` • pid ${instance.currentProcess.pid}` : ""}${instance.preset ? ` • preset ${instance.preset.prefix}/${instance.preset.presetId}` : ""}`;
 
-      inspect.textContent = "Inspect";
-      analyze.textContent = "Analyze";
-      useAsTarget.textContent = "Use as target";
+      const isSelected = state.selectedInstanceId === instance.id;
+      select.textContent = isSelected ? "Selected" : "Select";
       events.textContent = "View events";
       failures.textContent = "View failures";
-      start.textContent = "Start";
-      stop.textContent = "Stop";
-      restart.textContent = "Restart";
 
-      inspect.onclick = () => actions.inspectInstance(instance.id);
-      analyze.onclick = () => actions.analyzeInstance(instance.id);
-      useAsTarget.onclick = () =>
-        actions.updateObserverTarget({ kind: "managed_instance", instanceId: instance.id });
+      select.onclick = () => actions.inspectInstance(instance.id);
       events.onclick = () => timeline.focusOperatorTimelineForInstance(instance.id, { view: "all" });
       failures.onclick = () =>
         timeline.focusOperatorTimelineForInstance(instance.id, { view: "failures" });
-      start.onclick = () => actions.mutateInstance(instance.id, "start");
-      stop.onclick = () => actions.mutateInstance(instance.id, "stop");
-      restart.onclick = () => actions.mutateInstance(instance.id, "restart");
 
       const scheduledTarget =
         state.currentScheduledTarget?.kind === "managed_instance" ? state.currentScheduledTarget : undefined;
@@ -355,34 +337,21 @@ export function createInstanceViewsController({
       const isScheduledTarget = statusCards.sameTarget(scheduledTarget, instanceTarget);
       const isUnavailableTarget =
         isScheduledTarget && statusCards.isUnavailableObservedTarget(instanceTarget);
-      const restartUnavailable = instance.status !== "running";
 
-      if (instance.status === "running") {
-        start.disabled = true;
-      } else {
-        stop.disabled = true;
-        restart.disabled = true;
-      }
-      if (isScheduledTarget) {
-        useAsTarget.disabled = true;
+      if (isSelected) {
+        select.disabled = true;
       }
       if (pendingAction) {
-        start.disabled = true;
-        stop.disabled = true;
-        restart.disabled = true;
-        inspect.disabled = true;
-        analyze.disabled = true;
-        useAsTarget.disabled = true;
-      }
-      if (pendingAction === "start") {
-        start.textContent = "Starting...";
-      } else if (pendingAction === "stop") {
-        stop.textContent = "Stopping...";
-      } else if (pendingAction === "restart") {
-        restart.textContent = "Restarting...";
+        select.disabled = true;
       }
 
       header.appendChild(title);
+      if (isSelected) {
+        const selectedPill = document.createElement("span");
+        selectedPill.className = "pill";
+        selectedPill.textContent = "selected";
+        header.appendChild(selectedPill);
+      }
       if (isScheduledTarget) {
         const targetPill = document.createElement("span");
         targetPill.className = "pill target";
@@ -395,23 +364,17 @@ export function createInstanceViewsController({
         degradedPill.textContent = "unavailable";
         header.appendChild(degradedPill);
       }
-      controls.appendChild(inspect);
-      controls.appendChild(analyze);
-      controls.appendChild(useAsTarget);
+      controls.appendChild(select);
       controls.appendChild(events);
       controls.appendChild(failures);
-      controls.appendChild(start);
-      controls.appendChild(stop);
-      controls.appendChild(restart);
       wrapper.appendChild(header);
       wrapper.appendChild(meta);
       wrapper.appendChild(controls);
       appendActionContext(wrapper, [
         "managed locally",
-        instance.status === "running" ? "start unavailable: already running" : "",
-        instance.status !== "running" ? "stop unavailable: not running" : "",
-        restartUnavailable ? "restart unavailable: instance is not running" : "restart requires confirmation",
-        isScheduledTarget ? "use as target unavailable: already selected" : "",
+        isSelected ? "selected in control pane" : "",
+        `open the selected-instance pane for ${instance.status} lifecycle controls`,
+        isScheduledTarget ? "already the scheduled target" : "",
         pendingAction ? `${pendingAction} in progress` : "",
       ]);
       appendControlFeedback(wrapper, controlState);

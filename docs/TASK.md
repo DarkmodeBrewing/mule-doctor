@@ -24,6 +24,7 @@ The following major slices are already landed on `main`:
    - operator event timeline
    - cluster/group/compare navigation shortcuts
    - timeline context feedback
+   - unified selected-instance control pane for lifecycle, targeting, analysis, shared-content, and discoverability
    - selected-instance shared-content and discoverability controls
 3. Managed local instance support:
    - `InstanceManager`

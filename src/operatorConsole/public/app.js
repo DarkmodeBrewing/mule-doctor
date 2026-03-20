@@ -233,6 +233,24 @@ document.getElementById("instance-discoverability-form").onsubmit = instances.ru
 document.getElementById("use-external-target").onclick = () => {
   void instances.updateObserverTarget({ kind: "external" });
 };
+document.getElementById("selected-instance-refresh").onclick = () => {
+  void instances.refreshSelectedInstance();
+};
+document.getElementById("selected-instance-analyze").onclick = () => {
+  void instances.analyzeSelectedInstance();
+};
+document.getElementById("selected-instance-use-target").onclick = () => {
+  void instances.useSelectedInstanceAsTarget();
+};
+document.getElementById("selected-instance-start").onclick = () => {
+  void instances.mutateSelectedInstance("start");
+};
+document.getElementById("selected-instance-stop").onclick = () => {
+  void instances.mutateSelectedInstance("stop");
+};
+document.getElementById("selected-instance-restart").onclick = () => {
+  void instances.mutateSelectedInstance("restart");
+};
 document.getElementById("selected-instance-refresh-shared").onclick = () => {
   void instances.refreshSelectedInstanceShared();
 };
