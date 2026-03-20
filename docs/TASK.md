@@ -106,6 +106,12 @@ Acceptance criteria:
 - Regression detection happens before merge for the critical runtime paths.
 - Release validation is repeatable rather than ad hoc.
 
+Current status:
+
+- PRs now validate the Docker/compose build path in a dedicated workflow so container regressions surface before merge
+- full `npm run smoke:docker` runtime validation remains environment-specific because rust-mule needs an available SAM/I2P dependency and is not portable to GitHub-hosted runners
+- remaining Task F work should focus on release-oriented validation and any additional high-value integration coverage beyond `npm run check` plus Docker build validation
+
 ## Task J: Track Full Search Lifecycle and Search Health Signals
 
 1. Add explicit search-lifecycle tracking around rust-mule keyword searches, including:
