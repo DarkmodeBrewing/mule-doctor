@@ -140,6 +140,9 @@ Entrypoint behavior:
    - `RUST_MULE_CONFIG` is readable
 3. starts rust-mule
 4. waits for the rust-mule token file at `RUST_MULE_TOKEN_PATH`
+   - the file must exist
+   - the file must be readable
+   - the file must be non-empty
 5. exports `RUST_MULE_TOKEN_PATH`
 6. starts mule-doctor
 

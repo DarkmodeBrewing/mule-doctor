@@ -849,6 +849,7 @@ At startup it:
 2. validates the rust-mule binary and config file
 3. launches rust-mule
 4. waits for the token file at `RUST_MULE_TOKEN_PATH`
+   - it must exist, be readable, and be non-empty
 5. exports `RUST_MULE_TOKEN_PATH`
 6. launches mule-doctor
 7. exits non-zero if either managed process exits unexpectedly

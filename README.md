@@ -62,6 +62,7 @@ Runtime contract layers:
 
 - image/runtime defaults come from `Dockerfile`
 - rust-mule bootstrap and token wait behavior come from `entrypoint.sh`
+- the token wait now requires a readable non-empty token file before mule-doctor starts
 - mule-doctor startup prerequisites are enforced by `src/startup/readiness.ts`
 - end-to-end container validation is exercised by `npm run smoke:docker`
 
