@@ -84,6 +84,13 @@ Acceptance criteria:
 - Runtime assumptions are explicit rather than implicit in scripts or code.
 - Operators can follow the documented runtime contract without source inspection.
 
+Current status:
+
+- runtime/container contract docs have been aligned with the shipped image, entrypoint, readiness checks, and smoke flow
+- startup now fails early for misconfigured source paths and missing managed-instance rust-mule binaries
+- `entrypoint.sh` now waits for a readable, non-empty token file before mule-doctor starts
+- remaining work here should be incremental follow-ups, not the next main delivery track
+
 ## Task F: Release and CI Hardening
 
 1. Keep the PR workflow aligned with the current repository checks.
@@ -229,7 +236,6 @@ Acceptance criteria:
 
 ## Recommended Next Order
 
-1. Task D: Operator Console Control Plane Completion
-2. Task E: Runtime and Container Hardening
-3. Task F: Release and CI Hardening
-4. Task J: Track Full Search Lifecycle and Search Health Signals
+1. Task F: Release and CI Hardening
+2. Task J: Track Full Search Lifecycle and Search Health Signals
+3. Task E: Runtime and Container Hardening follow-up cleanup only

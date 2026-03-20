@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,11 +20,14 @@ async function makeTempDir() {
 test("ManagedInstancePresetService lists default presets", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
     const service = new ManagedInstancePresetService(manager);
@@ -41,11 +44,14 @@ test("ManagedInstancePresetService lists default presets", async () => {
 test("ManagedInstancePresetService applies a preset as planned instances", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
     const service = new ManagedInstancePresetService(manager);
@@ -78,9 +84,12 @@ test("ManagedInstancePresetService applies a preset as planned instances", async
 test("ManagedInstancePresetService rejects invalid prefixes", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath,
     });
     await manager.initialize();
     const service = new ManagedInstancePresetService(manager);
@@ -96,11 +105,14 @@ test("ManagedInstancePresetService rejects invalid prefixes", async () => {
 test("ManagedInstancePresetService rejects reused preset prefixes", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
     const service = new ManagedInstancePresetService(manager);
@@ -118,11 +130,14 @@ test("ManagedInstancePresetService rejects reused preset prefixes", async () => 
 test("ManagedInstancePresetService starts all instances in a preset group", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
       processLauncher: {
         async launch({ command, args, cwd }) {
           return {
@@ -162,6 +177,8 @@ test("ManagedInstancePresetService starts all instances in a preset group", asyn
 test("ManagedInstancePresetService stops and restarts all instances in a preset group", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     let nextPid = 5000;
     const stoppedPids = new Set();
     const launcher = {
@@ -188,6 +205,7 @@ test("ManagedInstancePresetService stops and restarts all instances in a preset 
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
       processLauncher: launcher,
     });
     await manager.initialize();

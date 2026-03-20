@@ -100,6 +100,25 @@ test("validateStartupReadiness rejects missing rust-mule log parent directory", 
   }
 });
 
+test("validateStartupReadiness rejects missing configured source paths", async () => {
+  const tmp = await makeTempDir();
+  try {
+    await writeFile(join(tmp.dir, "token"), "secret\n", "utf8");
+    await mkdir(join(tmp.dir, "logs"), { recursive: true });
+
+    await assert.rejects(
+      validateStartupReadiness(
+        makeConfig(tmp, {
+          sourcePath: join(tmp.dir, "missing-source"),
+        }),
+      ),
+      /RUST_MULE_SOURCE_PATH is unavailable/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("validateStartupReadiness rejects invalid custom state path parents", async () => {
   const tmp = await makeTempDir();
   try {

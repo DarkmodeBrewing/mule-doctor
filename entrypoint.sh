@@ -62,16 +62,21 @@ trap cleanup INT TERM EXIT
 if [ -n "$RUST_MULE_TOKEN_PATH" ]; then
   echo "Waiting for API token at $RUST_MULE_TOKEN_PATH..."
   start_ts="$(date +%s)"
-  while [ ! -f "$RUST_MULE_TOKEN_PATH" ]; do
+  while true; do
     if ! kill -0 "$RUST_PID" >/dev/null 2>&1; then
       echo "rust-mule exited before token file became available" >&2
       wait "$RUST_PID"
+      exit "$?"
+    fi
+
+    if [ -f "$RUST_MULE_TOKEN_PATH" ] && [ -r "$RUST_MULE_TOKEN_PATH" ] && [ -s "$RUST_MULE_TOKEN_PATH" ]; then
+      break
     fi
 
     now_ts="$(date +%s)"
     elapsed="$((now_ts - start_ts))"
     if [ "$TOKEN_WAIT_TIMEOUT_SEC" -gt 0 ] && [ "$elapsed" -ge "$TOKEN_WAIT_TIMEOUT_SEC" ]; then
-      echo "Timed out waiting for token file: $RUST_MULE_TOKEN_PATH" >&2
+      echo "Timed out waiting for readable non-empty token file: $RUST_MULE_TOKEN_PATH" >&2
       exit 1
     fi
     sleep 1

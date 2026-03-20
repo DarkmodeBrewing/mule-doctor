@@ -53,9 +53,18 @@ The Docker image follows the architecture runtime layout:
 - `/opt/rust-mule` – rust-mule source + compiled binary
 - `/app` – mule-doctor code and compiled JS
 - `/data` – runtime volume (state, logs, token, config)
+- `/data/instances` – managed rust-mule instance runtime trees when local instance control is used
 - runtime image includes `git`; bundled `/opt/rust-mule` keeps local `.git` history for read-only operations like `git_blame`, with `origin` remote removed to prevent accidental pushes
 
 For container defaults, entrypoint variables, and startup behavior, see [docs/configuration.md](docs/configuration.md).
+
+Runtime contract layers:
+
+- image/runtime defaults come from `Dockerfile`
+- rust-mule bootstrap and token wait behavior come from `entrypoint.sh`
+- the token wait now requires a readable non-empty token file before mule-doctor starts
+- mule-doctor startup prerequisites are enforced by `src/startup/readiness.ts`
+- end-to-end container validation is exercised by `npm run smoke:docker`
 
 Container runtime hardening:
 
@@ -82,15 +91,23 @@ End-to-end smoke harness:
   - `mule-doctor/operator-events.json`
 - by default the temp work directory is deleted on success and preserved on failure with captured compose logs for debugging
 
+Smoke prerequisites:
+
+- Docker with `docker compose`
+- a host environment that can bind the requested rust-mule and UI ports
+- `OPENAI_API_KEY` and `MATTERMOST_WEBHOOK_URL` may be omitted for smoke use; the harness injects safe placeholder values unless you override them
+- if you override `RUST_MULE_TOKEN_PATH`, it must stay under `/data` because the harness validates host-mounted artifacts directly
+
 Note: rust-mule readiness handling is being aligned with the newer `200 + ready: true/false` contract in code and tests, but the broader observer/search workflow work is still tracked in [docs/TASK.md](docs/TASK.md).
 
 Operator console (optional):
 
-- `GET /` serves a read-only UI for operator inspection.
+- `GET /` serves the token-protected operator console UI.
 - The UI and `/api/*` routes are guarded by `MULE_DOCTOR_UI_AUTH_TOKEN`.
 - JSON endpoints and request/response details are documented in [docs/api.md](docs/api.md).
 - Live log streaming is available through SSE at `/api/stream/app` and `/api/stream/rust-mule`.
 - The selected-instance panel now shows a compact rust-mule surface summary over searches, shared publish state, shared actions, and downloads, with the raw summary payload still available underneath.
+- The selected-instance panel is also the primary bounded control surface for mule-doctor-managed local instances: lifecycle, targeting, analysis, shared-content actions, and controlled discoverability.
 - Frontend assets are served statically from the built-in operator-console public bundle rather than inline backend HTML templates.
 - Docker compose maps UI port `${MULE_DOCTOR_UI_PORT:-18080}`, but keeps the UI disabled by default.
 - To access the console from the host, explicitly set `MULE_DOCTOR_UI_ENABLED=true`, provide `MULE_DOCTOR_UI_AUTH_TOKEN`, and keep `MULE_DOCTOR_UI_HOST=0.0.0.0` inside the container.

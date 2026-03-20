@@ -124,6 +124,7 @@ async function main(): Promise<void> {
     historyPath,
     llmLogDir: llmLogDir ?? resolvedDataDir,
     proposalDir,
+    sourcePath,
   });
 
   // Build components
