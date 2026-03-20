@@ -150,14 +150,14 @@ The entrypoint also creates parent directories for `RUST_MULE_PID_FILE` and `MUL
 
 Important distinction:
 
-- `entrypoint.sh` validates file existence and token creation
+- `entrypoint.sh` validates rust-mule bootstrap prerequisites and waits for a readable, non-empty token file
 - mule-doctor's own startup readiness validation separately checks its runtime prerequisites
 
 Runtime contract summary:
 
 - the image provides defaults for `/opt/rust-mule`, `/app`, `/data`, and the bundled healthcheck script
 - `entrypoint.sh` owns rust-mule process bootstrap inside the container
-- mule-doctor process startup only begins after the token file exists at `RUST_MULE_TOKEN_PATH`
+- mule-doctor process startup only begins after the token file at `RUST_MULE_TOKEN_PATH` is readable and non-empty
 - mule-doctor then performs its own readiness validation before wiring runtime services
 - the Docker `HEALTHCHECK` is a steady-state probe, not a bootstrap mechanism
 - `npm run smoke:docker` is the canonical end-to-end validation path for the composed container stack
@@ -284,7 +284,7 @@ Specifically, mule-doctor readiness does not:
 - verify rust-mule HTTP readiness flags
 - verify container process supervision
 
-rust-mule readiness semantics are currently evolving toward explicit payload readiness flags rather than HTTP `503`/`504` responses. The remaining runtime/container alignment work is tracked in [TASK.md](TASK.md) under `Task E`.
+rust-mule readiness semantics are currently evolving toward explicit payload readiness flags rather than HTTP `503`/`504` responses. Task E's current runtime/container hardening work is focused on keeping the documented contract and the shipped container behavior aligned as those readiness semantics continue to evolve.
 
 ### Container healthcheck behavior
 
