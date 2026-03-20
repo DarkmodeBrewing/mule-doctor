@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -80,11 +80,14 @@ test("buildRuntimePaths derives isolated per-instance paths", () => {
 test("InstanceManager creates and persists planned instances", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
 
@@ -123,11 +126,14 @@ test("InstanceManager creates and persists planned instances", async () => {
 test("InstanceManager creates planned instances in a batch", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
 
@@ -159,9 +165,12 @@ test("InstanceManager creates planned instances in a batch", async () => {
 test("InstanceManager rejects empty planned-instance batches", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath,
     });
     await manager.initialize();
 
@@ -177,11 +186,13 @@ test("InstanceManager rejects empty planned-instance batches", async () => {
 test("InstanceManager starts a planned instance and persists process state", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const launcher = new FakeProcessLauncher();
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
-      rustMuleBinaryPath: "/opt/rust-mule/rust-mule",
+      rustMuleBinaryPath,
       processLauncher: launcher,
     });
     await manager.initialize();
@@ -192,7 +203,7 @@ test("InstanceManager starts a planned instance and persists process state", asy
     assert.equal(started.status, "running");
     assert.equal(started.currentProcess.pid, 5000);
     assert.deepEqual(started.currentProcess.command, [
-      "/opt/rust-mule/rust-mule",
+      rustMuleBinaryPath,
       "--config",
       started.runtime.configPath,
     ]);
@@ -209,10 +220,13 @@ test("InstanceManager starts a planned instance and persists process state", asy
 test("InstanceManager stops a running instance and records last exit", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const launcher = new FakeProcessLauncher();
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath,
       processLauncher: launcher,
       stopTimeoutMs: 500,
     });
@@ -235,11 +249,14 @@ test("InstanceManager stops a running instance and records last exit", async () 
 test("InstanceManager marks records failed when startup reconciliation finds missing process", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const firstLauncher = new FakeProcessLauncher();
     const firstManager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       processLauncher: firstLauncher,
+      rustMuleBinaryPath,
     });
     await firstManager.initialize();
     await firstManager.createPlannedInstance({ id: "a" });
@@ -250,6 +267,7 @@ test("InstanceManager marks records failed when startup reconciliation finds mis
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       processLauncher: new FakeProcessLauncher(),
+      rustMuleBinaryPath,
     });
     await secondManager.initialize();
 
@@ -265,12 +283,15 @@ test("InstanceManager marks records failed when startup reconciliation finds mis
 test("InstanceManager monitors reconciled live processes and updates status after exit", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const firstLauncher = new FakeProcessLauncher();
     const firstManager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       processLauncher: firstLauncher,
       reconcilePollMs: 50,
+      rustMuleBinaryPath,
     });
     await firstManager.initialize();
     await firstManager.createPlannedInstance({ id: "a" });
@@ -283,6 +304,7 @@ test("InstanceManager monitors reconciled live processes and updates status afte
       instanceRootDir: join(tmp.dir, "instances"),
       processLauncher: secondLauncher,
       reconcilePollMs: 50,
+      rustMuleBinaryPath,
     });
     await secondManager.initialize();
 
@@ -304,10 +326,13 @@ test("InstanceManager monitors reconciled live processes and updates status afte
 test("InstanceManager restarts a running instance with a new pid", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const launcher = new FakeProcessLauncher();
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath,
       processLauncher: launcher,
       stopTimeoutMs: 500,
     });
@@ -329,11 +354,14 @@ test("InstanceManager restarts a running instance with a new pid", async () => {
 test("InstanceManager renders configured rust-mule template values", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
       rustMuleConfigTemplate: {
         samHost: "10.99.0.2",
         samPort: 7656,
@@ -376,11 +404,14 @@ test("InstanceManager renders configured rust-mule template values", async () =>
 test("InstanceManager accepts nested rust-mule template sections and writes ownership comments", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
       rustMuleConfigTemplate: {
         sam: {
           host: "10.99.0.20",
@@ -422,9 +453,12 @@ test("InstanceManager accepts nested rust-mule template sections and writes owne
 test("InstanceManager rejects invalid numeric template values", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath,
       rustMuleConfigTemplate: {
         samPort: Number.NaN,
       },
@@ -443,11 +477,14 @@ test("InstanceManager rejects invalid numeric template values", async () => {
 test("InstanceManager allocates non-overlapping API ports", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
 
@@ -468,11 +505,14 @@ function escapeRegExp(value) {
 test("InstanceManager rejects duplicate ids and reserved ports", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
 
@@ -494,9 +534,12 @@ test("InstanceManager rejects duplicate ids and reserved ports", async () => {
 test("InstanceManager rejects invalid ids", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath,
     });
     await manager.initialize();
 
@@ -512,11 +555,14 @@ test("InstanceManager rejects invalid ids", async () => {
 test("InstanceManager rejects invalid apiPort values", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
 
@@ -548,11 +594,14 @@ test("InstanceManager rejects invalid apiPort values", async () => {
 test("InstanceManager serializes concurrent planned instance creation", async () => {
   const tmp = await makeTempDir();
   try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
     const manager = new InstanceManager({
       dataDir: tmp.dir,
       instanceRootDir: join(tmp.dir, "instances"),
       apiPortStart: 19000,
       apiPortEnd: 19010,
+      rustMuleBinaryPath,
     });
     await manager.initialize();
 
@@ -567,6 +616,24 @@ test("InstanceManager serializes concurrent planned instance creation", async ()
     assert.deepEqual(
       instances.map((instance) => instance.apiPort).sort((a, b) => a - b),
       [19000, 19001, 19002],
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager initialize rejects explicit missing rust-mule binaries", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath: join(tmp.dir, "missing-rust-mule"),
+    });
+
+    await assert.rejects(
+      manager.initialize(),
+      /missing-rust-mule/,
     );
   } finally {
     await tmp.cleanup();

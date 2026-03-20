@@ -3,8 +3,8 @@
  * Plans, persists, and manages mule-doctor-owned local rust-mule instances.
  */
 
-import { mkdir, rm, writeFile } from "fs/promises";
-import { resolve } from "path";
+import { access, constants, mkdir, rm, writeFile } from "fs/promises";
+import { delimiter, resolve } from "path";
 import { InstanceCatalog, type InstanceCatalogConfig } from "./instanceCatalog.js";
 import type {
   ManagedInstanceExitState,
@@ -82,6 +82,7 @@ export class InstanceManager {
 
   async initialize(): Promise<void> {
     await this.catalog.initialize();
+    await ensureBinaryAvailable(this.rustMuleBinaryPath);
     await mkdir(this.instanceRootDir, { recursive: true });
     await this.reconcileRunningInstances();
   }
@@ -389,6 +390,35 @@ export class InstanceManager {
     );
     return run;
   }
+}
+
+async function ensureBinaryAvailable(command: string): Promise<void> {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    throw new Error("Managed rust-mule binary path must not be empty");
+  }
+
+  if (trimmed.includes("/") || trimmed.includes("\\")) {
+    const resolved = resolve(trimmed);
+    await access(resolved, constants.X_OK);
+    return;
+  }
+
+  const pathValue = process.env.PATH ?? "";
+  for (const entry of pathValue.split(delimiter)) {
+    if (!entry) {
+      continue;
+    }
+    const candidate = resolve(entry, trimmed);
+    try {
+      await access(candidate, constants.X_OK);
+      return;
+    } catch {
+      // continue scanning PATH entries
+    }
+  }
+
+  throw new Error(`Managed rust-mule binary not found on PATH: ${trimmed}`);
 }
 
 export function buildRuntimePaths(

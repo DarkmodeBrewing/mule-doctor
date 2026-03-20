@@ -51,6 +51,10 @@ These variables are read directly by [index.ts](../src/index.ts).
 | `RUST_MULE_DEBUG_TOKEN_FILE` | unset | Optional debug-token file for rust-mule debug endpoints |
 | `RUST_MULE_SOURCE_PATH` | unset | Optional source root for source-inspection tools |
 
+Notes:
+
+- when `RUST_MULE_SOURCE_PATH` is configured, mule-doctor startup now validates that it resolves to an existing accessible directory before source tools are wired
+
 ### Optional observer/runtime behavior
 
 | Variable | Default | Purpose |
@@ -110,6 +114,7 @@ Notes:
 
 - if no managed binary path is supplied, `InstanceManager` falls back to `rust-mule` on `PATH`
 - managed-instance support is initialized best-effort; mule-doctor can continue running without it if setup fails
+- when managed-instance control initializes, mule-doctor now validates that the selected rust-mule launch binary is executable or resolvable on `PATH`
 
 ## 2. Container Entrypoint Environment
 

@@ -11,6 +11,7 @@ export interface StartupReadinessConfig {
   historyPath?: string;
   llmLogDir: string;
   proposalDir: string;
+  sourcePath?: string;
 }
 
 export async function validateStartupReadiness(config: StartupReadinessConfig): Promise<void> {
@@ -33,6 +34,9 @@ export async function validateStartupReadiness(config: StartupReadinessConfig): 
   );
   await checkWritableDirectory(config.llmLogDir, "MULE_DOCTOR_LLM_LOG_DIR", errors, true);
   await checkWritableDirectory(config.proposalDir, "Proposal artifact directory", errors, true);
+  if (config.sourcePath) {
+    await checkExistingDirectory(config.sourcePath, "RUST_MULE_SOURCE_PATH", errors);
+  }
 
   if (errors.length > 0) {
     throw new Error(`Startup readiness validation failed:\n- ${errors.join("\n- ")}`);
