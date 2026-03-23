@@ -96,6 +96,12 @@ export function createInstancesController({
     element.className = isError ? "status" : "muted";
   }
 
+  function setSelectedManualSearchFeedback(text, isError = false) {
+    const element = document.getElementById("selected-instance-manual-search-feedback");
+    element.textContent = text;
+    element.className = isError ? "status" : "muted";
+  }
+
   function renderSurfaceDiagnosticsSummary(diagnostics) {
     const element = document.getElementById("instance-runtime-summary");
     const summary = diagnostics?.summary;
@@ -184,6 +190,32 @@ export function createInstancesController({
     element.className = "preset-help";
   }
 
+  function renderManualSearchSummary(result) {
+    const element = document.getElementById("selected-instance-manual-search-summary");
+    const mode = document.getElementById("manual-search-mode").value;
+    const selected = getSelectedManagedInstance();
+    const activeTargetLabel = statusCards.targetLabel(state.currentScheduledTarget || { kind: "external" });
+    if (!result) {
+      element.textContent =
+        mode === "active_target"
+          ? `Manual search will launch against ${activeTargetLabel}.`
+          : selected
+            ? `Manual search will launch against ${selected.id}.`
+            : "Select a managed instance or switch to the active diagnostic target.";
+      element.className = "preset-help muted";
+      return;
+    }
+
+    const parts = [
+      `Target: ${result.targetLabel}`,
+      `Search ID: ${result.searchId}`,
+      `Query: ${result.query}`,
+      `Dispatched: ${new Date(result.dispatchedAt).toLocaleString()}`,
+    ];
+    element.textContent = parts.join(" • ");
+    element.className = "preset-help";
+  }
+
   function renderDiscoverabilityOptions(instances) {
     const publisher = document.getElementById("discoverability-publisher");
     const searcher = document.getElementById("discoverability-searcher");
@@ -264,6 +296,9 @@ export function createInstancesController({
     document.getElementById("selected-instance-start").disabled = disabled || selected?.status === "running";
     document.getElementById("selected-instance-stop").disabled = disabled || selected?.status !== "running";
     document.getElementById("selected-instance-restart").disabled = disabled || selected?.status !== "running";
+    const manualSearchMode = document.getElementById("manual-search-mode").value;
+    const manualSearchDisabled =
+      manualSearchMode === "managed_instance" ? !hasSelection || Boolean(pendingAction) : false;
     for (const id of [
       "selected-instance-refresh-shared",
       "selected-instance-create-fixture",
@@ -274,6 +309,8 @@ export function createInstancesController({
     ]) {
       document.getElementById(id).disabled = disabled;
     }
+    document.getElementById("run-manual-search").disabled = manualSearchDisabled;
+    renderManualSearchSummary(state.currentManualSearchResult);
   }
 
   async function loadSelectedInstanceShared(id) {
@@ -285,6 +322,7 @@ export function createInstancesController({
 
   async function inspectInstance(id) {
     state.selectedInstanceId = id;
+    state.currentManualSearchResult = null;
     views.renderSelectedInstanceTimelineControls();
     renderSelectedControlAvailability();
     try {
@@ -594,6 +632,70 @@ export function createInstancesController({
     }
   }
 
+  async function runManualSearch(event) {
+    event.preventDefault();
+    const runButton = document.getElementById("run-manual-search");
+    const modeSelect = document.getElementById("manual-search-mode");
+    const queryInput = document.getElementById("manual-search-query");
+    const keywordIdInput = document.getElementById("manual-search-keyword-id");
+    const mode = modeSelect.value === "active_target" ? "active_target" : "managed_instance";
+    const query = String(queryInput.value || "").trim();
+    const keywordIdHex = String(keywordIdInput.value || "").trim();
+
+    if (!query && !keywordIdHex) {
+      setSelectedManualSearchFeedback("Provide a query or keyword ID.", true);
+      return;
+    }
+    if (mode === "managed_instance" && !state.selectedInstanceId) {
+      setSelectedManualSearchFeedback(
+        "Select an instance first or switch to the active diagnostic target.",
+        true,
+      );
+      return;
+    }
+
+    const payload = { mode };
+    if (mode === "managed_instance") {
+      payload.instanceId = state.selectedInstanceId;
+    }
+    if (query) {
+      payload.query = query;
+    }
+    if (keywordIdHex) {
+      payload.keywordIdHex = keywordIdHex;
+    }
+
+    try {
+      runButton.disabled = true;
+      modeSelect.disabled = true;
+      queryInput.disabled = true;
+      keywordIdInput.disabled = true;
+      setSelectedManualSearchFeedback("dispatching manual search...");
+      const result = await postJson("/api/searches/launch", payload);
+      state.currentManualSearchResult = result.result;
+      renderManualSearchSummary(state.currentManualSearchResult);
+      setText("instance-manual-search-result", JSON.stringify(result.result, null, 2));
+      setSelectedManualSearchFeedback(`manual search dispatched against ${result.result.targetLabel}`);
+      await Promise.all([refreshSearchHealthResults(), refreshOperatorEvents()]);
+      if (mode === "managed_instance" && state.selectedInstanceId) {
+        await inspectInstance(state.selectedInstanceId);
+      }
+    } catch (err) {
+      setSelectedManualSearchFeedback(String(err), true);
+      setText("instance-manual-search-result", `Failed to run manual search: ${String(err)}`);
+    } finally {
+      modeSelect.disabled = false;
+      queryInput.disabled = false;
+      keywordIdInput.disabled = false;
+      renderSelectedControlAvailability();
+    }
+  }
+
+  function handleManualSearchModeChange() {
+    state.currentManualSearchResult = null;
+    renderSelectedControlAvailability();
+  }
+
   async function applyInstancePreset(event) {
     event.preventDefault();
     const form = document.getElementById("instance-preset-form");
@@ -734,6 +836,7 @@ export function createInstancesController({
         const exists = data.instances.some((instance) => instance.id === state.selectedInstanceId);
         if (!exists) {
           state.selectedInstanceId = null;
+          state.currentManualSearchResult = null;
           views.renderSelectedInstanceTimelineControls();
           setText("instance-detail", "Selected instance no longer exists.");
           setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
@@ -741,6 +844,7 @@ export function createInstancesController({
           setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
           setText("instance-shared", INSTANCE_SHARED_PLACEHOLDER);
           setText("instance-discoverability-result", INSTANCE_DISCOVERABILITY_PLACEHOLDER);
+          setText("instance-manual-search-result", "Select a search target and provide a query or keyword ID.");
           renderSharedSummary(undefined);
           renderDiscoverabilitySummary(undefined);
         }
@@ -749,6 +853,7 @@ export function createInstancesController({
     } catch (err) {
       state.currentManagedInstances = [];
       state.selectedInstanceId = null;
+      state.currentManualSearchResult = null;
       state.instanceControlState.instances = {};
       state.instanceControlState.presets = {};
       timeline.populateOperatorEventFilters();
@@ -778,11 +883,14 @@ export function createInstancesController({
     refreshInstances,
     refreshSelectedInstance,
     refreshSelectedInstanceShared,
+    handleManualSearchModeChange,
+    renderSelectedControlAvailability,
     renderCompareTimelineControls: compare.renderCompareTimelineControls,
     renderInstancePresets: presets.renderInstancePresets,
     renderSelectedInstanceTimelineControls: views.renderSelectedInstanceTimelineControls,
     renderSelectedPresetHelp: presets.renderSelectedPresetHelp,
     runDiscoverabilityCheck,
+    runManualSearch,
     setInstanceFeedback,
     updateObserverTarget,
     useSelectedInstanceAsTarget,

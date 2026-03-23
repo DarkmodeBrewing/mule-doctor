@@ -1,4 +1,5 @@
 import type { SearchPublishDiagnosticsSummary } from "../diagnostics/rustMuleSurfaceSummaries.js";
+import type { OperatorSearchDispatchResult } from "./operatorSearchService.js";
 import type { LlmInvocationAuditSink } from "../llm/invocationAuditLog.js";
 import type { LlmInvocationGate } from "../llm/invocationGate.js";
 import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary, SearchHealthRecord, SearchHealthSummary, LlmInvocationRecord, LlmInvocationSummary } from "../types/contracts.js";
@@ -92,6 +93,15 @@ export interface ManagedInstanceDiscoverability {
   }): Promise<ManagedDiscoverabilityCheckResult>;
 }
 
+export interface OperatorSearches {
+  startSearch(input: {
+    mode: "managed_instance" | "active_target";
+    instanceId?: string;
+    query?: string;
+    keywordIdHex?: string;
+  }): Promise<OperatorSearchDispatchResult>;
+}
+
 export interface DiscoverabilityResultsStore {
   listRecent(limit?: number): Promise<ManagedDiscoverabilityRecord[]>;
   summarizeRecent(limit?: number): Promise<ManagedDiscoverabilitySummary>;
@@ -160,6 +170,7 @@ export interface OperatorConsoleConfig {
   managedInstanceAnalysis?: ManagedInstanceAnalysis;
   managedInstanceSharing?: ManagedInstanceSharing;
   managedInstanceDiscoverability?: ManagedInstanceDiscoverability;
+  operatorSearches?: OperatorSearches;
   managedInstancePresets?: ManagedInstancePresets;
   diagnosticTarget?: DiagnosticTargetControl;
   observerControl?: ObserverControl;

@@ -143,7 +143,8 @@ Current status:
 - controlled discoverability now also records an immediate active lifecycle entry at search dispatch, before the polling loop reaches a terminal result
 - managed-instance surface diagnostics now also persist deduplicated observed search lifecycle records for active and terminal keyword searches
 - observer cycles now also persist deduplicated observed search lifecycle records for the active diagnostic target, including externally configured targets
-- remaining work should focus on refining search-lifecycle context for non-controlled searches and deciding whether any additional manual/operator-triggered keyword-search paths should also record lifecycle history directly at dispatch time
+- operator console manual keyword search dispatch now records first-class lifecycle entries against the selected managed instance or active diagnostic target
+- remaining work should focus on refining search-lifecycle context richness for non-controlled searches and tightening any remaining operator workflows that should emit or surface search lifecycle state more directly
 
 ## Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
 

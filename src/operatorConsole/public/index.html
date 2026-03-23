@@ -253,6 +253,45 @@
             </div>
             <pre id="instance-discoverability-result" class="muted"></pre>
           </div>
+          <div class="subsection">
+            <div class="row">
+              <h3>Manual Search</h3>
+            </div>
+            <form id="instance-manual-search-form" class="instance-form">
+              <select
+                id="manual-search-mode"
+                name="mode"
+                aria-label="Manual search target"
+              >
+                <option value="managed_instance">Selected managed instance</option>
+                <option value="active_target">Active diagnostic target</option>
+              </select>
+              <input
+                id="manual-search-query"
+                name="query"
+                type="text"
+                placeholder="query text"
+                maxlength="256"
+                aria-label="Manual search query"
+              />
+              <input
+                id="manual-search-keyword-id"
+                name="keywordIdHex"
+                type="text"
+                placeholder="keyword id hex (optional)"
+                maxlength="128"
+                aria-label="Manual search keyword ID"
+              />
+              <button id="run-manual-search" type="submit">Run manual search</button>
+            </form>
+            <p id="selected-instance-manual-search-feedback" class="muted">
+              No manual search dispatched.
+            </p>
+            <div id="selected-instance-manual-search-summary" class="preset-help muted">
+              Select a search target and provide a query or keyword ID.
+            </div>
+            <pre id="instance-manual-search-result" class="muted"></pre>
+          </div>
           <pre id="instance-detail" class="muted"></pre>
           <pre id="instance-diagnostics" class="muted"></pre>
           <pre id="instance-runtime-diagnostics" class="muted"></pre>

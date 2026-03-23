@@ -340,6 +340,60 @@ test("summarizeSearchHealthRecords keeps recency ordering after collapsing logic
   assert.equal(summary.latestQuery, "older-search");
 });
 
+test("summarizeSearchHealthRecords collapses manual dispatch with later managed observation", () => {
+  const summary = summarizeSearchHealthRecords([
+    {
+      recordedAt: "2026-03-23T12:00:00.000Z",
+      source: "operator_triggered_search",
+      query: "alpha",
+      searchId: "search-6",
+      dispatchedAt: "2026-03-23T12:00:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 2, degradedIndicators: [] },
+        searcher: { peerCount: 2, degradedIndicators: [] },
+      },
+      states: [{ observedAt: "2026-03-23T12:00:00.000Z", state: "dispatched", hits: 0 }],
+      resultCount: 0,
+      outcome: "active",
+      finalState: "dispatched",
+      observedContext: {
+        instanceId: "a",
+      },
+    },
+    {
+      recordedAt: "2026-03-23T12:00:05.000Z",
+      source: "managed_instance_observation",
+      query: "alpha",
+      searchId: "search-6",
+      dispatchedAt: "2026-03-23T12:00:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 2, degradedIndicators: [] },
+        searcher: { peerCount: 2, degradedIndicators: [] },
+      },
+      states: [{ observedAt: "2026-03-23T12:00:05.000Z", state: "completed", hits: 1 }],
+      resultCount: 1,
+      outcome: "found",
+      finalState: "completed",
+      observedContext: {
+        instanceId: "a",
+      },
+    },
+  ]);
+
+  assert.equal(summary.totalSearches, 1);
+  assert.equal(summary.activeCount, 0);
+  assert.equal(summary.foundCount, 1);
+  assert.equal(summary.latestSource, "managed_instance_observation");
+});
+
 test("SearchHealthLog sanitizes records when reading from runtime store", async () => {
   const log = new SearchHealthLog({
     async getRecentSearchHealthResults() {

@@ -177,6 +177,9 @@ function renderSearchHealthItem(record) {
   if (record.observerContext?.label) {
     badges.appendChild(createBadge("observer", "instance"));
   }
+  if (record.source === "operator_triggered_search") {
+    badges.appendChild(createBadge("manual", "instance"));
+  }
   line.appendChild(badges);
 
   const detail = document.createElement("div");

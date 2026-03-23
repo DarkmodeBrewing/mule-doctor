@@ -241,6 +241,73 @@ export function createSearchHealthRecordFromControlledDispatch(input: {
   };
 }
 
+export function createSearchHealthRecordFromOperatorDispatch(input: {
+  query?: string;
+  keywordIdHex?: string;
+  readiness: RustMuleReadiness;
+  peerCount: number;
+  dispatch: RustMuleKeywordSearchResponse;
+  dispatchedAt?: string;
+  instanceId?: string;
+  target?: DiagnosticTargetRef;
+  targetLabel?: string;
+}): SearchHealthRecord {
+  const dispatchedAt = input.dispatchedAt ?? new Date().toISOString();
+  const query = readString(input.query) ?? readString(input.keywordIdHex) ?? "keyword search";
+  const searchId =
+    readString(input.dispatch.search_id_hex) ??
+    readString(input.dispatch.keyword_id_hex) ??
+    readString(input.keywordIdHex) ??
+    query;
+  const readiness = {
+    statusReady: input.readiness.statusReady === true,
+    searchesReady: input.readiness.searchesReady === true,
+    ready: input.readiness.ready === true,
+  };
+  const transport = buildTransportSnapshot(
+    input.peerCount,
+    input.readiness.ready,
+    input.readiness.statusReady,
+    input.readiness.searchesReady,
+  );
+  return {
+    recordedAt: dispatchedAt,
+    source: "operator_triggered_search",
+    query,
+    searchId,
+    dispatchedAt,
+    readinessAtDispatch: {
+      publisher: { ...readiness },
+      searcher: { ...readiness },
+    },
+    transportAtDispatch: {
+      publisher: { ...transport },
+      searcher: { ...transport },
+    },
+    states: [
+      {
+        observedAt: dispatchedAt,
+        state: "dispatched",
+        hits: 0,
+      },
+    ],
+    resultCount: 0,
+    outcome: "active",
+    finalState: "dispatched",
+    observedContext: input.instanceId
+      ? {
+          instanceId: input.instanceId,
+        }
+      : undefined,
+    observerContext: input.target && input.targetLabel
+      ? {
+          target: sanitizeDiagnosticTarget(input.target),
+          label: input.targetLabel,
+        }
+      : undefined,
+  };
+}
+
 export function createSearchHealthRecordFromObserverTargetObservation(input: {
   target: DiagnosticTargetRef;
   label: string;
