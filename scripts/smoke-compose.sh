@@ -387,7 +387,8 @@ main() {
   compose up --build -d
 
   local rust_token_host_path
-  rust_token_host_path="$(host_path_for_container_path "$RUST_MULE_TOKEN_PATH_IN_CONTAINER")"
+  host_path_for_container_path "$RUST_MULE_TOKEN_PATH_IN_CONTAINER"
+  rust_token_host_path="$REPLY"
 
   wait_for_nonempty_file "$rust_token_host_path" "$TIMEOUT_SECS" "rust-mule api token"
   wait_for_http_ok "http://127.0.0.1:$RUST_MULE_PORT/api/v1/health" "$TIMEOUT_SECS" "rust-mule health"
@@ -454,7 +455,7 @@ host_path_for_container_path() {
   if [[ "$container_path" != /data/* ]]; then
     fail "smoke harness only supports token paths under /data, got: $container_path"
   fi
-  printf '%s\n' "$DATA_DIR/${container_path#/data/}"
+  REPLY="$DATA_DIR/${container_path#/data/}"
 }
 
 main "$@"
