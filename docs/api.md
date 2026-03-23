@@ -740,6 +740,8 @@ Response:
 }
 ```
 
+The operator console compare view uses `GET /api/instances/compare` together with per-instance `GET /api/instances/{id}/runtime_surface` calls so operators can compare the latest current runtime surface separately from the historical search-health feed.
+
 Error behavior:
 
 - returns `429` when human-triggered managed-instance analysis is rate-limited; response includes `retryAfterSec`

@@ -989,6 +989,7 @@ export function createInstancesController({
     mutateSelectedInstanceShared,
     mutateSelectedInstance,
     refreshInstanceCompare: compare.refreshInstanceCompare,
+    renderCachedComparison: compare.renderCachedComparison,
     refreshDiscoverabilityViews,
     refreshInstancePresets,
     refreshInstances,
