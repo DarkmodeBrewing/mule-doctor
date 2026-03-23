@@ -161,6 +161,12 @@ document.getElementById("refresh-instances").onclick = instances.refreshInstance
 document.getElementById("refresh-instance-compare").onclick = instances.refreshInstanceCompare;
 document.getElementById("compare-left").onchange = instances.renderCompareTimelineControls;
 document.getElementById("compare-right").onchange = instances.renderCompareTimelineControls;
+document.getElementById("compare-search-state").onchange = () => {
+  void instances.refreshInstanceCompare();
+};
+document.getElementById("compare-publish-only").onchange = () => {
+  void instances.refreshInstanceCompare();
+};
 document.getElementById("refresh-target-status").onclick = refreshHealth;
 document.getElementById("refresh-scheduler-status").onclick = refreshHealth;
 document.getElementById("refresh-operator-events").onclick = refreshOperatorEvents;

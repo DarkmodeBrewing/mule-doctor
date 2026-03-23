@@ -345,11 +345,41 @@
           <select id="compare-right"></select>
           <button id="run-instance-compare" type="button">Compare instances</button>
         </div>
+        <div class="instance-form">
+          <select id="compare-search-state" aria-label="Filter compared search threads by state">
+            <option value="all">All search states</option>
+            <option value="active">Active only</option>
+            <option value="running">Running</option>
+            <option value="completed">Completed</option>
+            <option value="timed_out">Timed out</option>
+          </select>
+          <label class="toggle-row">
+            <input id="compare-publish-only" type="checkbox" />
+            Publish flags only
+          </label>
+        </div>
         <div class="controls">
           <button id="view-compare-left-events" type="button">View left events</button>
           <button id="view-compare-right-events" type="button">View right events</button>
           <button id="view-compare-left-failures" type="button">View left failures</button>
           <button id="view-compare-right-failures" type="button">View right failures</button>
+        </div>
+        <div id="instance-compare-summary" class="preset-help muted">
+          Compare current runtime surface state across two managed instances.
+        </div>
+        <div class="surface-grid">
+          <div class="surface-panel">
+            <h4>Left Runtime Surface</h4>
+            <div id="instance-compare-left-surface" class="surface-list muted">
+              Select two managed instances to compare.
+            </div>
+          </div>
+          <div class="surface-panel">
+            <h4>Right Runtime Surface</h4>
+            <div id="instance-compare-right-surface" class="surface-list muted">
+              Select two managed instances to compare.
+            </div>
+          </div>
         </div>
         <pre id="instance-compare" class="muted">Select two managed instances to compare.</pre>
       </article>
@@ -391,7 +421,7 @@
       </article>
       <article class="card">
         <div class="row">
-          <h2>Discoverability Results</h2>
+          <h2>Discoverability History</h2>
           <button id="refresh-discoverability-results">Refresh</button>
         </div>
         <div id="discoverability-summary" class="preset-help muted">
@@ -403,8 +433,11 @@
       </article>
       <article class="card">
         <div class="row">
-          <h2>Search Health</h2>
+          <h2>Search Health History</h2>
           <button id="refresh-search-health-results">Refresh</button>
+        </div>
+        <div class="preset-help muted">
+          Historical lifecycle records over time. Use the compare panel above for current runtime surface state.
         </div>
         <div id="search-health-summary" class="preset-help muted">
           Loading search health summary...

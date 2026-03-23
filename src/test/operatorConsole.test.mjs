@@ -1851,6 +1851,7 @@ test("OperatorConsoleServer compares two managed instances", async () => {
       subscribeToAppLogs: () => () => {},
       managedInstances: new StubManagedInstances(),
       managedInstanceDiagnostics: new StubManagedInstanceDiagnostics(),
+      managedInstanceSurfaceDiagnostics: new StubManagedInstanceSurfaceDiagnostics(),
     });
     await server.start();
 
@@ -1867,6 +1868,14 @@ test("OperatorConsoleServer compares two managed instances", async () => {
     assert.equal(payload.comparison.left.snapshot.available, true);
     assert.equal(payload.comparison.right.snapshot.available, false);
     assert.equal("logPath" in payload.comparison.left.instance.runtime, false);
+
+    const leftSurfaceRes = await fetch(
+      `${server.publicAddress()}/api/instances/a/runtime_surface`,
+      { headers: { Cookie: cookie } },
+    );
+    assert.equal(leftSurfaceRes.status, 200);
+    const leftSurface = await leftSurfaceRes.json();
+    assert.equal(leftSurface.diagnostics.detail.searches[0].searchId, "search-1");
 
     const invalidRes = await fetch(
       `${server.publicAddress()}/api/instances/compare?left=a&right=a`,
@@ -2447,6 +2456,10 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /operator-view-runs/);
     assert.match(rootHtml, /selected-instance-feedback/);
     assert.match(rootHtml, /selected-instance-action-summary/);
+    assert.match(rootHtml, /compare-search-state/);
+    assert.match(rootHtml, /compare-publish-only/);
+    assert.match(rootHtml, /instance-compare-summary/);
+    assert.match(rootHtml, /instance-compare-left-surface/);
     assert.match(rootHtml, /instance-runtime-summary/);
     assert.match(rootHtml, /instance-runtime-highlights/);
     assert.match(rootHtml, /instance-runtime-surface-summary/);
