@@ -267,6 +267,7 @@ async function main(): Promise<void> {
     client: rustMuleClient,
     logWatcher,
     runtimeStore,
+    searchHealthLog,
     targetResolver: observerTargetResolver,
     analyzerFactory: (target) => {
       const targetTools = new ToolRegistry(target.client, target.logSource, runtimeStore, {

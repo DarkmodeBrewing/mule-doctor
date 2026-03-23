@@ -322,7 +322,8 @@ export interface ManagedDiscoverabilitySummary {
 
 export type SearchHealthRecordSource =
   | "controlled_discoverability"
-  | "managed_instance_observation";
+  | "managed_instance_observation"
+  | "observer_target_observation";
 export type SearchHealthOutcome = ManagedDiscoverabilityOutcome | "active";
 
 export interface SearchHealthReadinessSnapshot {
@@ -346,6 +347,11 @@ export interface SearchHealthObservedContext {
   instanceId: string;
 }
 
+export interface SearchHealthObserverContext {
+  target: DiagnosticTargetRef;
+  label: string;
+}
+
 export interface SearchHealthRecord {
   recordedAt: string;
   source: SearchHealthRecordSource;
@@ -366,6 +372,7 @@ export interface SearchHealthRecord {
   finalState: string;
   controlledContext?: SearchHealthControlledContext;
   observedContext?: SearchHealthObservedContext;
+  observerContext?: SearchHealthObserverContext;
 }
 
 export interface SearchHealthSummary {
@@ -388,6 +395,7 @@ export interface SearchHealthSummary {
     searcherInstanceId: string;
   };
   latestInstanceId?: string;
+  latestTargetLabel?: string;
   lastSuccessAt?: string;
 }
 

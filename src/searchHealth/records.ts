@@ -1,6 +1,7 @@
 import type {
   ManagedDiscoverabilityCheckResult,
   ManagedDiscoverabilityFixtureSummary,
+  DiagnosticTargetRef,
   SearchHealthReadinessSnapshot,
   SearchHealthRecord,
   SearchHealthTransportSnapshot,
@@ -95,6 +96,12 @@ export function sanitizeSearchHealthRecord(record: SearchHealthRecord): SearchHe
           instanceId: record.observedContext.instanceId,
         }
       : undefined,
+    observerContext: record.observerContext
+      ? {
+          target: sanitizeDiagnosticTarget(record.observerContext.target),
+          label: record.observerContext.label,
+        }
+      : undefined,
   };
 }
 
@@ -166,6 +173,37 @@ export function createSearchHealthRecordFromManagedObservation(input: {
   };
 }
 
+export function createSearchHealthRecordFromObserverTargetObservation(input: {
+  target: DiagnosticTargetRef;
+  label: string;
+  readiness: RustMuleReadiness;
+  peerCount: number;
+  search: RustMuleKeywordSearchInfo;
+  detail?: RustMuleSearchDetailResponse;
+  recordedAt?: string;
+}): SearchHealthRecord {
+  const base = createSearchHealthRecordFromManagedObservation({
+    instanceId:
+      input.target.kind === "managed_instance" && input.target.instanceId
+        ? input.target.instanceId
+        : "observer-target",
+    readiness: input.readiness,
+    peerCount: input.peerCount,
+    search: input.search,
+    detail: input.detail,
+    recordedAt: input.recordedAt,
+  });
+  return {
+    ...base,
+    source: "observer_target_observation",
+    observedContext: undefined,
+    observerContext: {
+      target: sanitizeDiagnosticTarget(input.target),
+      label: input.label,
+    },
+  };
+}
+
 function sanitizeReadiness(
   value: Partial<SearchHealthReadinessSnapshot> | undefined,
 ): SearchHealthReadinessSnapshot {
@@ -221,6 +259,12 @@ function buildTransportSnapshot(
     peerCount: typeof peerCount === "number" ? peerCount : 0,
     degradedIndicators,
   };
+}
+
+function sanitizeDiagnosticTarget(target: DiagnosticTargetRef | undefined): DiagnosticTargetRef {
+  return target?.kind === "managed_instance" && typeof target.instanceId === "string"
+    ? { kind: "managed_instance", instanceId: target.instanceId }
+    : { kind: "external" };
 }
 
 function classifyObservedOutcome(
