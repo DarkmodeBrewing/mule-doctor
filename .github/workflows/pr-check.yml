@@ -9,19 +9,23 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-check-${{ github.event.pull_request.number }}
+  group: pr-check-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   check:
     name: Typecheck + Lint + Test
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
