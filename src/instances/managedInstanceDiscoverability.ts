@@ -3,6 +3,7 @@ import type {
   ManagedDiscoverabilityStateSample,
   ManagedSharedFixtureSnapshot,
 } from "../types/contracts.js";
+import type { SearchHealthLog } from "../searchHealth/searchHealthLog.js";
 import { ManagedInstanceDiagnosticsService } from "./managedInstanceDiagnostics.js";
 import { ManagedInstanceSharingService } from "./managedInstanceSharing.js";
 
@@ -20,13 +21,16 @@ export interface RunControlledDiscoverabilityCheckInput {
 export class ManagedInstanceDiscoverabilityService {
   private readonly diagnostics: ManagedInstanceDiagnosticsService;
   private readonly sharing: ManagedInstanceSharingService;
+  private readonly searchHealthLog: SearchHealthLog | undefined;
 
   constructor(
     diagnostics: ManagedInstanceDiagnosticsService,
     sharing: ManagedInstanceSharingService,
+    searchHealthLog?: SearchHealthLog,
   ) {
     this.diagnostics = diagnostics;
     this.sharing = sharing;
+    this.searchHealthLog = searchHealthLog;
   }
 
   async runControlledCheck(
@@ -89,6 +93,18 @@ export class ManagedInstanceDiscoverabilityService {
     }
 
     const dispatchedAt = new Date().toISOString();
+    await this.searchHealthLog?.appendControlledDiscoverabilityDispatch({
+      publisherInstanceId: publisherRecord.id,
+      searcherInstanceId: searcherRecord.id,
+      fixture,
+      query: fixture.token,
+      dispatch,
+      publisherReadiness,
+      searcherReadiness,
+      publisherPeerCount: publisherPeers.length,
+      searcherPeerCount: searcherPeers.length,
+      dispatchedAt,
+    });
     const deadline = Date.now() + timeoutMs;
     const states: ManagedDiscoverabilityStateSample[] = [];
 

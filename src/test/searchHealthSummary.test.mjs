@@ -175,6 +175,75 @@ test("summarizeSearchHealthRecords includes observer-target observations", () =>
   assert.equal(summary.latestTargetLabel, "external configured rust-mule client");
 });
 
+test("summarizeSearchHealthRecords collapses multiple records for the same logical search", () => {
+  const summary = summarizeSearchHealthRecords([
+    {
+      recordedAt: "2026-03-23T12:00:00.000Z",
+      source: "controlled_discoverability",
+      query: "fixture-token",
+      searchId: "search-5",
+      dispatchedAt: "2026-03-23T12:00:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 1, degradedIndicators: [] },
+        searcher: { peerCount: 1, degradedIndicators: [] },
+      },
+      states: [{ observedAt: "2026-03-23T12:00:00.000Z", state: "dispatched", hits: 0 }],
+      resultCount: 0,
+      outcome: "active",
+      finalState: "dispatched",
+      controlledContext: {
+        publisherInstanceId: "a",
+        searcherInstanceId: "b",
+        fixture: {
+          fixtureId: "f-5",
+          fileName: "f-5.txt",
+          relativePath: "f-5.txt",
+          sizeBytes: 16,
+        },
+      },
+    },
+    {
+      recordedAt: "2026-03-23T12:00:05.000Z",
+      source: "controlled_discoverability",
+      query: "fixture-token",
+      searchId: "search-5",
+      dispatchedAt: "2026-03-23T12:00:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 1, degradedIndicators: [] },
+        searcher: { peerCount: 1, degradedIndicators: [] },
+      },
+      states: [{ observedAt: "2026-03-23T12:00:05.000Z", state: "completed", hits: 1 }],
+      resultCount: 1,
+      outcome: "found",
+      finalState: "completed",
+      controlledContext: {
+        publisherInstanceId: "a",
+        searcherInstanceId: "b",
+        fixture: {
+          fixtureId: "f-5",
+          fileName: "f-5.txt",
+          relativePath: "f-5.txt",
+          sizeBytes: 16,
+        },
+      },
+    },
+  ]);
+
+  assert.equal(summary.totalSearches, 1);
+  assert.equal(summary.activeCount, 0);
+  assert.equal(summary.foundCount, 1);
+  assert.equal(summary.successRatePct, 100);
+  assert.equal(summary.latestOutcome, "found");
+});
+
 test("SearchHealthLog sanitizes records when reading from runtime store", async () => {
   const log = new SearchHealthLog({
     async getRecentSearchHealthResults() {

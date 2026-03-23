@@ -9,6 +9,7 @@ import type {
 import type {
   RustMuleSearchDetailResponse,
   RustMuleKeywordSearchInfo,
+  RustMuleKeywordSearchResponse,
   RustMuleReadiness,
 } from "../api/rustMuleClient.js";
 
@@ -169,6 +170,73 @@ export function createSearchHealthRecordFromManagedObservation(input: {
     finalState: state,
     observedContext: {
       instanceId: input.instanceId,
+    },
+  };
+}
+
+export function createSearchHealthRecordFromControlledDispatch(input: {
+  publisherInstanceId: string;
+  searcherInstanceId: string;
+  fixture: ManagedDiscoverabilityFixtureSummary;
+  query: string;
+  dispatch: RustMuleKeywordSearchResponse;
+  publisherReadiness: RustMuleReadiness;
+  searcherReadiness: RustMuleReadiness;
+  publisherPeerCount: number;
+  searcherPeerCount: number;
+  dispatchedAt?: string;
+}): SearchHealthRecord {
+  const dispatchedAt = input.dispatchedAt ?? new Date().toISOString();
+  const searchId =
+    readString(input.dispatch.search_id_hex) ??
+    readString(input.dispatch.keyword_id_hex) ??
+    input.query;
+  return {
+    recordedAt: dispatchedAt,
+    source: "controlled_discoverability",
+    query: input.query,
+    searchId,
+    dispatchedAt,
+    readinessAtDispatch: {
+      publisher: {
+        statusReady: input.publisherReadiness.statusReady === true,
+        searchesReady: input.publisherReadiness.searchesReady === true,
+        ready: input.publisherReadiness.ready === true,
+      },
+      searcher: {
+        statusReady: input.searcherReadiness.statusReady === true,
+        searchesReady: input.searcherReadiness.searchesReady === true,
+        ready: input.searcherReadiness.ready === true,
+      },
+    },
+    transportAtDispatch: {
+      publisher: buildTransportSnapshot(
+        input.publisherPeerCount,
+        input.publisherReadiness.ready,
+        input.publisherReadiness.statusReady,
+        input.publisherReadiness.searchesReady,
+      ),
+      searcher: buildTransportSnapshot(
+        input.searcherPeerCount,
+        input.searcherReadiness.ready,
+        input.searcherReadiness.statusReady,
+        input.searcherReadiness.searchesReady,
+      ),
+    },
+    states: [
+      {
+        observedAt: dispatchedAt,
+        state: "dispatched",
+        hits: 0,
+      },
+    ],
+    resultCount: 0,
+    outcome: "active",
+    finalState: "dispatched",
+    controlledContext: {
+      publisherInstanceId: input.publisherInstanceId,
+      searcherInstanceId: input.searcherInstanceId,
+      fixture: summarizeFixture(input.fixture),
     },
   };
 }
