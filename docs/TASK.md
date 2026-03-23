@@ -112,6 +112,7 @@ Current status:
 - PR CI also validates the packaged runtime image layout and metadata so release-image drift is caught before merge
 - pushes to `main` now rerun the fast check suite and Docker validation so the mainline release path is continuously revalidated
 - smoke-harness contract tests now cover generated files and failure diagnostics without depending on a live I2P/SAM-backed rust-mule runtime
+- `entrypoint.sh` and `container-healthcheck.sh` now have script-level contract coverage for token wait behavior, process/pid assumptions, and authenticated readiness checks
 - full `npm run smoke:docker` runtime validation remains environment-specific because rust-mule needs an available SAM/I2P dependency and is not portable to GitHub-hosted runners
 - remaining Task F work should focus on release-oriented validation and any additional high-value integration coverage beyond `npm run check` plus Docker build validation
 
