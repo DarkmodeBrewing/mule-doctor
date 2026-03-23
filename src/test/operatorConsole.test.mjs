@@ -1170,6 +1170,50 @@ test("OperatorConsoleServer launches manual keyword searches", async () => {
   }
 });
 
+test("OperatorConsoleServer rejects malformed manual keyword search payloads", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const operatorSearches = new StubOperatorSearches();
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      operatorSearches,
+      operatorEvents: new StubOperatorEvents(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/searches/launch`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: server.publicAddress(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        mode: "managed_instance",
+      }),
+    });
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.match(body.error, /manual search requires/);
+    assert.equal(operatorSearches.calls.length, 0);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("OperatorConsoleServer returns persisted discoverability results", async () => {
   const tmp = await makeTempDir();
   try {

@@ -310,7 +310,7 @@ export function createInstancesController({
       document.getElementById(id).disabled = disabled;
     }
     document.getElementById("run-manual-search").disabled = manualSearchDisabled;
-    renderManualSearchSummary(undefined);
+    renderManualSearchSummary(state.currentManualSearchResult);
   }
 
   async function loadSelectedInstanceShared(id) {
@@ -322,6 +322,7 @@ export function createInstancesController({
 
   async function inspectInstance(id) {
     state.selectedInstanceId = id;
+    state.currentManualSearchResult = null;
     views.renderSelectedInstanceTimelineControls();
     renderSelectedControlAvailability();
     try {
@@ -671,7 +672,8 @@ export function createInstancesController({
       keywordIdInput.disabled = true;
       setSelectedManualSearchFeedback("dispatching manual search...");
       const result = await postJson("/api/searches/launch", payload);
-      renderManualSearchSummary(result.result);
+      state.currentManualSearchResult = result.result;
+      renderManualSearchSummary(state.currentManualSearchResult);
       setText("instance-manual-search-result", JSON.stringify(result.result, null, 2));
       setSelectedManualSearchFeedback(`manual search dispatched against ${result.result.targetLabel}`);
       await Promise.all([refreshSearchHealthResults(), refreshOperatorEvents()]);
@@ -687,6 +689,11 @@ export function createInstancesController({
       keywordIdInput.disabled = false;
       renderSelectedControlAvailability();
     }
+  }
+
+  function handleManualSearchModeChange() {
+    state.currentManualSearchResult = null;
+    renderSelectedControlAvailability();
   }
 
   async function applyInstancePreset(event) {
@@ -829,6 +836,7 @@ export function createInstancesController({
         const exists = data.instances.some((instance) => instance.id === state.selectedInstanceId);
         if (!exists) {
           state.selectedInstanceId = null;
+          state.currentManualSearchResult = null;
           views.renderSelectedInstanceTimelineControls();
           setText("instance-detail", "Selected instance no longer exists.");
           setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
@@ -845,6 +853,7 @@ export function createInstancesController({
     } catch (err) {
       state.currentManagedInstances = [];
       state.selectedInstanceId = null;
+      state.currentManualSearchResult = null;
       state.instanceControlState.instances = {};
       state.instanceControlState.presets = {};
       timeline.populateOperatorEventFilters();
@@ -874,6 +883,7 @@ export function createInstancesController({
     refreshInstances,
     refreshSelectedInstance,
     refreshSelectedInstanceShared,
+    handleManualSearchModeChange,
     renderSelectedControlAvailability,
     renderCompareTimelineControls: compare.renderCompareTimelineControls,
     renderInstancePresets: presets.renderInstancePresets,

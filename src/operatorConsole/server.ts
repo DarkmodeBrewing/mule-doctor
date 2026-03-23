@@ -712,13 +712,42 @@ export class OperatorConsoleServer {
       return;
     }
     const payload = await readJsonBody(req);
+    const mode = typeof payload.mode === "string" ? payload.mode : undefined;
+    if (mode !== "active_target" && mode !== "managed_instance") {
+      sendJson(res, 400, {
+        ok: false,
+        error: "invalid mode: expected 'active_target' or 'managed_instance'",
+      });
+      return;
+    }
+    const query =
+      typeof payload.query === "string" && payload.query.trim().length > 0
+        ? payload.query
+        : undefined;
+    const keywordIdHex =
+      typeof payload.keywordIdHex === "string" && payload.keywordIdHex.trim().length > 0
+        ? payload.keywordIdHex
+        : undefined;
+    if (!query && !keywordIdHex) {
+      sendJson(res, 400, {
+        ok: false,
+        error: "manual search requires a non-empty 'query' or 'keywordIdHex'",
+      });
+      return;
+    }
+    if (query && keywordIdHex) {
+      sendJson(res, 400, {
+        ok: false,
+        error: "manual search requires either 'query' or 'keywordIdHex', not both",
+      });
+      return;
+    }
     const result = await handleManagedInstanceErrors(() =>
       this.operatorSearches!.startSearch({
-        mode: payload.mode === "active_target" ? "active_target" : "managed_instance",
+        mode,
         instanceId: typeof payload.instanceId === "string" ? payload.instanceId : undefined,
-        query: typeof payload.query === "string" ? payload.query : undefined,
-        keywordIdHex:
-          typeof payload.keywordIdHex === "string" ? payload.keywordIdHex : undefined,
+        query,
+        keywordIdHex,
       }),
     );
     await this.appendOperatorEvent({

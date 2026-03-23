@@ -104,3 +104,23 @@ test("OperatorSearchService records manual active-target dispatch", async () => 
   assert.deepEqual(records[0].target, { kind: "external" });
   assert.equal(records[0].targetLabel, "external configured rust-mule client");
 });
+
+test("OperatorSearchService rejects ambiguous manual search input", async () => {
+  const service = new OperatorSearchService({
+    observerTargetResolver: {
+      async resolve() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      service.startSearch({
+        mode: "active_target",
+        query: "alpha",
+        keywordIdHex: "feedface",
+      }),
+    /either query or keywordIdHex, not both/,
+  );
+});

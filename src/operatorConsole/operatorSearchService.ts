@@ -41,6 +41,9 @@ export class OperatorSearchService {
     if (!query && !keywordIdHex) {
       throw new Error("manual search requires query or keywordIdHex");
     }
+    if (query && keywordIdHex) {
+      throw new Error("manual search requires either query or keywordIdHex, not both");
+    }
 
     const runtime =
       input.mode === "managed_instance"
