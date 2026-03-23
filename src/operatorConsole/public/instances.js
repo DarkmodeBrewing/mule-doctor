@@ -12,6 +12,11 @@ import { createInstanceCompareController } from "./instanceCompare.js";
 import { createInstancePresetsController } from "./instancePresets.js";
 import { createInstanceViewsController } from "./instanceViews.js";
 
+const UNLOADED_PUBLISH_NOTE =
+  "Publish status is inferred from shared-file fields such as <code>keyword_publish_*</code>. A dedicated upstream publish-job API is not available.";
+const LOADED_PUBLISH_NOTE =
+  "Publish status is inferred from shared-file <code>keyword_publish_*</code> fields. Treat queued, failed, and acked values as file-level publish signals, not a complete active publish-job queue.";
+
 export function createInstancesController({
   state,
   timeline,
@@ -146,8 +151,7 @@ export function createInstancesController({
     if (!snapshot?.detail) {
       summaryElement.textContent = "No structured runtime surface loaded.";
       summaryElement.className = "preset-help muted";
-      publishNoteElement.textContent =
-        "Publish status is inferred from shared-file fields such as keyword_publish_*. A dedicated upstream publish-job API is not available.";
+      publishNoteElement.innerHTML = UNLOADED_PUBLISH_NOTE;
       publishNoteElement.className = "preset-help muted";
       renderSurfaceList("instance-runtime-search-threads", [], () => "", "Runtime surface not loaded.");
       renderSurfaceList("instance-runtime-publish-files", [], () => "", "Runtime surface not loaded.");
@@ -166,8 +170,7 @@ export function createInstancesController({
     ];
     summaryElement.textContent = parts.join(" • ");
     summaryElement.className = "preset-help";
-    publishNoteElement.textContent =
-      "Publish status is inferred from shared-file keyword_publish_* fields. Treat queued, failed, and acked values as file-level publish signals, not a complete active publish-job queue.";
+    publishNoteElement.innerHTML = LOADED_PUBLISH_NOTE;
     publishNoteElement.className = "preset-help";
 
     renderSurfaceList("instance-runtime-search-threads", detail.searches, (search) => ({
