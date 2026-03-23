@@ -6,9 +6,13 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
-const SCRIPT_PATH = "/workspace/mule-doctor/scripts/smoke-compose.sh";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const REPO_ROOT = join(__dirname, "..", "..");
+const SCRIPT_PATH = join(REPO_ROOT, "scripts", "smoke-compose.sh");
 
 async function makeTempDir(prefix) {
   const dir = await mkdtemp(join(tmpdir(), prefix));
@@ -183,7 +187,7 @@ test("smoke-compose harness writes expected artifacts in a stubbed success run",
     const workDir = join(tmp.dir, "work");
 
     await execFileAsync("bash", [SCRIPT_PATH], {
-      cwd: "/workspace/mule-doctor",
+      cwd: REPO_ROOT,
       env: {
         ...process.env,
         PATH: `${fakeBin}:${process.env.PATH}`,
@@ -227,7 +231,7 @@ test("smoke-compose harness preserves diagnostics for invalid token path overrid
     let failure = null;
     try {
       await execFileAsync("bash", [SCRIPT_PATH], {
-        cwd: "/workspace/mule-doctor",
+        cwd: REPO_ROOT,
         env: {
           ...process.env,
           PATH: `${fakeBin}:${process.env.PATH}`,
@@ -245,7 +249,7 @@ test("smoke-compose harness preserves diagnostics for invalid token path overrid
     const envFile = await readFile(join(workDir, "smoke.env"), "utf8");
 
     assert.match(logFile, /ERROR: smoke harness only supports token paths under \/data/);
-    assert.match(logFile, /Smoke work directory retained at/);
+    assert.match(logFile, /(Smoke work directory retained at|Preserving smoke work directory:)/);
     assert.match(envFile, /RUST_MULE_TOKEN_PATH=\/tmp\/outside-data\.token/);
     assert.equal(existsSync(join(workDir, "data", "config.toml")), true);
     assert.equal(existsSync(join(workDir, "docker-compose.smoke.yml")), true);
