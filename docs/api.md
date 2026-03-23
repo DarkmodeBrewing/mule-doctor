@@ -107,6 +107,7 @@ Common status codes:
 | `GET` | `/api/instances/{id}/logs` | Tail managed-instance rust-mule log |
 | `GET` | `/api/instances/{id}/diagnostics` | Get diagnostics snapshot |
 | `GET` | `/api/instances/{id}/surface_diagnostics` | Get per-instance search/shared/download summary |
+| `GET` | `/api/instances/{id}/runtime_surface` | Get structured current search/publish/download detail |
 | `POST` | `/api/instances/{id}/analyze` | Run one-shot analysis |
 | `POST` | `/api/instances/{id}/start` | Start instance |
 | `POST` | `/api/instances/{id}/stop` | Stop instance |
@@ -602,6 +603,94 @@ Response:
       ],
       "downloads": [
         "fixture.bin: queued (50%, 1 source)"
+      ]
+    }
+  }
+}
+```
+
+### `GET /api/instances/{id}/runtime_surface`
+
+Returns the same managed runtime-surface observation window as `surface_diagnostics`, but includes normalized current detail for:
+
+- keyword search threads
+- shared-file publish state
+- shared action state
+- downloads
+
+The operator console selected-instance panel uses this endpoint for the structured “Runtime Surface” cards, while the legacy `surface_diagnostics` route remains the compact summary/highlights form.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "diagnostics": {
+    "instanceId": "a",
+    "observedAt": "2026-03-23T10:00:00.000Z",
+    "summary": {
+      "searches": {
+        "ready": true,
+        "totalSearches": 2,
+        "activeSearches": 1
+      },
+      "sharedLibrary": {
+        "totalFiles": 4,
+        "keywordPublishQueuedCount": 1,
+        "keywordPublishAckedCount": 3
+      },
+      "downloads": {
+        "totalDownloads": 2,
+        "activeDownloads": 1
+      }
+    },
+    "highlights": {
+      "searches": [
+        "fixture-search: running (2 hits, publish enabled)"
+      ],
+      "sharedActions": [
+        "reindex: idle"
+      ],
+      "downloads": [
+        "fixture.bin: queued (50%, 1 source)"
+      ]
+    },
+    "detail": {
+      "searches": [
+        {
+          "searchId": "search-1",
+          "keywordIdHex": "keyword-1",
+          "label": "fixture-search",
+          "state": "running",
+          "ageSecs": 42,
+          "hits": 2,
+          "wantSearch": true,
+          "publishEnabled": true,
+          "publishAcked": false
+        }
+      ],
+      "sharedFiles": [
+        {
+          "fileName": "fixture.txt",
+          "fileIdHex": "file-1",
+          "keywordPublishQueued": true,
+          "keywordPublishFailed": false,
+          "keywordPublishAckedCount": 0
+        }
+      ],
+      "sharedActions": [
+        {
+          "kind": "reindex",
+          "state": "idle"
+        }
+      ],
+      "downloads": [
+        {
+          "fileName": "fixture.bin",
+          "state": "queued",
+          "progressPct": 50,
+          "sourceCount": 1
+        }
       ]
     }
   }

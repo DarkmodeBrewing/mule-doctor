@@ -1126,6 +1126,22 @@ export class OperatorConsoleServer {
       return;
     }
 
+    if (action === "runtime_surface") {
+      if (req.method !== "GET") {
+        sendJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      if (!this.managedInstanceSurfaceDiagnostics) {
+        sendJson(res, 501, { ok: false, error: "managed instance surface diagnostics unavailable" });
+        return;
+      }
+      const diagnostics = await handleManagedInstanceErrors(() =>
+        this.managedInstanceSurfaceDiagnostics!.getSnapshot(id),
+      );
+      sendJson(res, 200, { ok: true, diagnostics });
+      return;
+    }
+
     if (action === "analyze") {
       if (req.method !== "POST") {
         sendJson(res, 405, { ok: false, error: "method not allowed" });

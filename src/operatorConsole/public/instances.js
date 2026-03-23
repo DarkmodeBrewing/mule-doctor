@@ -140,6 +140,112 @@ export function createInstancesController({
     element.className = "preset-help";
   }
 
+  function renderRuntimeSurface(snapshot) {
+    const summaryElement = document.getElementById("instance-runtime-surface-summary");
+    if (!snapshot?.detail) {
+      summaryElement.textContent = "No structured runtime surface loaded.";
+      summaryElement.className = "preset-help muted";
+      renderSurfaceList("instance-runtime-search-threads", [], () => "");
+      renderSurfaceList("instance-runtime-publish-files", [], () => "");
+      renderSurfaceList("instance-runtime-shared-actions", [], () => "");
+      renderSurfaceList("instance-runtime-downloads", [], () => "");
+      return;
+    }
+
+    const detail = snapshot.detail;
+    const parts = [
+      `Observed: ${new Date(snapshot.observedAt).toLocaleString()}`,
+      `${detail.searches.length} search threads`,
+      `${detail.sharedFiles.length} shared files`,
+      `${detail.sharedActions.length} shared actions`,
+      `${detail.downloads.length} downloads`,
+    ];
+    summaryElement.textContent = parts.join(" • ");
+    summaryElement.className = "preset-help";
+
+    renderSurfaceList("instance-runtime-search-threads", detail.searches, (search) => ({
+      title: search.label,
+      meta: [
+        `state ${search.state}`,
+        typeof search.ageSecs === "number" ? `age ${formatAgeSeconds(search.ageSecs)}` : "",
+        `${search.hits} hits`,
+        search.wantSearch ? "wanted" : "",
+        search.publishEnabled ? "publish enabled" : "",
+        search.publishAcked ? "publish acked" : "",
+        search.keywordIdHex ? `keyword ${search.keywordIdHex}` : "",
+        search.searchId ? `search ${search.searchId}` : "",
+      ].filter((value) => value),
+    }));
+    renderSurfaceList("instance-runtime-publish-files", detail.sharedFiles, (file) => ({
+      title: file.fileName,
+      meta: [
+        file.localSourceCached ? "source cached" : "",
+        file.keywordPublishQueued ? "publish queued" : "",
+        file.keywordPublishFailed ? "publish failed" : "",
+        file.keywordPublishAckedCount > 0 ? `${file.keywordPublishAckedCount} publish acks` : "",
+        file.sourcePublishResponseReceived ? "source response received" : "",
+        file.queuedDownloads > 0 ? `${file.queuedDownloads} queued downloads` : "",
+        file.inflightDownloads > 0 ? `${file.inflightDownloads} inflight downloads` : "",
+        file.queuedUploads > 0 ? `${file.queuedUploads} queued uploads` : "",
+        file.inflightUploads > 0 ? `${file.inflightUploads} inflight uploads` : "",
+        typeof file.sizeBytes === "number" ? `${file.sizeBytes} bytes` : "",
+        file.fileIdHex ? `file ${file.fileIdHex}` : "",
+      ].filter((value) => value),
+    }));
+    renderSurfaceList("instance-runtime-shared-actions", detail.sharedActions, (action) => ({
+      title: action.kind,
+      meta: [
+        `state ${action.state}`,
+        action.fileName ? `file ${action.fileName}` : "",
+        action.fileIdHex ? `id ${action.fileIdHex}` : "",
+        action.error ? `error ${action.error}` : "",
+      ].filter((value) => value),
+    }));
+    renderSurfaceList("instance-runtime-downloads", detail.downloads, (download) => ({
+      title: download.fileName,
+      meta: [
+        `state ${download.state}`,
+        typeof download.progressPct === "number" ? `${download.progressPct}%` : "",
+        download.sourceCount > 0 ? `${download.sourceCount} sources` : "0 sources",
+        download.lastError ? `error ${download.lastError}` : "",
+        download.fileHashMd4Hex ? `hash ${download.fileHashMd4Hex}` : "",
+      ].filter((value) => value),
+    }));
+  }
+
+  function renderSurfaceList(elementId, items, formatter) {
+    const element = document.getElementById(elementId);
+    element.replaceChildren();
+    if (!Array.isArray(items) || items.length === 0) {
+      element.textContent = "None observed.";
+      element.className = "surface-list muted";
+      return;
+    }
+    element.className = "surface-list";
+    for (const item of items) {
+      const entry = formatter(item);
+      const wrapper = document.createElement("div");
+      wrapper.className = "surface-entry";
+      const title = document.createElement("div");
+      title.className = "surface-entry-title";
+      title.textContent = entry.title;
+      const meta = document.createElement("div");
+      meta.className = "surface-entry-meta";
+      meta.textContent = entry.meta.join(" • ");
+      wrapper.append(title, meta);
+      element.appendChild(wrapper);
+    }
+  }
+
+  function formatAgeSeconds(ageSecs) {
+    if (ageSecs < 60) {
+      return `${ageSecs}s`;
+    }
+    const minutes = Math.floor(ageSecs / 60);
+    const seconds = ageSecs % 60;
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+
   function formatHighlightSection(label, items) {
     if (!Array.isArray(items) || items.length === 0) {
       return `${label}: none`;
@@ -326,12 +432,14 @@ export function createInstancesController({
     views.renderSelectedInstanceTimelineControls();
     renderSelectedControlAvailability();
     try {
-      const surfaceDiagnostics = await fetchJson(
-        `/api/instances/${encodeURIComponent(id)}/surface_diagnostics`,
-      );
+      const [surfaceDiagnostics, runtimeSurface] = await Promise.all([
+        fetchJson(`/api/instances/${encodeURIComponent(id)}/surface_diagnostics`),
+        fetchJson(`/api/instances/${encodeURIComponent(id)}/runtime_surface`),
+      ]);
       renderSurfaceDiagnosticsSummary(surfaceDiagnostics.diagnostics);
       renderSurfaceDiagnosticsHighlights(surfaceDiagnostics.diagnostics);
-      setText("instance-runtime-diagnostics", JSON.stringify(surfaceDiagnostics.diagnostics, null, 2));
+      renderRuntimeSurface(runtimeSurface.diagnostics);
+      setText("instance-runtime-diagnostics", JSON.stringify(runtimeSurface.diagnostics, null, 2));
     } catch (err) {
       const summaryElement = document.getElementById("instance-runtime-summary");
       summaryElement.textContent = `Failed to load runtime surface summary: ${String(err)}`;
@@ -339,6 +447,10 @@ export function createInstancesController({
       const highlightsElement = document.getElementById("instance-runtime-highlights");
       highlightsElement.textContent = `Failed to load runtime surface highlights: ${String(err)}`;
       highlightsElement.className = "preset-help muted";
+      renderRuntimeSurface(undefined);
+      const runtimeSurfaceElement = document.getElementById("instance-runtime-surface-summary");
+      runtimeSurfaceElement.textContent = `Failed to load structured runtime surface: ${String(err)}`;
+      runtimeSurfaceElement.className = "preset-help muted";
       setText("instance-runtime-diagnostics", `Failed to load runtime diagnostics: ${String(err)}`);
     }
     try {
@@ -847,6 +959,7 @@ export function createInstancesController({
           setText("instance-manual-search-result", "Select a search target and provide a query or keyword ID.");
           renderSharedSummary(undefined);
           renderDiscoverabilitySummary(undefined);
+          renderRuntimeSurface(undefined);
         }
       }
       renderSelectedControlAvailability();
@@ -862,6 +975,7 @@ export function createInstancesController({
       views.renderInstanceList([]);
       views.renderSelectedInstanceTimelineControls();
       renderDiscoverabilityOptions([]);
+      renderRuntimeSurface(undefined);
       renderSelectedControlAvailability();
       setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
       statusCards.renderTargetStatusCard();

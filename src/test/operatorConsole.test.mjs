@@ -175,7 +175,7 @@ class StubManagedInstanceDiagnostics {
 }
 
 class StubManagedInstanceSurfaceDiagnostics {
-  async getSummary(id) {
+  buildDiagnostics(id) {
     if (id !== "a" && id !== "b") {
       throw new Error(`Managed instance not found: ${id}`);
     }
@@ -220,7 +220,69 @@ class StubManagedInstanceSurfaceDiagnostics {
         sharedActions: ["reindex: idle"],
         downloads: ["fixture.bin: queued (50%, 1 source)"],
       },
+      detail: {
+        searches: [
+          {
+            searchId: "search-1",
+            keywordIdHex: "keyword-1",
+            label: "fixture-search",
+            state: "running",
+            ageSecs: 42,
+            hits: 2,
+            wantSearch: true,
+            publishEnabled: true,
+            publishAcked: false,
+          },
+        ],
+        sharedFiles: [
+          {
+            fileName: "fixture.txt",
+            fileIdHex: "file-1",
+            sizeBytes: 128,
+            localSourceCached: true,
+            keywordPublishQueued: true,
+            keywordPublishFailed: false,
+            keywordPublishAckedCount: 0,
+            sourcePublishResponseReceived: true,
+            queuedDownloads: 1,
+            inflightDownloads: 0,
+            queuedUploads: 0,
+            inflightUploads: 1,
+          },
+        ],
+        sharedActions: [
+          {
+            kind: "reindex",
+            state: "idle",
+            fileName: "fixture.txt",
+            fileIdHex: "file-1",
+          },
+        ],
+        downloads: [
+          {
+            fileName: "fixture.bin",
+            fileHashMd4Hex: "hash-1",
+            state: "queued",
+            progressPct: 50,
+            sourceCount: 1,
+          },
+        ],
+      },
     };
+  }
+
+  async getSummary(id) {
+    const diagnostics = this.buildDiagnostics(id);
+    return {
+      instanceId: diagnostics.instanceId,
+      observedAt: diagnostics.observedAt,
+      summary: diagnostics.summary,
+      highlights: diagnostics.highlights,
+    };
+  }
+
+  async getSnapshot(id) {
+    return this.buildDiagnostics(id);
   }
 }
 
@@ -2303,8 +2365,10 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     const instancesModule = await instancesModuleRes.text();
     assert.match(instancesModule, /confirmAction/);
     assert.match(instancesModule, /surface_diagnostics/);
+    assert.match(instancesModule, /runtime_surface/);
     assert.match(instancesModule, /instance-runtime-summary/);
     assert.match(instancesModule, /instance-runtime-highlights/);
+    assert.match(instancesModule, /instance-runtime-search-threads/);
 
     const instanceViewsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/instanceViews.js`, {
       headers: { Cookie: cookie },
@@ -2386,6 +2450,9 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /selected-instance-action-summary/);
     assert.match(rootHtml, /instance-runtime-summary/);
     assert.match(rootHtml, /instance-runtime-highlights/);
+    assert.match(rootHtml, /instance-runtime-surface-summary/);
+    assert.match(rootHtml, /instance-runtime-search-threads/);
+    assert.match(rootHtml, /instance-runtime-publish-files/);
     assert.match(rootHtml, /instance-runtime-diagnostics/);
     assert.match(rootHtml, /refresh-discoverability-results/);
     assert.match(rootHtml, /discoverability-results/);
@@ -2448,6 +2515,19 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(instanceSurfaceDiagnostics.diagnostics.instanceId, "a");
     assert.equal(instanceSurfaceDiagnostics.diagnostics.summary.searches.totalSearches, 2);
     assert.equal(instanceSurfaceDiagnostics.diagnostics.highlights.searches[0], "fixture-search: running (2 hits, publish enabled)");
+
+    const instanceRuntimeSurfaceRes = await fetch(
+      `${baseUrl}/api/instances/a/runtime_surface`,
+      {
+        headers: { Cookie: cookie },
+      },
+    );
+    assert.equal(instanceRuntimeSurfaceRes.status, 200);
+    const instanceRuntimeSurface = await instanceRuntimeSurfaceRes.json();
+    assert.equal(instanceRuntimeSurface.diagnostics.instanceId, "a");
+    assert.equal(instanceRuntimeSurface.diagnostics.detail.searches[0].label, "fixture-search");
+    assert.equal(instanceRuntimeSurface.diagnostics.detail.sharedFiles[0].fileName, "fixture.txt");
+    assert.equal(instanceRuntimeSurface.diagnostics.detail.downloads[0].fileName, "fixture.bin");
 
     const invalidLinesRes = await fetch(`${baseUrl}/api/instances/a/logs?lines=not-a-number`, {
       headers: { Cookie: cookie },
