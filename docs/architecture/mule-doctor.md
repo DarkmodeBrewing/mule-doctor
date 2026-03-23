@@ -200,6 +200,13 @@ Current phase:
   - selected-instance shared-content and discoverability actions
   - set active diagnostic target
 
+Current runtime-surface boundary:
+
+- the console can show current search threads, shared-file publish markers, shared actions, and downloads for managed instances
+- shared-file publish markers such as `keyword_publish_*` are treated as inferred per-file status only
+- rust-mule does not currently expose a first-class active publish-job queue/surface
+- operators should not read the current publish counters as a complete background job model; they are the best available file-level publish signals
+
 Implementation note:
 
 - the operator console frontend is served as static assets, kept separate from backend auth/API/SSE route logic

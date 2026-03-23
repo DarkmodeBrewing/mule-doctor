@@ -2462,9 +2462,11 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /instance-compare-left-surface/);
     assert.match(rootHtml, /instance-runtime-summary/);
     assert.match(rootHtml, /instance-runtime-highlights/);
+    assert.match(rootHtml, /instance-runtime-publish-note/);
     assert.match(rootHtml, /instance-runtime-surface-summary/);
     assert.match(rootHtml, /instance-runtime-search-threads/);
     assert.match(rootHtml, /instance-runtime-publish-files/);
+    assert.match(rootHtml, /instance-compare-publish-note/);
     assert.match(rootHtml, /instance-runtime-diagnostics/);
     assert.match(rootHtml, /refresh-discoverability-results/);
     assert.match(rootHtml, /discoverability-results/);

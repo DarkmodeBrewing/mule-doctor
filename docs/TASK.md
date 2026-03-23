@@ -148,7 +148,7 @@ Current status:
 
 ## Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
 
-Status: in progress. The operator console now exposes a structured managed-instance runtime-surface view via `/api/instances/{id}/runtime_surface`, and the compare panel can contrast current search/publish/download state across two managed instances while keeping historical search-health views separate.
+Status: complete for current scope. The operator console now exposes a structured managed-instance runtime-surface view via `/api/instances/{id}/runtime_surface`, the compare panel can contrast current search/publish/download state across two managed instances while keeping historical search-health views separate, and the missing upstream publish-job surface is now documented explicitly instead of being implied.
 
 1. Use the current rust-mule endpoints as the basis for publish/search observability:
    - `GET /api/v1/searches`
