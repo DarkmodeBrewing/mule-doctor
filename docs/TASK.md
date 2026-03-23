@@ -109,6 +109,7 @@ Acceptance criteria:
 Current status:
 
 - PRs now validate the Docker/compose build path in a dedicated workflow so container regressions surface before merge
+- PR CI also validates the packaged runtime image layout and metadata so release-image drift is caught before merge
 - full `npm run smoke:docker` runtime validation remains environment-specific because rust-mule needs an available SAM/I2P dependency and is not portable to GitHub-hosted runners
 - remaining Task F work should focus on release-oriented validation and any additional high-value integration coverage beyond `npm run check` plus Docker build validation
 
