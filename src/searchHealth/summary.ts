@@ -75,7 +75,9 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
 function latestSearchRecords(records: SearchHealthRecord[]): SearchHealthRecord[] {
   const latestByKey = new Map<string, SearchHealthRecord>();
   for (const record of records) {
-    latestByKey.set(buildLogicalSearchKey(record), record);
+    const key = buildLogicalSearchKey(record);
+    latestByKey.delete(key);
+    latestByKey.set(key, record);
   }
   return [...latestByKey.values()];
 }
