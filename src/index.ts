@@ -17,6 +17,7 @@ import { Observer } from "./observer.js";
 import { RuntimeStore } from "./storage/runtimeStore.js";
 import { installStdoutLogBuffer } from "./operatorConsole/logBuffer.js";
 import { OperatorConsoleServer } from "./operatorConsole/server.js";
+import { OperatorSearchService } from "./operatorConsole/operatorSearchService.js";
 import { DiscoverabilityLog } from "./operatorConsole/discoverabilityLog.js";
 import { OperatorEventLog } from "./operatorConsole/operatorEventLog.js";
 import { SearchHealthLog } from "./searchHealth/searchHealthLog.js";
@@ -263,6 +264,11 @@ async function main(): Promise<void> {
     externalLogSource: logWatcher,
     managedDiagnostics: managedInstanceDiagnostics,
   });
+  const operatorSearches = new OperatorSearchService({
+    managedDiagnostics: managedInstanceDiagnostics,
+    observerTargetResolver,
+    searchHealthLog,
+  });
   const observer = new Observer(analyzer, mattermostClient, {
     intervalMs,
     client: rustMuleClient,
@@ -302,6 +308,7 @@ async function main(): Promise<void> {
       managedInstanceAnalysis,
       managedInstanceSharing,
       managedInstanceDiscoverability,
+      operatorSearches,
       managedInstancePresets,
       diagnosticTarget,
       observerControl: observer,

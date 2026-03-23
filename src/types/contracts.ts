@@ -322,6 +322,7 @@ export interface ManagedDiscoverabilitySummary {
 
 export type SearchHealthRecordSource =
   | "controlled_discoverability"
+  | "operator_triggered_search"
   | "managed_instance_observation"
   | "observer_target_observation";
 export type SearchHealthOutcome = ManagedDiscoverabilityOutcome | "active";

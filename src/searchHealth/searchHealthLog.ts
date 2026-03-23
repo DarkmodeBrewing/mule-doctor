@@ -1,17 +1,17 @@
 import type { RuntimeStore } from "../storage/runtimeStore.js";
 import type {
   ManagedDiscoverabilityCheckResult,
+  DiagnosticTargetRef,
+  ManagedDiscoverabilityFixtureSummary,
   SearchHealthRecord,
   SearchHealthSummary,
 } from "../types/contracts.js";
 import {
   createSearchHealthRecordFromControlledDispatch,
   createSearchHealthRecordFromDiscoverability,
+  createSearchHealthRecordFromOperatorDispatch,
   sanitizeSearchHealthRecord,
 } from "./records.js";
-import type {
-  ManagedDiscoverabilityFixtureSummary,
-} from "../types/contracts.js";
 import type {
   RustMuleKeywordSearchResponse,
   RustMuleReadiness,
@@ -51,6 +51,20 @@ export class SearchHealthLog {
     dispatchedAt?: string;
   }): Promise<void> {
     await this.append(createSearchHealthRecordFromControlledDispatch(input));
+  }
+
+  async appendOperatorTriggeredDispatch(input: {
+    query?: string;
+    keywordIdHex?: string;
+    readiness: RustMuleReadiness;
+    peerCount: number;
+    dispatch: RustMuleKeywordSearchResponse;
+    dispatchedAt?: string;
+    instanceId?: string;
+    target?: DiagnosticTargetRef;
+    targetLabel?: string;
+  }): Promise<void> {
+    await this.append(createSearchHealthRecordFromOperatorDispatch(input));
   }
 
   async listRecent(limit = 20): Promise<SearchHealthRecord[]> {

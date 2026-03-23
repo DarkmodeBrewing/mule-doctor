@@ -86,17 +86,17 @@ function buildLogicalSearchKey(record: SearchHealthRecord): string {
   const controlledKey = record.controlledContext
     ? `${record.controlledContext.publisherInstanceId}:${record.controlledContext.searcherInstanceId}`
     : "";
-  const observedKey = record.observedContext?.instanceId ?? "";
-  const observerKey = record.observerContext?.target.kind === "managed_instance"
-    ? `managed:${record.observerContext.target.instanceId ?? ""}`
-    : record.observerContext
-      ? "external"
-      : "";
+  const targetKey = record.controlledContext
+    ? `controlled:${controlledKey}`
+    : record.observedContext?.instanceId
+      ? `managed:${record.observedContext.instanceId}`
+      : record.observerContext?.target.kind === "managed_instance"
+        ? `managed:${record.observerContext.target.instanceId ?? ""}`
+        : record.observerContext
+          ? "external"
+          : "";
   return [
-    record.source,
     record.searchId,
-    controlledKey,
-    observedKey,
-    observerKey,
+    targetKey,
   ].join("|");
 }

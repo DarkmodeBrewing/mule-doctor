@@ -64,6 +64,7 @@ import type {
   ManagedInstanceSurfaceDiagnostics,
   ManagedInstancePresets,
   ManagedInstanceSharing,
+  OperatorSearches,
   OperatorConsoleConfig,
   OperatorEventsStore,
   ObserverControl,
@@ -88,6 +89,7 @@ export class OperatorConsoleServer {
   private readonly managedInstanceAnalysis: ManagedInstanceAnalysis | undefined;
   private readonly managedInstanceSharing: ManagedInstanceSharing | undefined;
   private readonly managedInstanceDiscoverability: ManagedInstanceDiscoverability | undefined;
+  private readonly operatorSearches: OperatorSearches | undefined;
   private readonly managedInstancePresets: ManagedInstancePresets | undefined;
   private readonly diagnosticTarget: DiagnosticTargetControl | undefined;
   private readonly observerControl: ObserverControl | undefined;
@@ -133,6 +135,7 @@ export class OperatorConsoleServer {
     this.managedInstanceAnalysis = config.managedInstanceAnalysis;
     this.managedInstanceSharing = config.managedInstanceSharing;
     this.managedInstanceDiscoverability = config.managedInstanceDiscoverability;
+    this.operatorSearches = config.operatorSearches;
     this.managedInstancePresets = config.managedInstancePresets;
     this.diagnosticTarget = config.diagnosticTarget;
     this.observerControl = config.observerControl;
@@ -341,6 +344,11 @@ export class OperatorConsoleServer {
 
     if (path === "/api/discoverability/check") {
       await this.handleDiscoverabilityCheck(req, res);
+      return;
+    }
+
+    if (path === "/api/searches/launch") {
+      await this.handleOperatorSearchLaunch(req, res);
       return;
     }
 
@@ -688,6 +696,37 @@ export class OperatorConsoleServer {
     if (this.searchHealthResults) {
       await this.searchHealthResults.appendControlledDiscoverability(result);
     }
+    sendJson(res, 200, { ok: true, result });
+  }
+
+  private async handleOperatorSearchLaunch(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!this.operatorSearches) {
+      sendJson(res, 501, { ok: false, error: "manual keyword search unavailable" });
+      return;
+    }
+    if (req.method !== "POST") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const payload = await readJsonBody(req);
+    const result = await handleManagedInstanceErrors(() =>
+      this.operatorSearches!.startSearch({
+        mode: payload.mode === "active_target" ? "active_target" : "managed_instance",
+        instanceId: typeof payload.instanceId === "string" ? payload.instanceId : undefined,
+        query: typeof payload.query === "string" ? payload.query : undefined,
+        keywordIdHex:
+          typeof payload.keywordIdHex === "string" ? payload.keywordIdHex : undefined,
+      }),
+    );
+    await this.appendOperatorEvent({
+      type: "managed_instance_control_applied",
+      message: `Operator launched manual keyword search against ${result.targetLabel} (${result.searchId}).`,
+      target: result.target,
+      actor: "operator_console",
+    });
     sendJson(res, 200, { ok: true, result });
   }
 

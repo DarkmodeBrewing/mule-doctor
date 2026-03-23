@@ -230,6 +230,8 @@ document.getElementById("run-observer-now").onclick = () => {
 document.getElementById("instance-create-form").onsubmit = instances.createInstance;
 document.getElementById("instance-preset-form").onsubmit = instances.applyInstancePreset;
 document.getElementById("instance-discoverability-form").onsubmit = instances.runDiscoverabilityCheck;
+document.getElementById("instance-manual-search-form").onsubmit = instances.runManualSearch;
+document.getElementById("manual-search-mode").onchange = instances.renderSelectedControlAvailability;
 document.getElementById("use-external-target").onclick = () => {
   void instances.updateObserverTarget({ kind: "external" });
 };
