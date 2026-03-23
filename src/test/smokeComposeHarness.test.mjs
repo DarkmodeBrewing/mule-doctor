@@ -76,12 +76,8 @@ case "$compose_cmd" in
   up)
     token_rel="\${RUST_MULE_TOKEN_PATH#/data/}"
     token_host_path="$SMOKE_DATA_DIR/\${token_rel}"
-    mkdir -p "$(dirname "$token_host_path")" "$SMOKE_DATA_DIR/logs" "$SMOKE_DATA_DIR/mule-doctor"
+    mkdir -p "$(dirname "$token_host_path")"
     printf 'fake-token\\n' >"$token_host_path"
-    printf 'log\\n' >"$SMOKE_DATA_DIR/logs/rust-mule.log"
-    printf '{}\\n' >"$SMOKE_DATA_DIR/mule-doctor/state.json"
-    printf '[]\\n' >"$SMOKE_DATA_DIR/mule-doctor/history.json"
-    printf '[]\\n' >"$SMOKE_DATA_DIR/mule-doctor/operator-events.json"
     ;;
   logs)
     printf 'fake compose logs\\n'
@@ -103,6 +99,7 @@ set -euo pipefail
 
 header_file=""
 cookie_file=""
+cookie_input_file=""
 write_out=""
 output_file=""
 url=""
@@ -117,6 +114,10 @@ while [[ $# -gt 0 ]]; do
       cookie_file="$2"
       shift 2
       ;;
+    -b)
+      cookie_input_file="$2"
+      shift 2
+      ;;
     -w)
       write_out="$2"
       shift 2
@@ -125,7 +126,7 @@ while [[ $# -gt 0 ]]; do
       output_file="$2"
       shift 2
       ;;
-    -H|-X|--data-urlencode|--connect-timeout|--max-time|--retry|-b)
+    -H|-X|--data-urlencode|--connect-timeout|--max-time|--retry)
       shift 2
       ;;
     -s|-S|-f|-sS|-fsS)
@@ -167,7 +168,20 @@ case "$url" in
   */api/v1/searches)
     printf '{"ready":true}'
     ;;
-  */api/health|*/api/v1/health)
+  */api/health)
+    if [[ -z "$cookie_input_file" || ! -s "$cookie_input_file" ]]; then
+      exit 1
+    fi
+    work_dir="$(dirname "$cookie_input_file")"
+    data_dir="$work_dir/data"
+    mkdir -p "$data_dir/logs" "$data_dir/mule-doctor"
+    printf 'log\\n' >"$data_dir/logs/rust-mule.log"
+    printf '{}\\n' >"$data_dir/mule-doctor/state.json"
+    printf '[]\\n' >"$data_dir/mule-doctor/history.json"
+    printf '[]\\n' >"$data_dir/mule-doctor/operator-events.json"
+    printf '{"ok":true}'
+    ;;
+  */api/v1/health)
     printf '{"ok":true}'
     ;;
   *)
@@ -253,11 +267,9 @@ test("smoke-compose harness preserves diagnostics for invalid token path overrid
     assert.match(envFile, /RUST_MULE_TOKEN_PATH=\/tmp\/outside-data\.token/);
     assert.equal(existsSync(join(workDir, "data", "config.toml")), true);
     assert.equal(existsSync(join(workDir, "docker-compose.smoke.yml")), true);
-    if (existsSync(join(workDir, "compose.logs"))) {
-      const composeLogs = await readFile(join(workDir, "compose.logs"), "utf8");
-      assert.match(logFile, /Captured compose logs at/);
-      assert.match(composeLogs, /fake compose logs/);
-    }
+    const composeLogs = await readFile(join(workDir, "compose.logs"), "utf8");
+    assert.match(logFile, /Captured compose logs at/);
+    assert.match(composeLogs, /fake compose logs/);
   } finally {
     await tmp.cleanup();
   }
