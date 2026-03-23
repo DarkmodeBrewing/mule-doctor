@@ -80,6 +80,8 @@ function renderSearchHealthSummary(summary) {
     parts.push(
       `Latest path: ${summary.latestPair.publisherInstanceId} -> ${summary.latestPair.searcherInstanceId}`,
     );
+  } else if (summary.latestTargetLabel) {
+    parts.push(`Latest target: ${summary.latestTargetLabel}`);
   } else if (summary.latestInstanceId) {
     parts.push(`Latest instance: ${summary.latestInstanceId}`);
   }
@@ -146,6 +148,8 @@ function renderSearchHealthItem(record) {
   const title = document.createElement("strong");
   title.textContent = record.controlledContext
     ? `${record.controlledContext.publisherInstanceId} -> ${record.controlledContext.searcherInstanceId}`
+    : record.observerContext?.label
+      ? `${record.observerContext.label}: ${record.query}`
     : record.observedContext?.instanceId
       ? `${record.observedContext.instanceId}: ${record.query}`
     : record.query;
@@ -169,6 +173,9 @@ function renderSearchHealthItem(record) {
   }
   if (record.observedContext?.instanceId) {
     badges.appendChild(createBadge("observed", "instance"));
+  }
+  if (record.observerContext?.label) {
+    badges.appendChild(createBadge("observer", "instance"));
   }
   line.appendChild(badges);
 

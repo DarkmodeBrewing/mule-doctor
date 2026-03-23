@@ -66,6 +66,7 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
         }
       : undefined,
     latestInstanceId: latest?.observedContext?.instanceId,
+    latestTargetLabel: latest?.observerContext?.label,
     lastSuccessAt: lastSuccess?.recordedAt,
   };
 }

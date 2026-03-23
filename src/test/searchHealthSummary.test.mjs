@@ -144,6 +144,37 @@ test("summarizeSearchHealthRecords includes managed-instance observations", () =
   assert.equal(summary.latestInstanceId, "searcher-a");
 });
 
+test("summarizeSearchHealthRecords includes observer-target observations", () => {
+  const summary = summarizeSearchHealthRecords([
+    {
+      recordedAt: "2026-03-23T12:05:00.000Z",
+      source: "observer_target_observation",
+      query: "external-search",
+      searchId: "search-4",
+      dispatchedAt: "2026-03-23T12:04:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 3, degradedIndicators: [] },
+        searcher: { peerCount: 3, degradedIndicators: [] },
+      },
+      states: [{ observedAt: "2026-03-23T12:05:00.000Z", state: "running", hits: 0 }],
+      resultCount: 0,
+      outcome: "active",
+      finalState: "running",
+      observerContext: {
+        target: { kind: "external" },
+        label: "external configured rust-mule client",
+      },
+    },
+  ]);
+
+  assert.equal(summary.latestSource, "observer_target_observation");
+  assert.equal(summary.latestTargetLabel, "external configured rust-mule client");
+});
+
 test("SearchHealthLog sanitizes records when reading from runtime store", async () => {
   const log = new SearchHealthLog({
     async getRecentSearchHealthResults() {

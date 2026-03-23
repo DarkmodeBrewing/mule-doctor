@@ -9,6 +9,7 @@ import type { MattermostClient } from "./integrations/mattermost.js";
 import type { RustMuleClient } from "./api/rustMuleClient.js";
 import type { LogWatcher } from "./logs/logWatcher.js";
 import type { RuntimeStore } from "./storage/runtimeStore.js";
+import type { SearchHealthLog } from "./searchHealth/searchHealthLog.js";
 import type {
   DiagnosticTargetRef,
   HistoryEntry,
@@ -19,6 +20,8 @@ import { getNetworkHealth } from "./health/healthScore.js";
 import type { NetworkHealthResult } from "./health/healthScore.js";
 import { redactText } from "./logs/redaction.js";
 import type { OperatorEventLog } from "./operatorConsole/operatorEventLog.js";
+import type { RustMuleReadiness, RustMuleSearchDetailResponse } from "./api/rustMuleClient.js";
+import { createSearchHealthRecordFromObserverTargetObservation } from "./searchHealth/records.js";
 import type {
   ObserverTargetDescriptor,
   ObserverTargetRuntime,
@@ -32,6 +35,7 @@ export interface ObserverConfig {
   client?: RustMuleClient;
   logWatcher?: LogWatcher;
   runtimeStore?: RuntimeStore;
+  searchHealthLog?: SearchHealthLog;
   targetResolver?: ObserverTargetResolver;
   analyzerFactory?: AnalyzerFactory;
   eventLog?: OperatorEventLog;
@@ -69,9 +73,12 @@ export class Observer {
   private readonly client: RustMuleClient | undefined;
   private readonly logWatcher: LogWatcher | undefined;
   private readonly runtimeStore: RuntimeStore | undefined;
+  private readonly searchHealthLog: SearchHealthLog | undefined;
   private readonly targetResolver: ObserverTargetResolver | undefined;
   private readonly analyzerFactory: AnalyzerFactory | undefined;
   private readonly eventLog: OperatorEventLog | undefined;
+  private readonly lastObservedSearchSignatures = new Map<string, string>();
+  private readonly lastObservedSearchStates = new Map<string, string>();
   private timer: NodeJS.Timeout | undefined;
   private started = false;
   private cycleInFlight: Promise<void> | undefined;
@@ -86,6 +93,7 @@ export class Observer {
     this.client = config.client;
     this.logWatcher = config.logWatcher;
     this.runtimeStore = config.runtimeStore;
+    this.searchHealthLog = config.searchHealthLog;
     this.targetResolver = config.targetResolver;
     this.analyzerFactory = config.analyzerFactory;
     this.eventLog = config.eventLog;
@@ -185,6 +193,7 @@ export class Observer {
       });
 
       let target: ObserverTargetRuntime | undefined;
+      let readiness: RustMuleReadiness | undefined;
       try {
         target = await this.resolveTarget();
       } catch (err) {
@@ -193,14 +202,14 @@ export class Observer {
       }
       if (target) {
         try {
-          await this.ensureTargetReady(target);
+          readiness = await this.ensureTargetReady(target);
         } catch (err) {
           await this.handleUnavailableTarget(targetDescriptor, err, cycleStartedAt);
           return;
         }
       }
 
-      const context = await this.collectAndPersistContext(target);
+      const context = await this.collectAndPersistContext(target, readiness);
       const prompt = buildObserverAnalysisPrompt(context);
       const analyzer = target && this.analyzerFactory ? this.analyzerFactory(target) : this.analyzer;
       const summary = await analyzer.analyze(prompt, {
@@ -248,6 +257,7 @@ export class Observer {
 
   private async collectAndPersistContext(
     target?: ObserverTargetRuntime,
+    readiness?: RustMuleReadiness,
   ): Promise<ObserverCycleContext | undefined> {
     const resolvedTarget = target ?? (await this.resolveTarget());
     if (!resolvedTarget || !this.runtimeStore) {
@@ -255,12 +265,14 @@ export class Observer {
     }
 
     try {
-      const [nodeInfo, peers, routingBuckets, lookupStats, recentHistory] = await Promise.all([
+      const [nodeInfo, peers, routingBuckets, lookupStats, recentHistory, targetReadiness] =
+        await Promise.all([
         resolvedTarget.client.getNodeInfo(),
         resolvedTarget.client.getPeers(),
         resolvedTarget.client.getRoutingBuckets(),
         resolvedTarget.client.getLookupStats(),
         this.runtimeStore.getRecentHistory(10),
+        readiness ? Promise.resolve(readiness) : resolvedTarget.client.getReadiness(),
       ]);
 
       const timestamp = new Date().toISOString();
@@ -295,6 +307,7 @@ export class Observer {
         lastTargetFailureReason: undefined,
       };
       await this.runtimeStore.updateState(statePatch);
+      await this.recordObservedSearchHealth(resolvedTarget, targetReadiness, peers.length, timestamp);
 
       return {
         targetLabel: resolvedTarget.label,
@@ -327,10 +340,10 @@ export class Observer {
     };
   }
 
-  private async ensureTargetReady(target: ObserverTargetRuntime): Promise<void> {
+  private async ensureTargetReady(target: ObserverTargetRuntime): Promise<RustMuleReadiness> {
     const readiness = await target.client.getReadiness();
     if (readiness.ready) {
-      return;
+      return readiness;
     }
 
     const reasons: string[] = [];
@@ -344,6 +357,77 @@ export class Observer {
     throw new Error(
       `rust-mule target not ready (${reasons.join(", ") || "readiness checks incomplete"})`,
     );
+  }
+
+  private async recordObservedSearchHealth(
+    target: ObserverTargetRuntime,
+    readiness: RustMuleReadiness,
+    peerCount: number,
+    recordedAt: string,
+  ): Promise<void> {
+    if (!this.searchHealthLog || readiness.searches.searches.length === 0) {
+      return;
+    }
+
+    const activeKeys = new Set<string>();
+    const details: Array<RustMuleSearchDetailResponse | undefined> = [];
+    for (const search of readiness.searches.searches) {
+      const searchId = readString(search.search_id_hex);
+      if (!searchId) {
+        details.push(undefined);
+        continue;
+      }
+      const key = `${observerSearchTargetKey(target.target)}:${searchId}`;
+      activeKeys.add(key);
+      const state = readString(search.state) ?? "unknown";
+      const hits = typeof search.hits === "number" ? search.hits : 0;
+      const shouldFetchDetail =
+        hits > 0 ||
+        !isSearchActive(state) ||
+        this.lastObservedSearchStates.get(key) !== state;
+      if (!shouldFetchDetail) {
+        details.push(undefined);
+        continue;
+      }
+      try {
+        details.push(await target.client.getSearchDetail(searchId));
+      } catch {
+        details.push(undefined);
+      }
+    }
+
+    this.pruneObservedSearchCaches(target.target, activeKeys);
+
+    for (let index = 0; index < readiness.searches.searches.length; index += 1) {
+      const search = readiness.searches.searches[index];
+      const record = createSearchHealthRecordFromObserverTargetObservation({
+        target: target.target,
+        label: target.label,
+        readiness,
+        peerCount,
+        search,
+        detail: details[index],
+        recordedAt,
+      });
+      const key = `${observerSearchTargetKey(target.target)}:${record.searchId}`;
+      this.lastObservedSearchStates.set(key, record.finalState);
+      const signature = buildObservedSearchSignature(record);
+      if (this.lastObservedSearchSignatures.get(key) === signature) {
+        continue;
+      }
+      this.lastObservedSearchSignatures.set(key, signature);
+      await this.searchHealthLog.append(record);
+    }
+  }
+
+  private pruneObservedSearchCaches(target: DiagnosticTargetRef, activeKeys: Set<string>): void {
+    const prefix = `${observerSearchTargetKey(target)}:`;
+    for (const key of this.lastObservedSearchSignatures.keys()) {
+      if (key.startsWith(prefix) && !activeKeys.has(key)) {
+        this.lastObservedSearchSignatures.delete(key);
+        this.lastObservedSearchStates.delete(key);
+      }
+    }
   }
 
   private async describeTarget(): Promise<ObserverTargetDescriptor> {
@@ -473,6 +557,45 @@ export class Observer {
       }),
     );
   }
+}
+
+function buildObservedSearchSignature(record: {
+  finalState: string;
+  resultCount: number;
+  outcome: string;
+  readinessAtDispatch: {
+    searcher: {
+      ready: boolean;
+    };
+  };
+  transportAtDispatch: {
+    searcher: {
+      peerCount: number;
+    };
+  };
+}): string {
+  return JSON.stringify({
+    finalState: record.finalState,
+    resultCount: record.resultCount,
+    outcome: record.outcome,
+    ready: record.readinessAtDispatch.searcher.ready,
+    peerCount: record.transportAtDispatch.searcher.peerCount,
+  });
+}
+
+function observerSearchTargetKey(target: DiagnosticTargetRef): string {
+  return target.kind === "managed_instance" && target.instanceId
+    ? `managed:${target.instanceId}`
+    : "external";
+}
+
+function isSearchActive(state: string): boolean {
+  const normalized = state.toLowerCase();
+  return normalized !== "completed" && normalized !== "complete" && normalized !== "done" && normalized !== "timed_out";
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 export function buildObserverAnalysisPrompt(context: ObserverCycleContext | undefined): string {

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { Observer } from "../../dist/observer.js";
 import { OperatorEventLog } from "../../dist/operatorConsole/operatorEventLog.js";
 import { RuntimeStore } from "../../dist/storage/runtimeStore.js";
+import { SearchHealthLog } from "../../dist/searchHealth/searchHealthLog.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-observer-"));
@@ -77,6 +78,17 @@ class StubClient {
       timeoutsPerSent: 0.1,
       outboundShaperDelayedTotal: 0,
       avgHops: 6,
+    };
+  }
+
+  async getSearchDetail(searchId) {
+    return {
+      search: {
+        search_id_hex: searchId,
+        keyword_label: "observer-search",
+        state: "running",
+      },
+      hits: [],
     };
   }
 }
@@ -266,6 +278,62 @@ test("Observer routes cycle analysis through the resolved managed target", async
     assert.equal(events[0].type, "observer_cycle_started");
     assert.equal(events[1].type, "observer_cycle_completed");
     assert.equal(events[1].outcome, "success");
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("Observer records observed search lifecycle for the active target", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const runtimeStore = new RuntimeStore({ dataDir: tmp.dir });
+    await runtimeStore.initialize();
+    const searchHealthLog = new SearchHealthLog(runtimeStore);
+
+    class SearchClient extends StubClient {
+      async getReadiness() {
+        return {
+          statusReady: true,
+          searchesReady: true,
+          ready: true,
+          status: { ready: true },
+          searches: {
+            ready: true,
+            searches: [
+              {
+                search_id_hex: "search-1",
+                keyword_label: "observer-search",
+                state: "running",
+                hits: 0,
+              },
+            ],
+          },
+        };
+      }
+    }
+
+    const observer = new Observer(new StubAnalyzer(), new StubMattermost(), {
+      runtimeStore,
+      searchHealthLog,
+      targetResolver: new StubTargetResolver({
+        target: { kind: "external" },
+        label: "external configured rust-mule client",
+        client: new SearchClient(),
+        logSource: new StubLogWatcher(),
+      }),
+      intervalMs: 999999,
+    });
+
+    await observer.collectAndPersistContext();
+    await observer.collectAndPersistContext();
+
+    const records = await searchHealthLog.listRecent(10);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].source, "observer_target_observation");
+    assert.equal(records[0].observerContext.label, "external configured rust-mule client");
+    assert.deepEqual(records[0].observerContext.target, { kind: "external" });
+    assert.equal(records[0].outcome, "active");
   } finally {
     await tmp.cleanup();
   }

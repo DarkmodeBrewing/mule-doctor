@@ -141,7 +141,8 @@ Current status:
 
 - controlled discoverability checks already persist lifecycle-style search health records with dispatch readiness, peer context, state samples, and terminal outcomes
 - managed-instance surface diagnostics now also persist deduplicated observed search lifecycle records for active and terminal keyword searches
-- remaining work should focus on broadening search-lifecycle coverage beyond the managed-instance diagnostics path and refining how transport/readiness context is captured for non-controlled searches
+- observer cycles now also persist deduplicated observed search lifecycle records for the active diagnostic target, including externally configured targets
+- remaining work should focus on refining search-lifecycle context for non-controlled searches and deciding whether any manual/operator-triggered keyword-search paths should also record lifecycle history directly at dispatch time
 
 ## Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
 
