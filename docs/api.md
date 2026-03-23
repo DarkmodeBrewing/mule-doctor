@@ -632,16 +632,43 @@ Response:
       "searches": {
         "ready": true,
         "totalSearches": 2,
-        "activeSearches": 1
+        "activeSearches": 1,
+        "stateCounts": {
+          "running": 1,
+          "completed": 1
+        },
+        "publishEnabledCount": 1,
+        "publishAckedCount": 0,
+        "wantedSearchCount": 1,
+        "zeroHitTerminalCount": 0
       },
       "sharedLibrary": {
         "totalFiles": 4,
+        "localSourceCachedCount": 4,
         "keywordPublishQueuedCount": 1,
-        "keywordPublishAckedCount": 3
+        "keywordPublishFailedCount": 0,
+        "keywordPublishAckedCount": 3,
+        "sourcePublishResponseCount": 4,
+        "activeTransferFileCount": 1,
+        "sharedActionCounts": {
+          "reindex": 1
+        },
+        "sharedActionStateCounts": {
+          "idle": 1
+        },
+        "publishJobSurface": "shared_file_status_only"
       },
       "downloads": {
         "totalDownloads": 2,
-        "activeDownloads": 1
+        "activeDownloads": 1,
+        "queueLen": 1,
+        "stateCounts": {
+          "queued": 1,
+          "completed": 1
+        },
+        "downloadsWithErrors": 0,
+        "downloadsWithSources": 1,
+        "avgProgressPct": 50
       }
     },
     "highlights": {

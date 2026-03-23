@@ -2364,7 +2364,6 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(instancesModuleRes.status, 200);
     const instancesModule = await instancesModuleRes.text();
     assert.match(instancesModule, /confirmAction/);
-    assert.match(instancesModule, /surface_diagnostics/);
     assert.match(instancesModule, /runtime_surface/);
     assert.match(instancesModule, /instance-runtime-summary/);
     assert.match(instancesModule, /instance-runtime-highlights/);

@@ -145,10 +145,10 @@ export function createInstancesController({
     if (!snapshot?.detail) {
       summaryElement.textContent = "No structured runtime surface loaded.";
       summaryElement.className = "preset-help muted";
-      renderSurfaceList("instance-runtime-search-threads", [], () => "");
-      renderSurfaceList("instance-runtime-publish-files", [], () => "");
-      renderSurfaceList("instance-runtime-shared-actions", [], () => "");
-      renderSurfaceList("instance-runtime-downloads", [], () => "");
+      renderSurfaceList("instance-runtime-search-threads", [], () => "", "Runtime surface not loaded.");
+      renderSurfaceList("instance-runtime-publish-files", [], () => "", "Runtime surface not loaded.");
+      renderSurfaceList("instance-runtime-shared-actions", [], () => "", "Runtime surface not loaded.");
+      renderSurfaceList("instance-runtime-downloads", [], () => "", "Runtime surface not loaded.");
       return;
     }
 
@@ -213,11 +213,11 @@ export function createInstancesController({
     }));
   }
 
-  function renderSurfaceList(elementId, items, formatter) {
+  function renderSurfaceList(elementId, items, formatter, emptyMessage = "None observed.") {
     const element = document.getElementById(elementId);
     element.replaceChildren();
     if (!Array.isArray(items) || items.length === 0) {
-      element.textContent = "None observed.";
+      element.textContent = emptyMessage;
       element.className = "surface-list muted";
       return;
     }
@@ -432,12 +432,9 @@ export function createInstancesController({
     views.renderSelectedInstanceTimelineControls();
     renderSelectedControlAvailability();
     try {
-      const [surfaceDiagnostics, runtimeSurface] = await Promise.all([
-        fetchJson(`/api/instances/${encodeURIComponent(id)}/surface_diagnostics`),
-        fetchJson(`/api/instances/${encodeURIComponent(id)}/runtime_surface`),
-      ]);
-      renderSurfaceDiagnosticsSummary(surfaceDiagnostics.diagnostics);
-      renderSurfaceDiagnosticsHighlights(surfaceDiagnostics.diagnostics);
+      const runtimeSurface = await fetchJson(`/api/instances/${encodeURIComponent(id)}/runtime_surface`);
+      renderSurfaceDiagnosticsSummary(runtimeSurface.diagnostics);
+      renderSurfaceDiagnosticsHighlights(runtimeSurface.diagnostics);
       renderRuntimeSurface(runtimeSurface.diagnostics);
       setText("instance-runtime-diagnostics", JSON.stringify(runtimeSurface.diagnostics, null, 2));
     } catch (err) {
