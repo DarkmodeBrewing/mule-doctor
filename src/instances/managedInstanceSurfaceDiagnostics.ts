@@ -24,6 +24,7 @@ export class ManagedInstanceSurfaceDiagnosticsService {
   private readonly diagnostics: ManagedInstanceDiagnosticsService;
   private readonly searchHealthLog: SearchHealthLog | undefined;
   private readonly lastObservedSearchSignatures = new Map<string, string>();
+  private readonly lastObservedSearchStates = new Map<string, string>();
 
   constructor(
     diagnostics: ManagedInstanceDiagnosticsService,
@@ -86,19 +87,37 @@ export class ManagedInstanceSurfaceDiagnosticsService {
     }
 
     const recordedAt = new Date().toISOString();
-    const details = await Promise.all(
-      searches.map(async (search) => {
-        const searchId = readString(search.search_id_hex);
-        if (!searchId) {
-          return undefined;
-        }
-        try {
-          return await client.getSearchDetail(searchId);
-        } catch {
-          return undefined;
-        }
-      }),
-    );
+    const activeKeys = new Set<string>();
+    const details: Array<RustMuleSearchDetailResponse | undefined> = [];
+
+    for (const search of searches) {
+      const searchId = readString(search.search_id_hex);
+      if (!searchId) {
+        details.push(undefined);
+        continue;
+      }
+
+      const key = `${instanceId}:${searchId}`;
+      activeKeys.add(key);
+      const state = readString(search.state) ?? "unknown";
+      const hits = typeof search.hits === "number" ? search.hits : 0;
+      const shouldFetchDetail =
+        hits > 0 ||
+        !isSearchActive(state) ||
+        this.lastObservedSearchStates.get(key) !== state;
+      if (!shouldFetchDetail) {
+        details.push(undefined);
+        continue;
+      }
+
+      try {
+        details.push(await client.getSearchDetail(searchId));
+      } catch {
+        details.push(undefined);
+      }
+    }
+
+    this.pruneObservedSearchCaches(instanceId, activeKeys);
 
     for (let index = 0; index < searches.length; index += 1) {
       const search = searches[index];
@@ -112,11 +131,21 @@ export class ManagedInstanceSurfaceDiagnosticsService {
       });
       const signature = buildObservedSearchSignature(record);
       const key = `${instanceId}:${record.searchId}`;
+      this.lastObservedSearchStates.set(key, record.finalState);
       if (this.lastObservedSearchSignatures.get(key) === signature) {
         continue;
       }
       this.lastObservedSearchSignatures.set(key, signature);
       await this.searchHealthLog.append(record);
+    }
+  }
+
+  private pruneObservedSearchCaches(instanceId: string, activeKeys: Set<string>): void {
+    for (const key of this.lastObservedSearchSignatures.keys()) {
+      if (key.startsWith(`${instanceId}:`) && !activeKeys.has(key)) {
+        this.lastObservedSearchSignatures.delete(key);
+        this.lastObservedSearchStates.delete(key);
+      }
     }
   }
 }

@@ -139,6 +139,7 @@ test("summarizeSearchHealthRecords includes managed-instance observations", () =
   assert.equal(summary.activeCount, 1);
   assert.equal(summary.dispatchReadyCount, 1);
   assert.equal(summary.degradedTransportCount, 0);
+  assert.equal(summary.successRatePct, undefined);
   assert.equal(summary.latestSource, "managed_instance_observation");
   assert.equal(summary.latestInstanceId, "searcher-a");
 });

@@ -20,10 +20,14 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
   };
   let dispatchReadyCount = 0;
   let degradedTransportCount = 0;
+  let terminalCount = 0;
 
   for (const record of sanitizedRecords) {
     if (record.outcome in counts) {
       counts[record.outcome] += 1;
+    }
+    if (record.outcome !== "active") {
+      terminalCount += 1;
     }
     if (
       record.readinessAtDispatch.publisher.ready === true &&
@@ -50,7 +54,7 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
     dispatchReadyCount,
     dispatchNotReadyCount: totalSearches - dispatchReadyCount,
     degradedTransportCount,
-    successRatePct: totalSearches > 0 ? (counts.found / totalSearches) * 100 : undefined,
+    successRatePct: terminalCount > 0 ? (counts.found / terminalCount) * 100 : undefined,
     latestRecordedAt: latest?.recordedAt,
     latestOutcome: latest?.outcome,
     latestQuery: latest?.query,
