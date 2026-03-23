@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -15,7 +15,9 @@ const REPO_ROOT = join(__dirname, "..", "..");
 const ENTRYPOINT_PATH = join(REPO_ROOT, "entrypoint.sh");
 const HEALTHCHECK_PATH = join(REPO_ROOT, "scripts", "container-healthcheck.sh");
 const REAL_NODE = process.execPath;
-const REAL_MKDIR = "/usr/bin/mkdir";
+const REAL_MKDIR = execFileSync("bash", ["-lc", "command -v mkdir"], {
+  encoding: "utf8",
+}).trim();
 
 async function makeTempDir(prefix) {
   const dir = await mkdtemp(join(tmpdir(), prefix));
@@ -177,10 +179,20 @@ done
 }
 
 function startLongRunningProcess() {
-  const child = spawn("bash", ["-lc", "sleep 30"], {
+  const child = spawn("sleep", ["30"], {
     stdio: "ignore",
   });
   return child;
+}
+
+async function stopProcess(child) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  await new Promise((resolve) => {
+    child.once("exit", resolve);
+    child.kill("SIGTERM");
+  });
 }
 
 test("entrypoint waits for token readiness and launches mule-doctor", async () => {
@@ -334,15 +346,18 @@ test("container healthcheck succeeds for ready rust-mule and authenticated UI", 
       .filter(Boolean)
       .map((line) => JSON.parse(line));
 
-    assert.equal(requests.length, 4);
-    assert.equal(requests[0].url, "http://127.0.0.1:17835/api/v1/health");
-    assert.equal(requests[1].url, "http://127.0.0.1:17835/api/v1/status");
-    assert.equal(requests[2].url, "http://127.0.0.1:17835/api/v1/searches");
-    assert.equal(requests[3].url, "http://127.0.0.1:18080/api/health");
-    assert.equal(requests[3].headers.Authorization, "Bearer ui-token");
+    const urls = requests.map((request) => request.url);
+    assert.equal(urls.includes("http://127.0.0.1:17835/api/v1/health"), true);
+    assert.equal(urls.includes("http://127.0.0.1:17835/api/v1/status"), true);
+    assert.equal(urls.includes("http://127.0.0.1:17835/api/v1/searches"), true);
+    assert.equal(urls.includes("http://127.0.0.1:18080/api/health"), true);
+
+    const uiHealthRequest = requests.find((request) => request.url === "http://127.0.0.1:18080/api/health");
+    assert.ok(uiHealthRequest);
+    assert.equal(uiHealthRequest.headers.Authorization, "Bearer ui-token");
   } finally {
-    rustProcess.kill("SIGTERM");
-    doctorProcess.kill("SIGTERM");
+    await stopProcess(rustProcess);
+    await stopProcess(doctorProcess);
     await tmp.cleanup();
   }
 });
@@ -383,8 +398,8 @@ test("container healthcheck fails when rust-mule searches are not ready", async 
       },
     );
   } finally {
-    rustProcess.kill("SIGTERM");
-    doctorProcess.kill("SIGTERM");
+    await stopProcess(rustProcess);
+    await stopProcess(doctorProcess);
     await tmp.cleanup();
   }
 });
@@ -429,8 +444,48 @@ test("container healthcheck requires a UI auth token when UI checks are enabled"
       },
     );
   } finally {
-    rustProcess.kill("SIGTERM");
-    doctorProcess.kill("SIGTERM");
+    await stopProcess(rustProcess);
+    await stopProcess(doctorProcess);
+    await tmp.cleanup();
+  }
+});
+
+test("container healthcheck requires both managed pid files to be live", async () => {
+  const tmp = await makeTempDir("mule-doctor-runtime-healthcheck-pid-");
+  const rustProcess = startLongRunningProcess();
+  try {
+    const { binDir, fetchShimPath } = await createFakeRuntime(tmp.dir);
+    const tokenPath = join(tmp.dir, "token");
+    const rustPidFile = join(tmp.dir, "rust.pid");
+    const doctorPidFile = join(tmp.dir, "doctor.pid");
+
+    await writeFile(tokenPath, "health-token\n", "utf8");
+    await writeFile(rustPidFile, `${rustProcess.pid}\n`, "utf8");
+    await writeFile(doctorPidFile, "999999\n", "utf8");
+
+    await assert.rejects(
+      execFileAsync("bash", [HEALTHCHECK_PATH], {
+        cwd: REPO_ROOT,
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH}`,
+          FAKE_NODE_REQUIRE: fetchShimPath,
+          FAKE_EXPECTED_RUST_TOKEN: "health-token",
+          FAKE_RUST_STATUS_READY: "true",
+          FAKE_RUST_SEARCH_READY: "true",
+          RUST_MULE_TOKEN_PATH: tokenPath,
+          RUST_MULE_PID_FILE: rustPidFile,
+          MULE_DOCTOR_PID_FILE: doctorPidFile,
+        },
+      }),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /managed process not running for pid file/);
+        return true;
+      },
+    );
+  } finally {
+    await stopProcess(rustProcess);
     await tmp.cleanup();
   }
 });
