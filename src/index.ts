@@ -203,7 +203,9 @@ async function main(): Promise<void> {
     : undefined;
   const managedInstanceSurfaceDiagnostics =
     managedInstanceDiagnostics
-      ? new ManagedInstanceSurfaceDiagnosticsService(managedInstanceDiagnostics)
+      ? new ManagedInstanceSurfaceDiagnosticsService(managedInstanceDiagnostics, {
+          searchHealthLog,
+        })
       : undefined;
   const mattermostClient = new MattermostClient(webhookUrl, mattermostAnalyzer, {
     discoverabilityResults: discoverabilityLog,

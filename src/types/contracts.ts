@@ -320,8 +320,10 @@ export interface ManagedDiscoverabilitySummary {
   lastSuccessAt?: string;
 }
 
-export type SearchHealthRecordSource = "controlled_discoverability";
-export type SearchHealthOutcome = ManagedDiscoverabilityOutcome;
+export type SearchHealthRecordSource =
+  | "controlled_discoverability"
+  | "managed_instance_observation";
+export type SearchHealthOutcome = ManagedDiscoverabilityOutcome | "active";
 
 export interface SearchHealthReadinessSnapshot {
   statusReady: boolean;
@@ -338,6 +340,10 @@ export interface SearchHealthControlledContext {
   publisherInstanceId: string;
   searcherInstanceId: string;
   fixture: ManagedDiscoverabilityFixtureSummary;
+}
+
+export interface SearchHealthObservedContext {
+  instanceId: string;
 }
 
 export interface SearchHealthRecord {
@@ -359,11 +365,13 @@ export interface SearchHealthRecord {
   outcome: SearchHealthOutcome;
   finalState: string;
   controlledContext?: SearchHealthControlledContext;
+  observedContext?: SearchHealthObservedContext;
 }
 
 export interface SearchHealthSummary {
   windowSize: number;
   totalSearches: number;
+  activeCount: number;
   foundCount: number;
   completedEmptyCount: number;
   timedOutCount: number;
@@ -379,6 +387,7 @@ export interface SearchHealthSummary {
     publisherInstanceId: string;
     searcherInstanceId: string;
   };
+  latestInstanceId?: string;
   lastSuccessAt?: string;
 }
 

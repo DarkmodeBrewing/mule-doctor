@@ -137,6 +137,12 @@ Acceptance criteria:
 - search attempts have enough structured context to compare propagation behavior over time.
 - search health becomes a first-class diagnostic signal rather than an ad hoc log observation.
 
+Current status:
+
+- controlled discoverability checks already persist lifecycle-style search health records with dispatch readiness, peer context, state samples, and terminal outcomes
+- managed-instance surface diagnostics now also persist deduplicated observed search lifecycle records for active and terminal keyword searches
+- remaining work should focus on broadening search-lifecycle coverage beyond the managed-instance diagnostics path and refining how transport/readiness context is captured for non-controlled searches
+
 ## Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
 
 1. Use the current rust-mule endpoints as the basis for publish/search observability:

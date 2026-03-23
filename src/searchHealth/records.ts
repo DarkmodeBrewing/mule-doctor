@@ -5,6 +5,11 @@ import type {
   SearchHealthRecord,
   SearchHealthTransportSnapshot,
 } from "../types/contracts.js";
+import type {
+  RustMuleSearchDetailResponse,
+  RustMuleKeywordSearchInfo,
+  RustMuleReadiness,
+} from "../api/rustMuleClient.js";
 
 export function createSearchHealthRecordFromDiscoverability(
   result: ManagedDiscoverabilityCheckResult,
@@ -85,6 +90,79 @@ export function sanitizeSearchHealthRecord(record: SearchHealthRecord): SearchHe
           fixture: summarizeFixture(record.controlledContext.fixture),
         }
       : undefined,
+    observedContext: record.observedContext
+      ? {
+          instanceId: record.observedContext.instanceId,
+        }
+      : undefined,
+  };
+}
+
+export function createSearchHealthRecordFromManagedObservation(input: {
+  instanceId: string;
+  readiness: RustMuleReadiness;
+  peerCount: number;
+  search: RustMuleKeywordSearchInfo;
+  detail?: RustMuleSearchDetailResponse;
+  recordedAt?: string;
+}): SearchHealthRecord {
+  const recordedAt = input.recordedAt ?? new Date().toISOString();
+  const state = readString(input.detail?.search?.state) ?? readString(input.search.state) ?? "unknown";
+  const resultCount = Array.isArray(input.detail?.hits)
+    ? input.detail.hits.length
+    : typeof input.search.hits === "number"
+      ? input.search.hits
+      : 0;
+  const readiness = {
+    statusReady: input.readiness.statusReady === true,
+    searchesReady: input.readiness.searchesReady === true,
+    ready: input.readiness.ready === true,
+  };
+  const transport = buildTransportSnapshot(
+    input.peerCount,
+    input.readiness.ready,
+    input.readiness.statusReady,
+    input.readiness.searchesReady,
+  );
+  const query =
+    readString(input.search.keyword_label) ??
+    readString(input.detail?.search?.keyword_label) ??
+    readString(input.search.search_id_hex) ??
+    readString(input.search.keyword_id_hex) ??
+    "search";
+  const searchId =
+    readString(input.search.search_id_hex) ??
+    readString(input.detail?.search?.search_id_hex) ??
+    readString(input.search.keyword_id_hex) ??
+    query;
+
+  return {
+    recordedAt,
+    source: "managed_instance_observation",
+    query,
+    searchId,
+    dispatchedAt: deriveDispatchedAt(recordedAt, input.search.created_secs_ago),
+    readinessAtDispatch: {
+      publisher: { ...readiness },
+      searcher: { ...readiness },
+    },
+    transportAtDispatch: {
+      publisher: { ...transport },
+      searcher: { ...transport },
+    },
+    states: [
+      {
+        observedAt: recordedAt,
+        state,
+        hits: resultCount,
+      },
+    ],
+    resultCount,
+    outcome: classifyObservedOutcome(state, resultCount),
+    finalState: state,
+    observedContext: {
+      instanceId: input.instanceId,
+    },
   };
 }
 
@@ -143,4 +221,36 @@ function buildTransportSnapshot(
     peerCount: typeof peerCount === "number" ? peerCount : 0,
     degradedIndicators,
   };
+}
+
+function classifyObservedOutcome(
+  state: string,
+  resultCount: number,
+): SearchHealthRecord["outcome"] {
+  const normalized = state.toLowerCase();
+  if (resultCount > 0) {
+    return "found";
+  }
+  if (normalized === "timed_out" || normalized === "timeout") {
+    return "timed_out";
+  }
+  if (normalized === "completed" || normalized === "complete" || normalized === "done") {
+    return "completed_empty";
+  }
+  return "active";
+}
+
+function deriveDispatchedAt(recordedAt: string, createdSecsAgo: unknown): string {
+  if (typeof createdSecsAgo !== "number" || !Number.isFinite(createdSecsAgo) || createdSecsAgo < 0) {
+    return recordedAt;
+  }
+  const recordedAtMs = Date.parse(recordedAt);
+  if (Number.isNaN(recordedAtMs)) {
+    return recordedAt;
+  }
+  return new Date(recordedAtMs - createdSecsAgo * 1000).toISOString();
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
