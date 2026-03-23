@@ -8,7 +8,8 @@ import { sanitizeSearchHealthRecord } from "./records.js";
 export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): SearchHealthSummary {
   const sanitizedRecords = records.map(sanitizeSearchHealthRecord);
   const latest = sanitizedRecords.at(-1);
-  const lastSuccess = [...sanitizedRecords]
+  const latestRecords = latestSearchRecords(sanitizedRecords);
+  const lastSuccess = [...latestRecords]
     .reverse()
     .find((record) => record.outcome === "found");
 
@@ -22,7 +23,7 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
   let degradedTransportCount = 0;
   let terminalCount = 0;
 
-  for (const record of sanitizedRecords) {
+  for (const record of latestRecords) {
     if (record.outcome in counts) {
       counts[record.outcome] += 1;
     }
@@ -43,7 +44,7 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
     }
   }
 
-  const totalSearches = sanitizedRecords.length;
+  const totalSearches = latestRecords.length;
   return {
     windowSize: totalSearches,
     totalSearches,
@@ -69,4 +70,33 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
     latestTargetLabel: latest?.observerContext?.label,
     lastSuccessAt: lastSuccess?.recordedAt,
   };
+}
+
+function latestSearchRecords(records: SearchHealthRecord[]): SearchHealthRecord[] {
+  const latestByKey = new Map<string, SearchHealthRecord>();
+  for (const record of records) {
+    const key = buildLogicalSearchKey(record);
+    latestByKey.delete(key);
+    latestByKey.set(key, record);
+  }
+  return [...latestByKey.values()];
+}
+
+function buildLogicalSearchKey(record: SearchHealthRecord): string {
+  const controlledKey = record.controlledContext
+    ? `${record.controlledContext.publisherInstanceId}:${record.controlledContext.searcherInstanceId}`
+    : "";
+  const observedKey = record.observedContext?.instanceId ?? "";
+  const observerKey = record.observerContext?.target.kind === "managed_instance"
+    ? `managed:${record.observerContext.target.instanceId ?? ""}`
+    : record.observerContext
+      ? "external"
+      : "";
+  return [
+    record.source,
+    record.searchId,
+    controlledKey,
+    observedKey,
+    observerKey,
+  ].join("|");
 }

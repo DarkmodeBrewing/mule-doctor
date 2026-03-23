@@ -5,9 +5,17 @@ import type {
   SearchHealthSummary,
 } from "../types/contracts.js";
 import {
+  createSearchHealthRecordFromControlledDispatch,
   createSearchHealthRecordFromDiscoverability,
   sanitizeSearchHealthRecord,
 } from "./records.js";
+import type {
+  ManagedDiscoverabilityFixtureSummary,
+} from "../types/contracts.js";
+import type {
+  RustMuleKeywordSearchResponse,
+  RustMuleReadiness,
+} from "../api/rustMuleClient.js";
 import { summarizeSearchHealthRecords } from "./summary.js";
 
 export class SearchHealthLog {
@@ -28,6 +36,21 @@ export class SearchHealthLog {
     result: ManagedDiscoverabilityCheckResult,
   ): Promise<void> {
     await this.append(createSearchHealthRecordFromDiscoverability(result));
+  }
+
+  async appendControlledDiscoverabilityDispatch(input: {
+    publisherInstanceId: string;
+    searcherInstanceId: string;
+    fixture: ManagedDiscoverabilityFixtureSummary;
+    query: string;
+    dispatch: RustMuleKeywordSearchResponse;
+    publisherReadiness: RustMuleReadiness;
+    searcherReadiness: RustMuleReadiness;
+    publisherPeerCount: number;
+    searcherPeerCount: number;
+    dispatchedAt?: string;
+  }): Promise<void> {
+    await this.append(createSearchHealthRecordFromControlledDispatch(input));
   }
 
   async listRecent(limit = 20): Promise<SearchHealthRecord[]> {

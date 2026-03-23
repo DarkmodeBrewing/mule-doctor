@@ -188,3 +188,66 @@ test("ManagedInstanceDiscoverabilityService returns completed_empty for terminal
   assert.equal(result.publisherSharedBefore.file, undefined);
   assert.equal(result.publisherSharedAfter.file, undefined);
 });
+
+test("ManagedInstanceDiscoverabilityService records dispatch-time search health", async () => {
+  const dispatchRecords = [];
+  const diagnostics = {
+    async getInstanceRecord(id) {
+      return { id };
+    },
+    getClientForInstance(record) {
+      if (record.id === "publisher") {
+        return {
+          async loadToken() {},
+          async getReadiness() {
+            return { ready: true, statusReady: true, searchesReady: true };
+          },
+          async getPeers() {
+            return [{ id: "p0" }];
+          },
+        };
+      }
+      return makeClient({
+        searchId: "search-dispatch-1",
+        peers: [{ id: "p1" }],
+        details: [{ search: { state: "completed" }, hits: [] }],
+      });
+    },
+  };
+  const sharing = {
+    async getOverview() {
+      return { files: [], actions: [], downloads: [] };
+    },
+    async ensureFixture() {
+      return {
+        fixtureId: "discoverability",
+        token: "mule-doctor-publisher-discoverability",
+        fileName: "mule-doctor-publisher-discoverability.txt",
+        relativePath: "mule-doctor-publisher-discoverability.txt",
+        absolutePath: "/tmp/mule-doctor-publisher-discoverability.txt",
+        sizeBytes: 64,
+      };
+    },
+    async triggerReindex() {},
+    async triggerRepublishSources() {},
+    async triggerRepublishKeywords() {},
+  };
+
+  const service = new ManagedInstanceDiscoverabilityService(diagnostics, sharing, {
+    async appendControlledDiscoverabilityDispatch(record) {
+      dispatchRecords.push(record);
+    },
+  });
+  await service.runControlledCheck({
+    publisherInstanceId: "publisher",
+    searcherInstanceId: "searcher",
+    pollIntervalMs: 1,
+    timeoutMs: 1_000,
+  });
+
+  assert.equal(dispatchRecords.length, 1);
+  assert.equal(dispatchRecords[0].publisherInstanceId, "publisher");
+  assert.equal(dispatchRecords[0].searcherInstanceId, "searcher");
+  assert.equal(dispatchRecords[0].query, "mule-doctor-publisher-discoverability");
+  assert.equal(dispatchRecords[0].dispatch.search_id_hex, "search-dispatch-1");
+});

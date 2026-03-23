@@ -246,6 +246,7 @@ async function main(): Promise<void> {
       ? new ManagedInstanceDiscoverabilityService(
           managedInstanceDiagnostics,
           managedInstanceSharing,
+          searchHealthLog,
         )
       : undefined;
   const managedInstancePresets = managedInstances
