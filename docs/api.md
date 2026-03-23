@@ -405,8 +405,6 @@ Response on acceptance:
 }
 ```
 
-The operator console compare view combines this endpoint with per-instance `GET /api/instances/{id}/runtime_surface` calls so operators can compare the latest current runtime surface separately from the historical search-health feed.
-
 Error behavior:
 
 - returns `409` if a run is already in flight or otherwise not accepted
@@ -741,6 +739,8 @@ Response:
   }
 }
 ```
+
+The operator console compare view uses `GET /api/instances/compare` together with per-instance `GET /api/instances/{id}/runtime_surface` calls so operators can compare the latest current runtime surface separately from the historical search-health feed.
 
 Error behavior:
 

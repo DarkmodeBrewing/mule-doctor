@@ -1,6 +1,15 @@
 /* global document */
 
 export function createInstanceCompareController({ fetchJson, setText }) {
+  let lastCompareResult = null;
+
+  function getCurrentFilters() {
+    return {
+      stateFilter: document.getElementById("compare-search-state").value,
+      publishOnly: document.getElementById("compare-publish-only").checked,
+    };
+  }
+
   function renderEmptySurface(elementId, message) {
     const element = document.getElementById(elementId);
     element.replaceChildren();
@@ -120,7 +129,7 @@ export function createInstanceCompareController({ fetchJson, setText }) {
   }
 
   function renderComparisonSurfaces(left, right, filters) {
-    if (!left || !right) {
+    if (!left && !right) {
       document.getElementById("instance-compare-summary").textContent =
         "Compare current runtime surface state across two managed instances.";
       document.getElementById("instance-compare-summary").className = "preset-help muted";
@@ -132,12 +141,20 @@ export function createInstanceCompareController({ fetchJson, setText }) {
     const rightSummary = summarizeRuntimeSurface(right, filters);
     const summaryElement = document.getElementById("instance-compare-summary");
     summaryElement.textContent = [
-      `${left.instanceId}: ${leftSummary.summary}`,
-      `${right.instanceId}: ${rightSummary.summary}`,
+      `${left?.instanceId ?? "left"}: ${leftSummary.summary}`,
+      `${right?.instanceId ?? "right"}: ${rightSummary.summary}`,
     ].join(" | ");
     summaryElement.className = "preset-help";
-    renderSurfaceEntries("instance-compare-left-surface", leftSummary.entries);
-    renderSurfaceEntries("instance-compare-right-surface", rightSummary.entries);
+    if (left) {
+      renderSurfaceEntries("instance-compare-left-surface", leftSummary.entries);
+    } else {
+      renderEmptySurface("instance-compare-left-surface", "Runtime surface unavailable for left instance.");
+    }
+    if (right) {
+      renderSurfaceEntries("instance-compare-right-surface", rightSummary.entries);
+    } else {
+      renderEmptySurface("instance-compare-right-surface", "Runtime surface unavailable for right instance.");
+    }
   }
 
   function renderCompareTimelineControls() {
@@ -208,24 +225,62 @@ export function createInstanceCompareController({ fetchJson, setText }) {
     };
   }
 
+  function renderCachedComparison() {
+    if (!lastCompareResult) {
+      renderComparisonSurfaces(undefined, undefined, getCurrentFilters());
+      return;
+    }
+    renderComparisonSurfaces(
+      lastCompareResult.leftSurface,
+      lastCompareResult.rightSurface,
+      getCurrentFilters(),
+    );
+    setText(
+      "instance-compare",
+      JSON.stringify(
+        {
+          comparedAt: lastCompareResult.comparedAt,
+          left: lastCompareResult.leftComparison,
+          right: lastCompareResult.rightComparison,
+          filters: getCurrentFilters(),
+        },
+        null,
+        2,
+      ),
+    );
+  }
+
   async function refreshInstanceCompare() {
     const left = document.getElementById("compare-left").value;
     const right = document.getElementById("compare-right").value;
-    const stateFilter = document.getElementById("compare-search-state").value;
-    const publishOnly = document.getElementById("compare-publish-only").checked;
+    const { stateFilter, publishOnly } = getCurrentFilters();
     renderCompareTimelineControls();
     if (!left || !right) {
+      lastCompareResult = null;
       setText("instance-compare", "Select two managed instances to compare.");
       renderComparisonSurfaces(undefined, undefined, { stateFilter, publishOnly });
       return;
     }
     try {
-      const [data, leftSurface, rightSurface] = await Promise.all([
-        fetchJson(`/api/instances/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`),
+      const data = await fetchJson(
+        `/api/instances/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`,
+      );
+      const [leftSurfaceResult, rightSurfaceResult] = await Promise.allSettled([
         fetchJson(`/api/instances/${encodeURIComponent(left)}/runtime_surface`),
         fetchJson(`/api/instances/${encodeURIComponent(right)}/runtime_surface`),
       ]);
-      renderComparisonSurfaces(leftSurface.diagnostics, rightSurface.diagnostics, {
+      const leftSurface =
+        leftSurfaceResult.status === "fulfilled" ? leftSurfaceResult.value.diagnostics : undefined;
+      const rightSurface =
+        rightSurfaceResult.status === "fulfilled" ? rightSurfaceResult.value.diagnostics : undefined;
+      lastCompareResult = {
+        comparedAt: new Date().toISOString(),
+        leftComparison: summarizeComparisonSide(data.comparison.left),
+        rightComparison: summarizeComparisonSide(data.comparison.right),
+        leftSurface,
+        rightSurface,
+      };
+      renderComparisonSurfaces(leftSurface, rightSurface, {
         stateFilter,
         publishOnly,
       });
@@ -233,9 +288,9 @@ export function createInstanceCompareController({ fetchJson, setText }) {
         "instance-compare",
         JSON.stringify(
           {
-            comparedAt: new Date().toISOString(),
-            left: summarizeComparisonSide(data.comparison.left),
-            right: summarizeComparisonSide(data.comparison.right),
+            comparedAt: lastCompareResult.comparedAt,
+            left: lastCompareResult.leftComparison,
+            right: lastCompareResult.rightComparison,
             filters: {
               stateFilter,
               publishOnly,
@@ -246,8 +301,9 @@ export function createInstanceCompareController({ fetchJson, setText }) {
         ),
       );
     } catch (err) {
+      lastCompareResult = null;
       renderComparisonSurfaces(undefined, undefined, { stateFilter, publishOnly });
-      setText("instance-compare", `Failed to compare instances: ${String(err)}`);
+      setText("instance-compare", `Failed to refresh instance comparison data: ${String(err)}`);
     }
   }
 
@@ -272,6 +328,7 @@ export function createInstanceCompareController({ fetchJson, setText }) {
   return {
     comparePresetGroup,
     refreshInstanceCompare,
+    renderCachedComparison,
     renderComparisonSelectors,
     renderCompareTimelineControls,
   };
