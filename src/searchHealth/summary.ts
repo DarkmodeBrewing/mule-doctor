@@ -13,6 +13,7 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
     .find((record) => record.outcome === "found");
 
   const counts: Record<SearchHealthOutcome, number> = {
+    active: 0,
     found: 0,
     completed_empty: 0,
     timed_out: 0,
@@ -42,6 +43,7 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
   return {
     windowSize: totalSearches,
     totalSearches,
+    activeCount: counts.active,
     foundCount: counts.found,
     completedEmptyCount: counts.completed_empty,
     timedOutCount: counts.timed_out,
@@ -59,6 +61,7 @@ export function summarizeSearchHealthRecords(records: SearchHealthRecord[]): Sea
           searcherInstanceId: latest.controlledContext.searcherInstanceId,
         }
       : undefined,
+    latestInstanceId: latest?.observedContext?.instanceId,
     lastSuccessAt: lastSuccess?.recordedAt,
   };
 }

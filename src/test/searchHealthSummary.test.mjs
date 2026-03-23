@@ -67,6 +67,7 @@ test("summarizeSearchHealthRecords derives readiness and transport counts", () =
   ]);
 
   assert.equal(summary.totalSearches, 2);
+  assert.equal(summary.activeCount, 0);
   assert.equal(summary.foundCount, 1);
   assert.equal(summary.timedOutCount, 1);
   assert.equal(summary.dispatchReadyCount, 1);
@@ -99,12 +100,47 @@ test("summarizeSearchHealthRecords tolerates malformed persisted records", () =>
   ]);
 
   assert.equal(summary.totalSearches, 2);
+  assert.equal(summary.activeCount, 0);
   assert.equal(summary.foundCount, 1);
   assert.equal(summary.completedEmptyCount, 0);
   assert.equal(summary.timedOutCount, 0);
   assert.equal(summary.dispatchReadyCount, 0);
   assert.equal(summary.dispatchNotReadyCount, 2);
   assert.equal(summary.degradedTransportCount, 0);
+});
+
+test("summarizeSearchHealthRecords includes managed-instance observations", () => {
+  const summary = summarizeSearchHealthRecords([
+    {
+      recordedAt: "2026-03-23T12:00:00.000Z",
+      source: "managed_instance_observation",
+      query: "fixture-token",
+      searchId: "search-3",
+      dispatchedAt: "2026-03-23T11:59:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 4, degradedIndicators: [] },
+        searcher: { peerCount: 4, degradedIndicators: [] },
+      },
+      states: [{ observedAt: "2026-03-23T12:00:00.000Z", state: "running", hits: 0 }],
+      resultCount: 0,
+      outcome: "active",
+      finalState: "running",
+      observedContext: {
+        instanceId: "searcher-a",
+      },
+    },
+  ]);
+
+  assert.equal(summary.totalSearches, 1);
+  assert.equal(summary.activeCount, 1);
+  assert.equal(summary.dispatchReadyCount, 1);
+  assert.equal(summary.degradedTransportCount, 0);
+  assert.equal(summary.latestSource, "managed_instance_observation");
+  assert.equal(summary.latestInstanceId, "searcher-a");
 });
 
 test("SearchHealthLog sanitizes records when reading from runtime store", async () => {

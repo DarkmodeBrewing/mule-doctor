@@ -66,7 +66,7 @@ function renderSearchHealthSummary(summary) {
 
   const parts = [
     `Window: ${summary.windowSize} recent searches`,
-    `Found ${summary.foundCount}, empty ${summary.completedEmptyCount}, timed out ${summary.timedOutCount}`,
+    `Active ${summary.activeCount}, found ${summary.foundCount}, empty ${summary.completedEmptyCount}, timed out ${summary.timedOutCount}`,
     `Dispatch-ready ${summary.dispatchReadyCount}, not-ready ${summary.dispatchNotReadyCount}`,
     `Degraded transport: ${summary.degradedTransportCount}`,
   ];
@@ -80,6 +80,8 @@ function renderSearchHealthSummary(summary) {
     parts.push(
       `Latest path: ${summary.latestPair.publisherInstanceId} -> ${summary.latestPair.searcherInstanceId}`,
     );
+  } else if (summary.latestInstanceId) {
+    parts.push(`Latest instance: ${summary.latestInstanceId}`);
   }
   if (summary.lastSuccessAt) {
     parts.push(`Last success: ${formatRecordedAt(summary.lastSuccessAt)}`);
@@ -144,6 +146,8 @@ function renderSearchHealthItem(record) {
   const title = document.createElement("strong");
   title.textContent = record.controlledContext
     ? `${record.controlledContext.publisherInstanceId} -> ${record.controlledContext.searcherInstanceId}`
+    : record.observedContext?.instanceId
+      ? `${record.observedContext.instanceId}: ${record.query}`
     : record.query;
   line.appendChild(title);
 
@@ -163,15 +167,19 @@ function renderSearchHealthItem(record) {
   ) {
     badges.appendChild(createBadge("degraded transport", "warn"));
   }
+  if (record.observedContext?.instanceId) {
+    badges.appendChild(createBadge("observed", "instance"));
+  }
   line.appendChild(badges);
 
   const detail = document.createElement("div");
   detail.className = "event-detail";
   const finalState = record.finalState || "unknown";
   const fixtureName = record.controlledContext?.fixture?.fileName;
+  const peerLabel = record.observedContext?.instanceId ? "observed peers" : "searcher peers";
   detail.textContent =
     `${record.query}${fixtureName ? ` via ${fixtureName}` : ""} • final state ${finalState} • ` +
-    `${record.transportAtDispatch?.searcher?.peerCount ?? 0} searcher peers • recorded ${formatRecordedAt(record.recordedAt)}`;
+    `${record.transportAtDispatch?.searcher?.peerCount ?? 0} ${peerLabel} • recorded ${formatRecordedAt(record.recordedAt)}`;
 
   item.appendChild(line);
   item.appendChild(detail);
