@@ -78,6 +78,106 @@ test("ManagedInstanceSurfaceDiagnosticsService persists deduplicated observed se
   assert.equal(appendedRecords[1].resultCount, 1);
 });
 
+test("ManagedInstanceSurfaceDiagnosticsService exposes structured runtime surface detail", async () => {
+  const diagnostics = {
+    async getInstanceRecord(id) {
+      return { id };
+    },
+    getClientForInstance() {
+      return {
+        async loadToken() {},
+        async getStatus() {
+          return { ready: true };
+        },
+        async getSearches() {
+          return {
+            ready: true,
+            searches: [
+              {
+                search_id_hex: "search-1",
+                keyword_id_hex: "keyword-1",
+                keyword_label: "fixture-token",
+                state: "running",
+                created_secs_ago: 42,
+                hits: 2,
+                want_search: true,
+                publish_enabled: true,
+                got_publish_ack: false,
+              },
+            ],
+          };
+        },
+        async getSharedFiles() {
+          return {
+            files: [
+              {
+                identity: {
+                  file_name: "fixture.txt",
+                  file_id_hex: "file-1",
+                  file_size: 128,
+                },
+                local_source_cached: true,
+                keyword_publish_queued: true,
+                keyword_publish_failed: false,
+                keyword_publish_acked: 2,
+                source_publish_response_received: true,
+                queued_downloads: 1,
+                inflight_downloads: 0,
+                queued_uploads: 0,
+                inflight_uploads: 1,
+              },
+            ],
+          };
+        },
+        async getSharedActions() {
+          return {
+            actions: [
+              {
+                kind: "republish_keywords",
+                state: "running",
+                file_name: "fixture.txt",
+                file_id_hex: "file-1",
+              },
+            ],
+          };
+        },
+        async getDownloads() {
+          return {
+            downloads: [
+              {
+                file_name: "fixture.bin",
+                file_hash_md4_hex: "hash-1",
+                state: "queued",
+                progress_pct: 50,
+                source_count: 2,
+              },
+            ],
+          };
+        },
+        async getPeers() {
+          return [{ id: "peer-1" }];
+        },
+        async getSearchDetail() {
+          return {
+            search: { search_id_hex: "search-1" },
+            hits: [{ filename: "fixture.txt" }],
+          };
+        },
+      };
+    },
+  };
+
+  const service = new ManagedInstanceSurfaceDiagnosticsService(diagnostics);
+  const snapshot = await service.getSnapshot("managed-a");
+
+  assert.equal(snapshot.detail.searches[0].label, "fixture-token");
+  assert.equal(snapshot.detail.searches[0].hits, 2);
+  assert.equal(snapshot.detail.sharedFiles[0].fileName, "fixture.txt");
+  assert.equal(snapshot.detail.sharedFiles[0].keywordPublishAckedCount, 2);
+  assert.equal(snapshot.detail.sharedActions[0].kind, "republish_keywords");
+  assert.equal(snapshot.detail.downloads[0].fileName, "fixture.bin");
+});
+
 test("ManagedInstanceSurfaceDiagnosticsService prunes observed-search cache when searches disappear", async () => {
   const appendedRecords = [];
   const searchList = [

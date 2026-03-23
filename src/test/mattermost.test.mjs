@@ -102,7 +102,7 @@ class StubSearchHealthResults {
 }
 
 class StubManagedInstanceSurfaceDiagnostics {
-  async getSummary(instanceId) {
+  buildDiagnostics(instanceId) {
     return {
       instanceId,
       observedAt: "2026-03-16T09:30:00.000Z",
@@ -139,7 +139,32 @@ class StubManagedInstanceSurfaceDiagnostics {
           avgProgressPct: 50,
         },
       },
+      highlights: {
+        searches: [],
+        sharedActions: [],
+        downloads: [],
+      },
+      detail: {
+        searches: [],
+        sharedFiles: [],
+        sharedActions: [],
+        downloads: [],
+      },
     };
+  }
+
+  async getSummary(instanceId) {
+    const diagnostics = this.buildDiagnostics(instanceId);
+    return {
+      instanceId: diagnostics.instanceId,
+      observedAt: diagnostics.observedAt,
+      summary: diagnostics.summary,
+      highlights: diagnostics.highlights,
+    };
+  }
+
+  async getSnapshot(instanceId) {
+    return this.buildDiagnostics(instanceId);
   }
 }
 

@@ -267,6 +267,55 @@ label {
   margin: 0;
 }
 
+.surface-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.surface-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(48, 67, 88, 0.65);
+  border-radius: 12px;
+  background: rgba(11, 16, 24, 0.6);
+}
+
+.surface-panel h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.surface-list {
+  display: grid;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.surface-entry {
+  border: 1px solid rgba(48, 67, 88, 0.55);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(8, 17, 26, 0.84);
+}
+
+.surface-entry-title {
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.surface-entry-meta {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
 .control-feedback.pending {
   color: var(--warn);
 }

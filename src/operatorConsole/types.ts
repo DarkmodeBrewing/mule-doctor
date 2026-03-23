@@ -1,4 +1,5 @@
 import type { SearchPublishDiagnosticsSummary } from "../diagnostics/rustMuleSurfaceSummaries.js";
+import type { ManagedInstanceSurfaceDiagnosticsSnapshot } from "../instances/managedInstanceSurfaceDiagnostics.js";
 import type { OperatorSearchDispatchResult } from "./operatorSearchService.js";
 import type { LlmInvocationAuditSink } from "../llm/invocationAuditLog.js";
 import type { LlmInvocationGate } from "../llm/invocationGate.js";
@@ -43,6 +44,7 @@ export interface ManagedInstanceSurfaceDiagnostics {
       downloads: string[];
     };
   }>;
+  getSnapshot(id: string): Promise<ManagedInstanceSurfaceDiagnosticsSnapshot>;
 }
 
 export interface ManagedInstancePresets {

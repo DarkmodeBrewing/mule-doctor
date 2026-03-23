@@ -20,6 +20,60 @@ export interface ManagedInstanceSurfaceDiagnosticsSummary {
   };
 }
 
+export interface ManagedKeywordSearchThreadDetail {
+  searchId: string;
+  keywordIdHex?: string;
+  label: string;
+  state: string;
+  ageSecs?: number;
+  hits: number;
+  wantSearch: boolean;
+  publishEnabled: boolean;
+  publishAcked: boolean;
+}
+
+export interface ManagedSharedFileDetail {
+  fileName: string;
+  fileIdHex?: string;
+  sizeBytes?: number;
+  localSourceCached: boolean;
+  keywordPublishQueued: boolean;
+  keywordPublishFailed: boolean;
+  keywordPublishAckedCount: number;
+  sourcePublishResponseReceived: boolean;
+  queuedDownloads: number;
+  inflightDownloads: number;
+  queuedUploads: number;
+  inflightUploads: number;
+}
+
+export interface ManagedSharedActionDetail {
+  kind: string;
+  state: string;
+  fileName?: string;
+  fileIdHex?: string;
+  error?: string;
+}
+
+export interface ManagedDownloadDetail {
+  fileName: string;
+  fileHashMd4Hex?: string;
+  state: string;
+  progressPct?: number;
+  sourceCount: number;
+  lastError?: string;
+}
+
+export interface ManagedInstanceSurfaceDiagnosticsSnapshot
+  extends ManagedInstanceSurfaceDiagnosticsSummary {
+  detail: {
+    searches: ManagedKeywordSearchThreadDetail[];
+    sharedFiles: ManagedSharedFileDetail[];
+    sharedActions: ManagedSharedActionDetail[];
+    downloads: ManagedDownloadDetail[];
+  };
+}
+
 export class ManagedInstanceSurfaceDiagnosticsService {
   private readonly diagnostics: ManagedInstanceDiagnosticsService;
   private readonly searchHealthLog: SearchHealthLog | undefined;
@@ -37,6 +91,16 @@ export class ManagedInstanceSurfaceDiagnosticsService {
   }
 
   async getSummary(instanceId: string): Promise<ManagedInstanceSurfaceDiagnosticsSummary> {
+    const snapshot = await this.getSnapshot(instanceId);
+    return {
+      instanceId: snapshot.instanceId,
+      observedAt: snapshot.observedAt,
+      summary: snapshot.summary,
+      highlights: snapshot.highlights,
+    };
+  }
+
+  async getSnapshot(instanceId: string): Promise<ManagedInstanceSurfaceDiagnosticsSnapshot> {
     const record = await this.diagnostics.getInstanceRecord(instanceId);
     const client = this.diagnostics.getClientForInstance(record);
     await client.loadToken();
@@ -56,9 +120,10 @@ export class ManagedInstanceSurfaceDiagnosticsService {
       searches,
     };
     await this.recordObservedSearchHealth(record.id, readiness, peers.length, client, searches.searches);
+    const observedAt = new Date().toISOString();
     return {
       instanceId: record.id,
-      observedAt: new Date().toISOString(),
+      observedAt,
       summary: summarizeSearchPublishDiagnostics({
         searches,
         shared,
@@ -69,6 +134,12 @@ export class ManagedInstanceSurfaceDiagnosticsService {
         searches: summarizeSearchHighlights(searches.searches),
         sharedActions: summarizeSharedActionHighlights(actions.actions),
         downloads: summarizeDownloadHighlights(downloads.downloads),
+      },
+      detail: {
+        searches: normalizeSearchThreads(searches.searches),
+        sharedFiles: normalizeSharedFiles(shared.files),
+        sharedActions: normalizeSharedActions(actions.actions),
+        downloads: normalizeDownloads(downloads.downloads),
       },
     };
   }
@@ -222,6 +293,88 @@ function readString(value: unknown): string | undefined {
 
 function readNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function normalizeSearchThreads(searches: unknown[]): ManagedKeywordSearchThreadDetail[] {
+  return searches
+    .map((entry) => {
+      const search = isRecord(entry) ? entry : {};
+      const searchId =
+        readString(search.search_id_hex) ?? readString(search.keyword_id_hex) ?? "unknown-search";
+      return {
+        searchId,
+        keywordIdHex: readString(search.keyword_id_hex),
+        label: readString(search.keyword_label) ?? searchId,
+        state: readString(search.state) ?? "unknown",
+        ageSecs: readNumber(search.created_secs_ago),
+        hits: readNumber(search.hits) ?? 0,
+        wantSearch: search.want_search === true,
+        publishEnabled: search.publish_enabled === true,
+        publishAcked: search.got_publish_ack === true,
+      };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function normalizeSharedFiles(files: unknown[]): ManagedSharedFileDetail[] {
+  return files
+    .map((entry) => {
+      const file = isRecord(entry) ? entry : {};
+      const identity = isRecord(file.identity) ? file.identity : {};
+      return {
+        fileName:
+          readString(identity.file_name) ??
+          readString(identity.file_id_hex) ??
+          readString(file.file_name) ??
+          "shared-file",
+        fileIdHex: readString(identity.file_id_hex) ?? readString(file.file_id_hex),
+        sizeBytes: readNumber(identity.file_size) ?? readNumber(file.file_size),
+        localSourceCached: file.local_source_cached === true,
+        keywordPublishQueued: file.keyword_publish_queued === true,
+        keywordPublishFailed: file.keyword_publish_failed === true,
+        keywordPublishAckedCount: readNumber(file.keyword_publish_acked) ?? 0,
+        sourcePublishResponseReceived: file.source_publish_response_received === true,
+        queuedDownloads: readNumber(file.queued_downloads) ?? 0,
+        inflightDownloads: readNumber(file.inflight_downloads) ?? 0,
+        queuedUploads: readNumber(file.queued_uploads) ?? 0,
+        inflightUploads: readNumber(file.inflight_uploads) ?? 0,
+      };
+    })
+    .sort((left, right) => left.fileName.localeCompare(right.fileName));
+}
+
+function normalizeSharedActions(actions: unknown[]): ManagedSharedActionDetail[] {
+  return actions
+    .map((entry) => {
+      const action = isRecord(entry) ? entry : {};
+      return {
+        kind: readString(action.kind) ?? "unknown",
+        state: readString(action.state) ?? "unknown",
+        fileName: readString(action.file_name),
+        fileIdHex: readString(action.file_id_hex),
+        error: readString(action.last_error) ?? readString(action.error),
+      };
+    })
+    .sort((left, right) => left.kind.localeCompare(right.kind) || left.state.localeCompare(right.state));
+}
+
+function normalizeDownloads(downloads: unknown[]): ManagedDownloadDetail[] {
+  return downloads
+    .map((entry) => {
+      const download = isRecord(entry) ? entry : {};
+      return {
+        fileName:
+          readString(download.file_name) ??
+          readString(download.file_hash_md4_hex) ??
+          "download",
+        fileHashMd4Hex: readString(download.file_hash_md4_hex),
+        state: readString(download.state) ?? "unknown",
+        progressPct: readNumber(download.progress_pct),
+        sourceCount: readNumber(download.source_count) ?? 0,
+        lastError: readString(download.last_error),
+      };
+    })
+    .sort((left, right) => left.fileName.localeCompare(right.fileName));
 }
 
 function isSearchActive(state: string): boolean {
