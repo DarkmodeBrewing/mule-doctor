@@ -370,14 +370,8 @@ export class Observer {
     }
 
     const activeKeys = new Set<string>();
-    const details: Array<RustMuleSearchDetailResponse | undefined> = [];
-    for (const search of readiness.searches.searches) {
-      const searchId = readString(search.search_id_hex);
-      if (!searchId) {
-        details.push(undefined);
-        continue;
-      }
-      const key = `${observerSearchTargetKey(target.target)}:${searchId}`;
+    const detailPromises = readiness.searches.searches.map(async (search) => {
+      const key = buildObservedSearchCacheKey(target.target, search);
       activeKeys.add(key);
       const state = readString(search.state) ?? "unknown";
       const hits = typeof search.hits === "number" ? search.hits : 0;
@@ -386,15 +380,19 @@ export class Observer {
         !isSearchActive(state) ||
         this.lastObservedSearchStates.get(key) !== state;
       if (!shouldFetchDetail) {
-        details.push(undefined);
-        continue;
+        return undefined;
+      }
+      const searchId = readString(search.search_id_hex);
+      if (!searchId) {
+        return undefined;
       }
       try {
-        details.push(await target.client.getSearchDetail(searchId));
+        return await target.client.getSearchDetail(searchId);
       } catch {
-        details.push(undefined);
+        return undefined;
       }
-    }
+    });
+    const details = await Promise.all(detailPromises);
 
     this.pruneObservedSearchCaches(target.target, activeKeys);
 
@@ -409,7 +407,7 @@ export class Observer {
         detail: details[index],
         recordedAt,
       });
-      const key = `${observerSearchTargetKey(target.target)}:${record.searchId}`;
+      const key = buildObservedSearchCacheKey(target.target, search, details[index]);
       this.lastObservedSearchStates.set(key, record.finalState);
       const signature = buildObservedSearchSignature(record);
       if (this.lastObservedSearchSignatures.get(key) === signature) {
@@ -587,6 +585,30 @@ function observerSearchTargetKey(target: DiagnosticTargetRef): string {
   return target.kind === "managed_instance" && target.instanceId
     ? `managed:${target.instanceId}`
     : "external";
+}
+
+function buildObservedSearchCacheKey(
+  target: DiagnosticTargetRef,
+  search: {
+    search_id_hex?: unknown;
+    keyword_id_hex?: unknown;
+    keyword_label?: unknown;
+  },
+  detail?: RustMuleSearchDetailResponse,
+): string {
+  const query =
+    readString(search.keyword_label) ??
+    readString(detail?.search?.keyword_label) ??
+    readString(search.search_id_hex) ??
+    readString(detail?.search?.search_id_hex) ??
+    readString(search.keyword_id_hex) ??
+    "search";
+  const searchId =
+    readString(search.search_id_hex) ??
+    readString(detail?.search?.search_id_hex) ??
+    readString(search.keyword_id_hex) ??
+    query;
+  return `${observerSearchTargetKey(target)}:${searchId}`;
 }
 
 function isSearchActive(state: string): boolean {

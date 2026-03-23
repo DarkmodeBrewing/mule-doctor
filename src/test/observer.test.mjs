@@ -339,6 +339,64 @@ test("Observer records observed search lifecycle for the active target", async (
   }
 });
 
+test("Observer deduplicates observed searches when search_id_hex is absent", async () => {
+  const tmp = await makeTempDir();
+
+  try {
+    const runtimeStore = new RuntimeStore({ dataDir: tmp.dir });
+    await runtimeStore.initialize();
+    const searchHealthLog = new SearchHealthLog(runtimeStore);
+
+    class SearchClient extends StubClient {
+      async getReadiness() {
+        return {
+          statusReady: true,
+          searchesReady: true,
+          ready: true,
+          status: { ready: true },
+          searches: {
+            ready: true,
+            searches: [
+              {
+                keyword_id_hex: "keyword-1",
+                keyword_label: "observer-search",
+                state: "running",
+                hits: 0,
+              },
+            ],
+          },
+        };
+      }
+
+      async getSearchDetail() {
+        throw new Error("detail should not be fetched without search_id_hex");
+      }
+    }
+
+    const observer = new Observer(new StubAnalyzer(), new StubMattermost(), {
+      runtimeStore,
+      searchHealthLog,
+      targetResolver: new StubTargetResolver({
+        target: { kind: "external" },
+        label: "external configured rust-mule client",
+        client: new SearchClient(),
+        logSource: new StubLogWatcher(),
+      }),
+      intervalMs: 999999,
+    });
+
+    await observer.collectAndPersistContext();
+    await observer.collectAndPersistContext();
+
+    const records = await searchHealthLog.listRecent(10);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].searchId, "keyword-1");
+    assert.equal(records[0].source, "observer_target_observation");
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("Observer reports unavailable active targets without stopping the loop", async () => {
   const tmp = await makeTempDir();
 
