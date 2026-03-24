@@ -4,22 +4,19 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { redactLine, redactText } from "../logs/redaction.js";
+import { redactLine } from "../logs/redaction.js";
 import type {
   DiagnosticTargetRef,
   ManagedInstanceRecord,
   RuntimeState,
 } from "../types/contracts.js";
-import { describeDiagnosticTarget } from "../targets/describeTarget.js";
 import {
   AUTH_COOKIE_NAME,
-  DEFAULT_LOG_LINES,
   DEFAULT_STREAM_HEARTBEAT_MS,
   DEFAULT_STREAM_LINES,
   DEFAULT_STREAM_POLL_MS,
   DEFAULT_UI_PORT,
   MAX_FILE_BYTES,
-  MAX_LOG_LINES,
   MAX_STREAM_LINES,
   PUBLIC_UNAUTHENTICATED_ASSETS,
 } from "./constants.js";
@@ -29,17 +26,16 @@ import {
   getCookie,
   getHeaderValue,
   readFormBody,
-  readJsonBody,
   redirect,
   RequestError,
   sendJson,
   sendSseHeaders,
   writeSseEvent,
 } from "./http.js";
+import { handleGeneralApiRoute } from "./serverGeneralRoutes.js";
+import { handleManagedInstanceApiRoute } from "./serverManagedInstanceRoutes.js";
 import {
   getFileSize,
-  listFiles,
-  readFromAllowedDir,
   readStreamChunk,
   readTailLines,
   sendStaticAsset,
@@ -47,17 +43,13 @@ import {
 } from "./files.js";
 import {
   clampInt,
-  handleManagedInstanceErrors,
   log,
-  redactInstanceForConsole,
-  sanitizeCycleOutcome,
   sanitizeHost,
 } from "./serverUtils.js";
 import type {
   AuthState,
   DiagnosticTargetControl,
   ManagedInstanceAnalysis,
-  ManagedInstanceComparisonResponse,
   ManagedInstanceControl,
   ManagedInstanceDiscoverability,
   ManagedInstanceDiagnostics,
@@ -70,7 +62,6 @@ import type {
   ObserverControl,
 } from "./types.js";
 import type { LlmInvocationGate } from "../llm/invocationGate.js";
-import { normalizeInvocationKeyPart } from "../llm/invocationGate.js";
 
 export class OperatorConsoleServer {
   private readonly authToken: string | undefined;
@@ -272,1043 +263,18 @@ export class OperatorConsoleServer {
       return;
     }
 
-    if (path === "/api/instances") {
-      await this.handleInstancesCollection(req, res);
+    if (await handleGeneralApiRoute(this.generalRouteContext(), req, res, url, path)) {
       return;
     }
-
-    if (path === "/api/instance-presets") {
-      await this.handleInstancePresets(req, res);
+    if (await handleManagedInstanceApiRoute(this.managedInstanceRouteContext(), req, res, path)) {
       return;
     }
-
-    if (path === "/api/instance-presets/apply") {
-      await this.handleApplyInstancePreset(req, res);
-      return;
-    }
-
-    if (path.startsWith("/api/instance-presets/")) {
-      await this.handleInstancePresetAction(req, res, path);
-      return;
-    }
-
-    if (path === "/api/observer/target") {
-      await this.handleDiagnosticTarget(req, res);
-      return;
-    }
-
-    if (path === "/api/observer/run") {
-      await this.handleObserverRun(req, res);
-      return;
-    }
-
-    if (path === "/api/operator/events") {
-      await this.handleOperatorEvents(req, url, res);
-      return;
-    }
-
-    if (path === "/api/discoverability/results") {
-      await this.handleDiscoverabilityResults(req, url, res);
-      return;
-    }
-
-    if (path === "/api/discoverability/summary") {
-      await this.handleDiscoverabilitySummary(req, url, res);
-      return;
-    }
-
-    if (path === "/api/search-health/results") {
-      await this.handleSearchHealthResults(req, url, res);
-      return;
-    }
-
-    if (path === "/api/search-health/summary") {
-      await this.handleSearchHealthSummary(req, url, res);
-      return;
-    }
-
-    if (path === "/api/llm/invocations") {
-      await this.handleLlmInvocationResults(req, url, res);
-      return;
-    }
-
-    if (path === "/api/llm/invocations/summary") {
-      await this.handleLlmInvocationSummary(req, url, res);
-      return;
-    }
-
-    if (path === "/api/instances/compare") {
-      await this.handleInstanceComparison(req, url, res);
-      return;
-    }
-
-    if (path === "/api/discoverability/check") {
-      await this.handleDiscoverabilityCheck(req, res);
-      return;
-    }
-
-    if (path === "/api/searches/launch") {
-      await this.handleOperatorSearchLaunch(req, res);
-      return;
-    }
-
-    if (path.startsWith("/api/instances/")) {
-      await this.handleInstanceAction(req, res, path);
-      return;
-    }
-
     if (req.method !== "GET") {
       sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-
-    if (path === "/api/health") {
-      const runtimeState = this.getRuntimeState ? await this.getRuntimeState() : undefined;
-      const schedulerStatus = this.observerControl?.getStatus();
-      sendJson(res, 200, {
-        ok: true,
-        startedAt: this.startedAt,
-        now: new Date().toISOString(),
-        uptimeSec: Math.round(process.uptime()),
-        scheduler: schedulerStatus
-          ? {
-              started: schedulerStatus.started,
-              cycleInFlight: schedulerStatus.cycleInFlight,
-              intervalMs: schedulerStatus.intervalMs,
-              currentCycleStartedAt:
-                schedulerStatus.currentCycleStartedAt ?? runtimeState?.currentCycleStartedAt,
-              currentCycleTarget:
-                schedulerStatus.currentCycleTarget ?? runtimeState?.currentCycleTarget,
-              lastCycleStartedAt: runtimeState?.lastCycleStartedAt,
-              lastCycleCompletedAt: runtimeState?.lastCycleCompletedAt,
-              lastCycleDurationMs: runtimeState?.lastCycleDurationMs,
-              lastCycleOutcome: sanitizeCycleOutcome(runtimeState?.lastCycleOutcome),
-            }
-          : undefined,
-        observer: runtimeState
-          ? {
-              activeDiagnosticTarget: runtimeState.activeDiagnosticTarget,
-              lastObservedTarget: runtimeState.lastObservedTarget,
-              lastRun: runtimeState.lastRun,
-              lastHealthScore: runtimeState.lastHealthScore,
-              currentCycleStartedAt: runtimeState.currentCycleStartedAt,
-              currentCycleTarget: runtimeState.currentCycleTarget,
-              lastCycleStartedAt: runtimeState.lastCycleStartedAt,
-              lastCycleCompletedAt: runtimeState.lastCycleCompletedAt,
-              lastCycleDurationMs: runtimeState.lastCycleDurationMs,
-              lastCycleOutcome: sanitizeCycleOutcome(runtimeState.lastCycleOutcome),
-              lastTargetFailureReason: runtimeState.lastTargetFailureReason
-                ? redactText(runtimeState.lastTargetFailureReason)
-                : runtimeState.lastTargetFailureReason,
-            }
-          : undefined,
-        paths: {
-          rustMuleLogPath: this.rustMuleLogPath,
-          llmLogDir: this.llmLogDir,
-          proposalDir: this.proposalDir,
-        },
-      });
-      return;
-    }
-
-    if (path === "/api/logs/app") {
-      const lines = clampInt(
-        parseInt(url.searchParams.get("lines") ?? "", 10),
-        DEFAULT_LOG_LINES,
-        1,
-        MAX_LOG_LINES,
-      );
-      sendJson(res, 200, {
-        ok: true,
-        lines: this.getAppLogs(lines).map(redactLine),
-      });
-      return;
-    }
-
-    if (path === "/api/logs/rust-mule") {
-      const lines = clampInt(
-        parseInt(url.searchParams.get("lines") ?? "", 10),
-        DEFAULT_LOG_LINES,
-        1,
-        MAX_LOG_LINES,
-      );
-      const content = await readTailLines(this.rustMuleLogPath, lines, MAX_FILE_BYTES);
-      sendJson(res, 200, { ok: true, lines: content.map(redactLine) });
-      return;
-    }
-
-    if (path === "/api/llm/logs") {
-      const files = await listFiles(this.llmLogDir, (name) => /^LLM_.*\.log$/i.test(name));
-      sendJson(res, 200, { ok: true, files });
-      return;
-    }
-
-    if (path.startsWith("/api/llm/logs/")) {
-      const fileName = decodeURIComponent(path.slice("/api/llm/logs/".length));
-      const content = await readFromAllowedDir(this.llmLogDir, fileName, MAX_FILE_BYTES);
-      sendJson(res, 200, {
-        ok: true,
-        file: content.name,
-        sizeBytes: content.sizeBytes,
-        truncated: content.truncated,
-        content: redactText(content.content),
-      });
-      return;
-    }
-
-    if (path === "/api/proposals") {
-      const files = await listFiles(this.proposalDir, (name) => name.toLowerCase().endsWith(".patch"));
-      sendJson(res, 200, { ok: true, files });
-      return;
-    }
-
-    if (path.startsWith("/api/proposals/")) {
-      const fileName = decodeURIComponent(path.slice("/api/proposals/".length));
-      const content = await readFromAllowedDir(this.proposalDir, fileName, MAX_FILE_BYTES);
-      sendJson(res, 200, {
-        ok: true,
-        file: content.name,
-        sizeBytes: content.sizeBytes,
-        truncated: content.truncated,
-        content: redactText(content.content),
-      });
       return;
     }
 
     sendJson(res, 404, { ok: false, error: "not found" });
-  }
-
-  private async handleObserverRun(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    if (!this.observerControl) {
-      sendJson(res, 501, { ok: false, error: "observer control unavailable" });
-      return;
-    }
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-
-    const decision = this.humanInvocationGate?.tryAcquire([
-      { key: "human_llm:global", cooldownMs: 30_000 },
-      { key: "human_llm:observer_run", cooldownMs: 300_000 },
-    ]);
-    if (decision && !decision.ok) {
-      const recordedAt = new Date().toISOString();
-      await this.appendInvocationAudit({
-        surface: "manual_observer_run",
-        trigger: "human",
-        startedAt: recordedAt,
-        completedAt: recordedAt,
-        durationMs: 0,
-        toolCalls: 0,
-        toolRounds: 0,
-        finishReason: "rate_limited",
-        rateLimitReason: decision.reason,
-        retryAfterSec: decision.retryAfterSec,
-      });
-      sendJson(res, 429, {
-        ok: false,
-        error: `observer run is rate-limited (${decision.reason})`,
-        retryAfterSec: decision.retryAfterSec,
-      });
-      return;
-    }
-
-    const result = this.observerControl.triggerRunNow();
-    if (!result.accepted) {
-      decision?.lease.release({ cooldown: false });
-      sendJson(res, 409, { ok: false, error: result.reason ?? "observer run not accepted" });
-      return;
-    }
-    decision?.lease.release();
-    let target: DiagnosticTargetRef | undefined;
-    try {
-      target = this.diagnosticTarget ? await this.diagnosticTarget.getActiveTarget() : undefined;
-    } catch (err) {
-      log("warn", "operatorConsole", `Failed to resolve active target for run-now event: ${String(err)}`);
-    }
-    await this.appendOperatorEvent({
-      type: "observer_run_requested",
-      message: `Operator triggered a scheduled observer cycle for ${describeDiagnosticTarget(target)}`,
-      target,
-      actor: "operator_console",
-    });
-    sendJson(res, 202, {
-      ok: true,
-      accepted: true,
-      scheduler: this.observerControl.getStatus(),
-    });
-  }
-
-  private async handleOperatorEvents(
-    req: IncomingMessage,
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.operatorEvents) {
-      sendJson(res, 501, { ok: false, error: "operator event history unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const limit = clampInt(
-      parseInt(url.searchParams.get("limit") ?? "", 10),
-      30,
-      1,
-      200,
-    );
-    const events = await this.operatorEvents.listRecent(limit);
-    sendJson(res, 200, {
-      ok: true,
-      events: events.map((event) => ({
-        ...event,
-        message: redactText(event.message),
-      })),
-    });
-  }
-
-  private async handleInstanceComparison(
-    req: IncomingMessage,
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.managedInstances || !this.managedInstanceDiagnostics) {
-      sendJson(res, 501, { ok: false, error: "managed instance comparison unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-
-    const leftId = url.searchParams.get("left")?.trim();
-    const rightId = url.searchParams.get("right")?.trim();
-    if (!leftId || !rightId) {
-      sendJson(res, 400, { ok: false, error: "left and right managed instance ids are required" });
-      return;
-    }
-    if (leftId === rightId) {
-      sendJson(res, 400, { ok: false, error: "left and right managed instance ids must differ" });
-      return;
-    }
-
-    const comparison = await handleManagedInstanceErrors(async (): Promise<ManagedInstanceComparisonResponse> => {
-      const instances = await this.managedInstances!.listInstances();
-      const leftInstance = instances.find((instance) => instance.id === leftId);
-      const rightInstance = instances.find((instance) => instance.id === rightId);
-      if (!leftInstance) {
-        throw new Error(`Managed instance not found: ${leftId}`);
-      }
-      if (!rightInstance) {
-        throw new Error(`Managed instance not found: ${rightId}`);
-      }
-      const [leftSnapshot, rightSnapshot] = await Promise.all([
-        this.managedInstanceDiagnostics!.getSnapshot(leftId),
-        this.managedInstanceDiagnostics!.getSnapshot(rightId),
-      ]);
-      return {
-        left: {
-          instance: redactInstanceForConsole(leftInstance),
-          snapshot: leftSnapshot,
-        },
-        right: {
-          instance: redactInstanceForConsole(rightInstance),
-          snapshot: rightSnapshot,
-        },
-      };
-    });
-
-    sendJson(res, 200, {
-      ok: true,
-      comparison,
-    });
-  }
-
-  private async handleDiagnosticTarget(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    if (!this.diagnosticTarget) {
-      sendJson(res, 501, { ok: false, error: "diagnostic target control unavailable" });
-      return;
-    }
-
-    if (req.method === "GET") {
-      const target = await this.diagnosticTarget.getActiveTarget();
-      sendJson(res, 200, { ok: true, target });
-      return;
-    }
-
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-
-    const payload = await readJsonBody(req);
-    const target = await handleManagedInstanceErrors(() =>
-      this.diagnosticTarget!.setActiveTarget({
-        kind:
-          (typeof payload.kind === "string" ? payload.kind : "external") as DiagnosticTargetRef["kind"],
-        instanceId: typeof payload.instanceId === "string" ? payload.instanceId : undefined,
-      }),
-    );
-    sendJson(res, 200, { ok: true, target });
-  }
-
-  private async handleDiscoverabilityCheck(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.managedInstanceDiscoverability) {
-      sendJson(res, 501, { ok: false, error: "managed discoverability checks unavailable" });
-      return;
-    }
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const payload = await readJsonBody(req);
-    const result = await handleManagedInstanceErrors(() =>
-      this.managedInstanceDiscoverability!.runControlledCheck({
-        publisherInstanceId:
-          typeof payload.publisherInstanceId === "string" ? payload.publisherInstanceId : "",
-        searcherInstanceId:
-          typeof payload.searcherInstanceId === "string" ? payload.searcherInstanceId : "",
-        fixtureId: typeof payload.fixtureId === "string" ? payload.fixtureId : undefined,
-        timeoutMs: typeof payload.timeoutMs === "number" ? payload.timeoutMs : undefined,
-        pollIntervalMs:
-          typeof payload.pollIntervalMs === "number" ? payload.pollIntervalMs : undefined,
-      }),
-    );
-    await this.appendOperatorEvent({
-      type: "managed_instance_control_applied",
-      message:
-        `Operator ran controlled discoverability check from ${result.publisherInstanceId} to ${result.searcherInstanceId} ` +
-        `with outcome ${result.outcome}.`,
-      target: {
-        kind: "managed_instance",
-        instanceId: result.searcherInstanceId,
-      },
-      actor: "operator_console",
-    });
-    if (this.discoverabilityResults) {
-      await this.discoverabilityResults.append(result);
-    }
-    if (this.searchHealthResults) {
-      await this.searchHealthResults.appendControlledDiscoverability(result);
-    }
-    sendJson(res, 200, { ok: true, result });
-  }
-
-  private async handleOperatorSearchLaunch(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.operatorSearches) {
-      sendJson(res, 501, { ok: false, error: "manual keyword search unavailable" });
-      return;
-    }
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const payload = await readJsonBody(req);
-    const mode = typeof payload.mode === "string" ? payload.mode : undefined;
-    if (mode !== "active_target" && mode !== "managed_instance") {
-      sendJson(res, 400, {
-        ok: false,
-        error: "invalid mode: expected 'active_target' or 'managed_instance'",
-      });
-      return;
-    }
-    const query =
-      typeof payload.query === "string" && payload.query.trim().length > 0
-        ? payload.query
-        : undefined;
-    const keywordIdHex =
-      typeof payload.keywordIdHex === "string" && payload.keywordIdHex.trim().length > 0
-        ? payload.keywordIdHex
-        : undefined;
-    if (!query && !keywordIdHex) {
-      sendJson(res, 400, {
-        ok: false,
-        error: "manual search requires a non-empty 'query' or 'keywordIdHex'",
-      });
-      return;
-    }
-    if (query && keywordIdHex) {
-      sendJson(res, 400, {
-        ok: false,
-        error: "manual search requires either 'query' or 'keywordIdHex', not both",
-      });
-      return;
-    }
-    const result = await handleManagedInstanceErrors(() =>
-      this.operatorSearches!.startSearch({
-        mode,
-        instanceId: typeof payload.instanceId === "string" ? payload.instanceId : undefined,
-        query,
-        keywordIdHex,
-      }),
-    );
-    await this.appendOperatorEvent({
-      type: "managed_instance_control_applied",
-      message: `Operator launched manual keyword search against ${result.targetLabel} (${result.searchId}).`,
-      target: result.target,
-      actor: "operator_console",
-    });
-    sendJson(res, 200, { ok: true, result });
-  }
-
-  private async handleDiscoverabilityResults(
-    req: IncomingMessage,
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.discoverabilityResults) {
-      sendJson(res, 501, { ok: false, error: "discoverability result history unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const limit = clampInt(
-      parseInt(url.searchParams.get("limit") ?? "", 10),
-      20,
-      1,
-      200,
-    );
-    const results = await this.discoverabilityResults.listRecent(limit);
-    sendJson(res, 200, { ok: true, results });
-  }
-
-  private async handleDiscoverabilitySummary(
-    req: IncomingMessage,
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.discoverabilityResults) {
-      sendJson(res, 501, { ok: false, error: "discoverability summary unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const limit = clampInt(
-      parseInt(url.searchParams.get("limit") ?? "", 10),
-      20,
-      1,
-      200,
-    );
-    const summary = await this.discoverabilityResults.summarizeRecent(limit);
-    sendJson(res, 200, { ok: true, summary });
-  }
-
-  private async handleSearchHealthResults(
-    req: IncomingMessage,
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.searchHealthResults) {
-      sendJson(res, 501, { ok: false, error: "search health history unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const limit = clampInt(
-      parseInt(url.searchParams.get("limit") ?? "", 10),
-      20,
-      1,
-      200,
-    );
-    const results = await this.searchHealthResults.listRecent(limit);
-    sendJson(res, 200, { ok: true, results });
-  }
-
-  private async handleSearchHealthSummary(
-    req: IncomingMessage,
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.searchHealthResults) {
-      sendJson(res, 501, { ok: false, error: "search health summary unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const limit = clampInt(
-      parseInt(url.searchParams.get("limit") ?? "", 10),
-      20,
-      1,
-      200,
-    );
-    const summary = await this.searchHealthResults.summarizeRecent(limit);
-    sendJson(res, 200, { ok: true, summary });
-  }
-
-  private async handleLlmInvocationResults(
-    req: IncomingMessage,
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.llmInvocationResults) {
-      sendJson(res, 501, { ok: false, error: "llm invocation history unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
-    const results = await this.llmInvocationResults.listRecent(limit);
-    sendJson(res, 200, { ok: true, results });
-  }
-
-  private async handleLlmInvocationSummary(
-    req: IncomingMessage,
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.llmInvocationResults) {
-      sendJson(res, 501, { ok: false, error: "llm invocation summary unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
-    const summary = await this.llmInvocationResults.summarizeRecent(limit);
-    sendJson(res, 200, { ok: true, summary });
-  }
-
-  private async handleInstancesCollection(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.managedInstances) {
-      sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
-      return;
-    }
-
-    if (req.method === "GET") {
-      const instances = await this.managedInstances.listInstances();
-      sendJson(res, 200, { ok: true, instances });
-      return;
-    }
-
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-
-    const payload = await readJsonBody(req);
-    const id = typeof payload.id === "string" ? payload.id : "";
-    const apiPort =
-      typeof payload.apiPort === "number" && Number.isInteger(payload.apiPort)
-        ? payload.apiPort
-        : undefined;
-    const created = await handleManagedInstanceErrors(() =>
-      this.managedInstances!.createPlannedInstance({ id, apiPort }),
-    );
-    await this.appendManagedInstanceControlEvent(
-      created,
-      `Operator created planned managed instance ${created.id}.`,
-    );
-    sendJson(res, 201, { ok: true, instance: created });
-  }
-
-  private async handleInstancePresets(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.managedInstancePresets) {
-      sendJson(res, 501, { ok: false, error: "managed instance presets unavailable" });
-      return;
-    }
-    if (req.method !== "GET") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    sendJson(res, 200, {
-      ok: true,
-      presets: this.managedInstancePresets.listPresets(),
-    });
-  }
-
-  private async handleApplyInstancePreset(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    if (!this.managedInstancePresets) {
-      sendJson(res, 501, { ok: false, error: "managed instance presets unavailable" });
-      return;
-    }
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const payload = await readJsonBody(req);
-    const applied = await handleManagedInstanceErrors(() =>
-      this.managedInstancePresets!.applyPreset({
-        presetId: typeof payload.presetId === "string" ? payload.presetId : "",
-        prefix: typeof payload.prefix === "string" ? payload.prefix : "",
-      }),
-    );
-    await this.appendManagedInstanceControlEvents(
-      applied.instances,
-      (instance) =>
-        `Operator applied preset ${applied.presetId} and created planned managed instance ${instance.id}.`,
-    );
-    sendJson(res, 201, { ok: true, applied });
-  }
-
-  private async handleInstancePresetAction(
-    req: IncomingMessage,
-    res: ServerResponse,
-    path: string,
-  ): Promise<void> {
-    if (!this.managedInstancePresets) {
-      sendJson(res, 501, { ok: false, error: "managed instance presets unavailable" });
-      return;
-    }
-
-    const suffix = path.slice("/api/instance-presets/".length);
-    const [prefixRaw, action] = suffix.split("/");
-    let prefix = "";
-    try {
-      prefix = decodeURIComponent(prefixRaw ?? "").trim();
-    } catch {
-      sendJson(res, 400, {
-        ok: false,
-        error: "invalid percent-encoding in preset group prefix",
-      });
-      return;
-    }
-    if (!prefix) {
-      sendJson(res, 400, { ok: false, error: "missing preset group prefix" });
-      return;
-    }
-    if (action !== "start" && action !== "stop" && action !== "restart") {
-      sendJson(res, 404, { ok: false, error: "preset action not found" });
-      return;
-    }
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    const lifecycleAction = action;
-    const actionVerb = pastTenseVerb(lifecycleAction);
-
-    const result = await handleManagedInstanceErrors(() => {
-      if (action === "start") {
-        return this.managedInstancePresets!.startPreset(prefix);
-      }
-      if (action === "stop") {
-        return this.managedInstancePresets!.stopPreset(prefix);
-      }
-      return this.managedInstancePresets!.restartPreset(prefix);
-    });
-    await this.appendManagedInstanceControlEvents(
-      result.instances,
-      (instance) => `Operator ${actionVerb} managed instance ${instance.id} from preset group ${prefix}.`,
-    );
-    if (action === "start") {
-      sendJson(res, 200, { ok: true, result, started: result });
-      return;
-    }
-    sendJson(res, 200, { ok: true, result });
-  }
-
-  private async handleInstanceAction(
-    req: IncomingMessage,
-    res: ServerResponse,
-    path: string,
-  ): Promise<void> {
-    const suffix = path.slice("/api/instances/".length);
-    const [idRaw, action, ...rest] = suffix.split("/");
-    let id = "";
-    try {
-      id = decodeURIComponent(idRaw ?? "").trim();
-    } catch {
-      sendJson(res, 400, { ok: false, error: "invalid percent-encoding in instance id" });
-      return;
-    }
-    if (!id) {
-      sendJson(res, 400, { ok: false, error: "missing instance id" });
-      return;
-    }
-
-    if (!action) {
-      if (req.method !== "GET") {
-        sendJson(res, 405, { ok: false, error: "method not allowed" });
-        return;
-      }
-      if (!this.managedInstances) {
-        sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
-        return;
-      }
-      const instance = await this.findManagedInstance(id);
-      if (!instance) {
-        sendJson(res, 404, { ok: false, error: `managed instance not found: ${id}` });
-        return;
-      }
-      sendJson(res, 200, { ok: true, instance });
-      return;
-    }
-
-    if (action === "logs") {
-      if (req.method !== "GET") {
-        sendJson(res, 405, { ok: false, error: "method not allowed" });
-        return;
-      }
-      if (!this.managedInstances) {
-        sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
-        return;
-      }
-      const instance = await this.findManagedInstance(id);
-      if (!instance) {
-        sendJson(res, 404, { ok: false, error: `managed instance not found: ${id}` });
-        return;
-      }
-      const lines = clampInt(
-        parseInt(new URL(req.url ?? "/", "http://operator-console.local").searchParams.get("lines") ?? "", 10),
-        DEFAULT_LOG_LINES,
-        1,
-        MAX_LOG_LINES,
-      );
-      const content = await readTailLines(instance.runtime.logPath, lines, MAX_FILE_BYTES);
-      sendJson(res, 200, {
-        ok: true,
-        instance: {
-          id: instance.id,
-          status: instance.status,
-        },
-        lines: content.map(redactLine),
-      });
-      return;
-    }
-
-    if (action === "diagnostics") {
-      if (req.method !== "GET") {
-        sendJson(res, 405, { ok: false, error: "method not allowed" });
-        return;
-      }
-      if (!this.managedInstanceDiagnostics) {
-        sendJson(res, 501, { ok: false, error: "managed instance diagnostics unavailable" });
-        return;
-      }
-      const snapshot = await handleManagedInstanceErrors(() =>
-        this.managedInstanceDiagnostics!.getSnapshot(id),
-      );
-      sendJson(res, 200, { ok: true, snapshot });
-      return;
-    }
-
-    if (action === "surface_diagnostics") {
-      if (req.method !== "GET") {
-        sendJson(res, 405, { ok: false, error: "method not allowed" });
-        return;
-      }
-      if (!this.managedInstanceSurfaceDiagnostics) {
-        sendJson(res, 501, { ok: false, error: "managed instance surface diagnostics unavailable" });
-        return;
-      }
-      const diagnostics = await handleManagedInstanceErrors(() =>
-        this.managedInstanceSurfaceDiagnostics!.getSummary(id),
-      );
-      sendJson(res, 200, { ok: true, diagnostics });
-      return;
-    }
-
-    if (action === "runtime_surface") {
-      if (req.method !== "GET") {
-        sendJson(res, 405, { ok: false, error: "method not allowed" });
-        return;
-      }
-      if (!this.managedInstanceSurfaceDiagnostics) {
-        sendJson(res, 501, { ok: false, error: "managed instance surface diagnostics unavailable" });
-        return;
-      }
-      const diagnostics = await handleManagedInstanceErrors(() =>
-        this.managedInstanceSurfaceDiagnostics!.getSnapshot(id),
-      );
-      sendJson(res, 200, { ok: true, diagnostics });
-      return;
-    }
-
-    if (action === "analyze") {
-      if (req.method !== "POST") {
-        sendJson(res, 405, { ok: false, error: "method not allowed" });
-        return;
-      }
-      if (!this.managedInstanceAnalysis) {
-        sendJson(res, 501, { ok: false, error: "managed instance analysis unavailable" });
-        return;
-      }
-      const instanceGateKeyPart = normalizeInvocationKeyPart(id, { maxLength: 48 }) ?? "unknown";
-      const decision = this.humanInvocationGate?.tryAcquire([
-        { key: "human_llm:global", cooldownMs: 30_000 },
-        { key: "human_llm:operator_analyze", cooldownMs: 60_000 },
-        { key: `human_llm:operator_analyze:instance:${instanceGateKeyPart}`, cooldownMs: 300_000 },
-      ]);
-      if (decision && !decision.ok) {
-        const recordedAt = new Date().toISOString();
-        await this.appendInvocationAudit({
-          surface: "managed_instance_analysis",
-          trigger: "human",
-          target: { kind: "managed_instance", instanceId: id },
-          startedAt: recordedAt,
-          completedAt: recordedAt,
-          durationMs: 0,
-          toolCalls: 0,
-          toolRounds: 0,
-          finishReason: "rate_limited",
-          rateLimitReason: decision.reason,
-          retryAfterSec: decision.retryAfterSec,
-        });
-        sendJson(res, 429, {
-          ok: false,
-          error: `managed instance analysis is rate-limited (${decision.reason})`,
-          retryAfterSec: decision.retryAfterSec,
-        });
-        return;
-      }
-      let analysis;
-      try {
-        analysis = await handleManagedInstanceErrors(() => this.managedInstanceAnalysis!.analyze(id));
-      } finally {
-        decision?.lease.release({ cooldown: analysis?.available !== false });
-      }
-      sendJson(res, 200, { ok: true, analysis });
-      return;
-    }
-
-    if (action === "shared") {
-      await this.handleInstanceSharedAction(req, res, id, rest);
-      return;
-    }
-
-    if (!this.managedInstances) {
-      sendJson(res, 501, { ok: false, error: "managed instance control unavailable" });
-      return;
-    }
-
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-    if (action !== "start" && action !== "stop" && action !== "restart") {
-      sendJson(res, 404, { ok: false, error: "not found" });
-      return;
-    }
-    const lifecycleAction = action;
-    const actionVerb = pastTenseVerb(lifecycleAction);
-
-    let instance: ManagedInstanceRecord;
-    if (lifecycleAction === "start") {
-      instance = await handleManagedInstanceErrors(() => this.managedInstances!.startInstance(id));
-    } else if (lifecycleAction === "stop") {
-      instance = await handleManagedInstanceErrors(() =>
-        this.managedInstances!.stopInstance(id, "stopped from operator console"),
-      );
-    } else {
-      instance = await handleManagedInstanceErrors(() => this.managedInstances!.restartInstance(id));
-    }
-    await this.appendManagedInstanceControlEvent(
-      instance,
-      `Operator ${actionVerb} managed instance ${instance.id}.`,
-    );
-
-    sendJson(res, 200, { ok: true, instance });
-  }
-
-  private async handleInstanceSharedAction(
-    req: IncomingMessage,
-    res: ServerResponse,
-    id: string,
-    actionSegments: string[],
-  ): Promise<void> {
-    if (!this.managedInstanceSharing) {
-      sendJson(res, 501, { ok: false, error: "managed instance shared-content control unavailable" });
-      return;
-    }
-
-    const [subAction] = actionSegments;
-    if (actionSegments.length > 1) {
-      sendJson(res, 404, { ok: false, error: "not found" });
-      return;
-    }
-    if (!subAction) {
-      if (req.method !== "GET") {
-        sendJson(res, 405, { ok: false, error: "method not allowed" });
-        return;
-      }
-      const shared = await handleManagedInstanceErrors(() =>
-        this.managedInstanceSharing!.getOverview(id),
-      );
-      sendJson(res, 200, { ok: true, shared });
-      return;
-    }
-
-    if (subAction === "fixtures") {
-      if (req.method !== "POST") {
-        sendJson(res, 405, { ok: false, error: "method not allowed" });
-        return;
-      }
-      const payload = await readJsonBody(req);
-      const fixture = await handleManagedInstanceErrors(() =>
-        this.managedInstanceSharing!.ensureFixture(id, {
-          fixtureId: typeof payload.fixtureId === "string" ? payload.fixtureId : undefined,
-        }),
-      );
-      await this.appendOperatorEvent({
-        type: "managed_instance_control_applied",
-        message: `Operator created fixture ${fixture.fileName} for managed instance ${id}.`,
-        target: {
-          kind: "managed_instance",
-          instanceId: id,
-        },
-        actor: "operator_console",
-      });
-      sendJson(res, 201, { ok: true, fixture });
-      return;
-    }
-
-    if (req.method !== "POST") {
-      sendJson(res, 405, { ok: false, error: "method not allowed" });
-      return;
-    }
-
-    if (subAction !== "reindex" && subAction !== "republish_sources" && subAction !== "republish_keywords") {
-      sendJson(res, 404, { ok: false, error: "not found" });
-      return;
-    }
-
-    const shared = await handleManagedInstanceErrors(() => {
-      if (subAction === "reindex") {
-        return this.managedInstanceSharing!.reindex(id);
-      }
-      if (subAction === "republish_sources") {
-        return this.managedInstanceSharing!.republishSources(id);
-      }
-      return this.managedInstanceSharing!.republishKeywords(id);
-    });
-    await this.appendOperatorEvent({
-      type: "managed_instance_control_applied",
-      message: `Operator triggered ${subAction} for managed instance ${id} shared content.`,
-      target: {
-        kind: "managed_instance",
-        instanceId: id,
-      },
-      actor: "operator_console",
-    });
-    sendJson(res, 200, { ok: true, shared });
   }
 
   private async appendManagedInstanceControlEvent(
@@ -1580,10 +546,48 @@ export class OperatorConsoleServer {
       log("warn", "operatorConsole", `Failed to append invocation audit: ${String(err)}`);
     }
   }
-}
 
-function pastTenseVerb(action: "start" | "stop" | "restart"): string {
-  if (action === "start") return "started";
-  if (action === "stop") return "stopped";
-  return "restarted";
+  private generalRouteContext() {
+    return {
+      startedAt: this.startedAt,
+      rustMuleLogPath: this.rustMuleLogPath,
+      llmLogDir: this.llmLogDir,
+      proposalDir: this.proposalDir,
+      getAppLogs: this.getAppLogs,
+      getRuntimeState: this.getRuntimeState,
+      managedInstances: this.managedInstances,
+      managedInstanceDiagnostics: this.managedInstanceDiagnostics,
+      diagnosticTarget: this.diagnosticTarget,
+      observerControl: this.observerControl,
+      operatorEvents: this.operatorEvents,
+      discoverabilityResults: this.discoverabilityResults,
+      searchHealthResults: this.searchHealthResults,
+      llmInvocationResults: this.llmInvocationResults,
+      humanInvocationGate: this.humanInvocationGate,
+      appendOperatorEvent: this.appendOperatorEvent.bind(this),
+      appendInvocationAudit: this.appendInvocationAudit.bind(this),
+    };
+  }
+
+  private managedInstanceRouteContext() {
+    return {
+      managedInstances: this.managedInstances,
+      managedInstanceDiagnostics: this.managedInstanceDiagnostics,
+      managedInstanceSurfaceDiagnostics: this.managedInstanceSurfaceDiagnostics,
+      managedInstanceAnalysis: this.managedInstanceAnalysis,
+      managedInstanceSharing: this.managedInstanceSharing,
+      managedInstanceDiscoverability: this.managedInstanceDiscoverability,
+      operatorSearches: this.operatorSearches,
+      managedInstancePresets: this.managedInstancePresets,
+      diagnosticTarget: this.diagnosticTarget,
+      discoverabilityResults: this.discoverabilityResults,
+      searchHealthResults: this.searchHealthResults,
+      humanInvocationGate: this.humanInvocationGate,
+      appendManagedInstanceControlEvent: this.appendManagedInstanceControlEvent.bind(this),
+      appendManagedInstanceControlEvents: this.appendManagedInstanceControlEvents.bind(this),
+      appendOperatorEvent: this.appendOperatorEvent.bind(this),
+      appendInvocationAudit: this.appendInvocationAudit.bind(this),
+      findManagedInstance: this.findManagedInstance.bind(this),
+    };
+  }
 }
