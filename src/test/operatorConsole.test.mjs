@@ -2373,10 +2373,9 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.equal(instancesModuleRes.status, 200);
     const instancesModule = await instancesModuleRes.text();
     assert.match(instancesModule, /confirmAction/);
-    assert.match(instancesModule, /runtime_surface/);
-    assert.match(instancesModule, /instance-runtime-summary/);
-    assert.match(instancesModule, /instance-runtime-highlights/);
-    assert.match(instancesModule, /instance-runtime-search-threads/);
+    assert.match(instancesModule, /instanceSurfaceView/);
+    assert.match(instancesModule, /instanceWorkflowActions/);
+    assert.match(instancesModule, /renderSelectedControlAvailability/);
 
     const instanceViewsModuleRes = await fetch(`${baseUrl}/static/operatorConsole/instanceViews.js`, {
       headers: { Cookie: cookie },

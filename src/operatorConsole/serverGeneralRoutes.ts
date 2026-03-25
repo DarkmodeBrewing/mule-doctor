@@ -17,7 +17,13 @@ import {
   readTailLines,
 } from "./files.js";
 import { readJsonBody, sendJson } from "./http.js";
-import { clampInt, handleManagedInstanceErrors, redactInstanceForConsole, sanitizeCycleOutcome } from "./serverUtils.js";
+import {
+  clampInt,
+  handleManagedInstanceErrors,
+  log,
+  redactInstanceForConsole,
+  sanitizeCycleOutcome,
+} from "./serverUtils.js";
 import type {
   DiagnosticTargetControl,
   DiscoverabilityResultsStore,
@@ -195,7 +201,12 @@ async function handleObserverRun(
   let target: DiagnosticTargetRef | undefined;
   try {
     target = ctx.diagnosticTarget ? await ctx.diagnosticTarget.getActiveTarget() : undefined;
-  } catch {
+  } catch (err) {
+    log(
+      "warn",
+      "operatorConsole",
+      `Failed to resolve active target for run-now event: ${String(err)}`,
+    );
     target = undefined;
   }
   await ctx.appendOperatorEvent({
