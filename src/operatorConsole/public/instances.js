@@ -6,16 +6,12 @@ import {
   INSTANCE_DIAGNOSTICS_PLACEHOLDER,
   INSTANCE_LOGS_PLACEHOLDER,
   INSTANCE_SHARED_PLACEHOLDER,
-  LOG_LINE_LIMIT,
 } from "./constants.js";
 import { createInstanceCompareController } from "./instanceCompare.js";
 import { createInstancePresetsController } from "./instancePresets.js";
+import { createInstanceSurfaceView } from "./instanceSurfaceView.js";
 import { createInstanceViewsController } from "./instanceViews.js";
-
-const UNLOADED_PUBLISH_NOTE =
-  "Publish status is inferred from shared-file fields such as <code>keyword_publish_*</code>. A dedicated upstream publish-job API is not available.";
-const LOADED_PUBLISH_NOTE =
-  "Publish status is inferred from shared-file <code>keyword_publish_*</code> fields. Treat queued, failed, and acked values as file-level publish signals, not a complete active publish-job queue.";
+import { createInstanceWorkflowActions } from "./instanceWorkflowActions.js";
 
 export function createInstancesController({
   state,
@@ -36,13 +32,6 @@ export function createInstancesController({
       return window.confirm(message);
     }
     return true;
-  }
-
-  function renderControlState() {
-    views.renderInstanceList(state.currentManagedInstances);
-    views.renderInstanceGroups(state.currentManagedInstances);
-    views.renderSelectedInstanceTimelineControls();
-    renderSelectedControlAvailability();
   }
 
   function getSelectedManagedInstance() {
@@ -107,277 +96,12 @@ export function createInstancesController({
     element.className = isError ? "status" : "muted";
   }
 
-  function renderSurfaceDiagnosticsSummary(diagnostics) {
-    const element = document.getElementById("instance-runtime-summary");
-    const summary = diagnostics?.summary;
-    if (!summary) {
-      element.textContent = "No runtime surface summary loaded.";
-      element.className = "preset-help muted";
-      return;
-    }
-
-    const parts = [
-      `Observed: ${new Date(diagnostics.observedAt).toLocaleString()}`,
-      `Searches: ${summary.searches.totalSearches} total, ${summary.searches.activeSearches} active, ready=${summary.searches.ready ? "yes" : "no"}`,
-      `Publish: queued=${summary.sharedLibrary.keywordPublishQueuedCount}, failed=${summary.sharedLibrary.keywordPublishFailedCount}, acked=${summary.sharedLibrary.keywordPublishAckedCount}`,
-      `Shared files: ${summary.sharedLibrary.totalFiles}`,
-      `Downloads: ${summary.downloads.totalDownloads} total, ${summary.downloads.activeDownloads} active, errors=${summary.downloads.downloadsWithErrors}`,
-    ];
-    element.textContent = parts.join(" • ");
-    element.className = "preset-help";
-  }
-
-  function renderSurfaceDiagnosticsHighlights(diagnostics) {
-    const element = document.getElementById("instance-runtime-highlights");
-    const highlights = diagnostics?.highlights;
-    if (!highlights) {
-      element.textContent = "No runtime surface highlights loaded.";
-      element.className = "preset-help muted";
-      return;
-    }
-
-    const sections = [
-      formatHighlightSection("Searches", highlights.searches),
-      formatHighlightSection("Shared actions", highlights.sharedActions),
-      formatHighlightSection("Downloads", highlights.downloads),
-    ];
-    element.textContent = sections.join(" | ");
-    element.className = "preset-help";
-  }
-
-  function renderRuntimeSurface(snapshot) {
-    const summaryElement = document.getElementById("instance-runtime-surface-summary");
-    const publishNoteElement = document.getElementById("instance-runtime-publish-note");
-    if (!snapshot?.detail) {
-      summaryElement.textContent = "No structured runtime surface loaded.";
-      summaryElement.className = "preset-help muted";
-      publishNoteElement.innerHTML = UNLOADED_PUBLISH_NOTE;
-      publishNoteElement.className = "preset-help muted";
-      renderSurfaceList("instance-runtime-search-threads", [], () => "", "Runtime surface not loaded.");
-      renderSurfaceList("instance-runtime-publish-files", [], () => "", "Runtime surface not loaded.");
-      renderSurfaceList("instance-runtime-shared-actions", [], () => "", "Runtime surface not loaded.");
-      renderSurfaceList("instance-runtime-downloads", [], () => "", "Runtime surface not loaded.");
-      return;
-    }
-
-    const detail = snapshot.detail;
-    const parts = [
-      `Observed: ${new Date(snapshot.observedAt).toLocaleString()}`,
-      `${detail.searches.length} search threads`,
-      `${detail.sharedFiles.length} shared files`,
-      `${detail.sharedActions.length} shared actions`,
-      `${detail.downloads.length} downloads`,
-    ];
-    summaryElement.textContent = parts.join(" • ");
-    summaryElement.className = "preset-help";
-    publishNoteElement.innerHTML = LOADED_PUBLISH_NOTE;
-    publishNoteElement.className = "preset-help";
-
-    renderSurfaceList("instance-runtime-search-threads", detail.searches, (search) => ({
-      title: search.label,
-      meta: [
-        `state ${search.state}`,
-        typeof search.ageSecs === "number" ? `age ${formatAgeSeconds(search.ageSecs)}` : "",
-        `${search.hits} hits`,
-        search.wantSearch ? "wanted" : "",
-        search.publishEnabled ? "publish enabled" : "",
-        search.publishAcked ? "publish acked" : "",
-        search.keywordIdHex ? `keyword ${search.keywordIdHex}` : "",
-        search.searchId ? `search ${search.searchId}` : "",
-      ].filter((value) => value),
-    }));
-    renderSurfaceList("instance-runtime-publish-files", detail.sharedFiles, (file) => ({
-      title: file.fileName,
-      meta: [
-        file.localSourceCached ? "source cached" : "",
-        file.keywordPublishQueued ? "publish queued" : "",
-        file.keywordPublishFailed ? "publish failed" : "",
-        file.keywordPublishAckedCount > 0 ? `${file.keywordPublishAckedCount} publish acks` : "",
-        file.sourcePublishResponseReceived ? "source response received" : "",
-        file.queuedDownloads > 0 ? `${file.queuedDownloads} queued downloads` : "",
-        file.inflightDownloads > 0 ? `${file.inflightDownloads} inflight downloads` : "",
-        file.queuedUploads > 0 ? `${file.queuedUploads} queued uploads` : "",
-        file.inflightUploads > 0 ? `${file.inflightUploads} inflight uploads` : "",
-        typeof file.sizeBytes === "number" ? `${file.sizeBytes} bytes` : "",
-        file.fileIdHex ? `file ${file.fileIdHex}` : "",
-      ].filter((value) => value),
-    }));
-    renderSurfaceList("instance-runtime-shared-actions", detail.sharedActions, (action) => ({
-      title: action.kind,
-      meta: [
-        `state ${action.state}`,
-        action.fileName ? `file ${action.fileName}` : "",
-        action.fileIdHex ? `id ${action.fileIdHex}` : "",
-        action.error ? `error ${action.error}` : "",
-      ].filter((value) => value),
-    }));
-    renderSurfaceList("instance-runtime-downloads", detail.downloads, (download) => ({
-      title: download.fileName,
-      meta: [
-        `state ${download.state}`,
-        typeof download.progressPct === "number" ? `${download.progressPct}%` : "",
-        download.sourceCount > 0 ? `${download.sourceCount} sources` : "0 sources",
-        download.lastError ? `error ${download.lastError}` : "",
-        download.fileHashMd4Hex ? `hash ${download.fileHashMd4Hex}` : "",
-      ].filter((value) => value),
-    }));
-  }
-
-  function renderSurfaceList(elementId, items, formatter, emptyMessage = "None observed.") {
-    const element = document.getElementById(elementId);
-    element.replaceChildren();
-    if (!Array.isArray(items) || items.length === 0) {
-      element.textContent = emptyMessage;
-      element.className = "surface-list muted";
-      return;
-    }
-    element.className = "surface-list";
-    for (const item of items) {
-      const entry = formatter(item);
-      const wrapper = document.createElement("div");
-      wrapper.className = "surface-entry";
-      const title = document.createElement("div");
-      title.className = "surface-entry-title";
-      title.textContent = entry.title;
-      const meta = document.createElement("div");
-      meta.className = "surface-entry-meta";
-      meta.textContent = entry.meta.join(" • ");
-      wrapper.append(title, meta);
-      element.appendChild(wrapper);
-    }
-  }
-
-  function formatAgeSeconds(ageSecs) {
-    if (ageSecs < 60) {
-      return `${ageSecs}s`;
-    }
-    const minutes = Math.floor(ageSecs / 60);
-    const seconds = ageSecs % 60;
-    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-  }
-
-  function formatHighlightSection(label, items) {
-    if (!Array.isArray(items) || items.length === 0) {
-      return `${label}: none`;
-    }
-    return `${label}: ${items.join(" • ")}`;
-  }
-
-  function renderSharedSummary(shared) {
-    const element = document.getElementById("selected-instance-shared-summary");
-    if (!shared) {
-      element.textContent = "No shared-content overview loaded.";
-      element.className = "preset-help muted";
-      return;
-    }
-
-    const parts = [
-      `Instance: ${shared.instanceId}`,
-      `${shared.files?.length ?? 0} shared files`,
-      `${shared.actions?.length ?? 0} shared actions`,
-      `${shared.downloads?.length ?? 0} downloads`,
-    ];
-    const firstFile = shared.files?.[0]?.identity?.file_name;
-    if (firstFile) {
-      parts.push(`Sample file: ${firstFile}`);
-    }
-    element.textContent = parts.join(" • ");
-    element.className = "preset-help";
-  }
-
-  function renderDiscoverabilitySummary(result) {
-    const element = document.getElementById("selected-instance-discoverability-summary");
-    if (!result) {
-      element.textContent = "No discoverability result loaded.";
-      element.className = "preset-help muted";
-      return;
-    }
-
-    const parts = [
-      `${result.publisherInstanceId} -> ${result.searcherInstanceId}`,
-      `Outcome: ${result.outcome}`,
-      `Results: ${result.resultCount}`,
-      `Search ID: ${result.searchId}`,
-    ];
-    if (result.fixture?.fileName) {
-      parts.push(`Fixture: ${result.fixture.fileName}`);
-    }
-    element.textContent = parts.join(" • ");
-    element.className = "preset-help";
-  }
-
-  function renderManualSearchSummary(result) {
-    const element = document.getElementById("selected-instance-manual-search-summary");
-    const mode = document.getElementById("manual-search-mode").value;
-    const selected = getSelectedManagedInstance();
-    const activeTargetLabel = statusCards.targetLabel(state.currentScheduledTarget || { kind: "external" });
-    if (!result) {
-      element.textContent =
-        mode === "active_target"
-          ? `Manual search will launch against ${activeTargetLabel}.`
-          : selected
-            ? `Manual search will launch against ${selected.id}.`
-            : "Select a managed instance or switch to the active diagnostic target.";
-      element.className = "preset-help muted";
-      return;
-    }
-
-    const parts = [
-      `Target: ${result.targetLabel}`,
-      `Search ID: ${result.searchId}`,
-      `Query: ${result.query}`,
-      `Dispatched: ${new Date(result.dispatchedAt).toLocaleString()}`,
-    ];
-    element.textContent = parts.join(" • ");
-    element.className = "preset-help";
-  }
-
-  function renderDiscoverabilityOptions(instances) {
-    const publisher = document.getElementById("discoverability-publisher");
-    const searcher = document.getElementById("discoverability-searcher");
-    const previousPublisher = publisher.value;
-    const previousSearcher = searcher.value;
-    const candidates = instances.filter((instance) => typeof instance.id === "string");
-
-    publisher.replaceChildren();
-    searcher.replaceChildren();
-
-    if (!candidates.length) {
-      for (const select of [publisher, searcher]) {
-        const option = document.createElement("option");
-        option.value = "";
-        option.textContent = "No managed instances available";
-        select.appendChild(option);
-        select.disabled = true;
-      }
-      return;
-    }
-
-    publisher.disabled = false;
-    searcher.disabled = false;
-    for (const instance of candidates) {
-      const label = `${instance.id} (${instance.status})`;
-      for (const select of [publisher, searcher]) {
-        const option = document.createElement("option");
-        option.value = instance.id;
-        option.textContent = label;
-        select.appendChild(option);
-      }
-    }
-
-    const selectedId = state.selectedInstanceId;
-    publisher.value =
-      candidates.some((instance) => instance.id === previousPublisher)
-        ? previousPublisher
-        : selectedId && candidates.some((instance) => instance.id === selectedId)
-          ? selectedId
-          : candidates[0].id;
-    const defaultSearcher = candidates.find((instance) => instance.id !== publisher.value)?.id;
-    searcher.value =
-      candidates.some((instance) => instance.id === previousSearcher)
-        ? previousSearcher
-        : defaultSearcher ?? candidates[0].id;
-  }
+  const renderers = createInstanceSurfaceView({
+    state,
+    statusCards,
+    setText,
+    getSelectedManagedInstance,
+  });
 
   function renderSelectedControlAvailability() {
     const selected = getSelectedManagedInstance();
@@ -402,7 +126,7 @@ export function createInstancesController({
         selected.preset ? `preset ${selected.preset.prefix}/${selected.preset.presetId}` : "",
         isScheduledTarget ? "scheduled target" : "",
         selected.lastExit?.reason ? `last exit ${selected.lastExit.reason}` : "",
-      ].filter((part) => Boolean(part));
+      ].filter(Boolean);
       meta.textContent = parts.join(" • ");
       meta.className = "preset-help";
     }
@@ -412,6 +136,7 @@ export function createInstancesController({
     document.getElementById("selected-instance-start").disabled = disabled || selected?.status === "running";
     document.getElementById("selected-instance-stop").disabled = disabled || selected?.status !== "running";
     document.getElementById("selected-instance-restart").disabled = disabled || selected?.status !== "running";
+
     const manualSearchMode = document.getElementById("manual-search-mode").value;
     const manualSearchDisabled =
       manualSearchMode === "managed_instance" ? !hasSelection || Boolean(pendingAction) : false;
@@ -426,526 +151,16 @@ export function createInstancesController({
       document.getElementById(id).disabled = disabled;
     }
     document.getElementById("run-manual-search").disabled = manualSearchDisabled;
-    renderManualSearchSummary(state.currentManualSearchResult);
+    renderers.renderManualSearchSummary(state.currentManualSearchResult);
   }
 
-  async function loadSelectedInstanceShared(id) {
-    const response = await fetchJson(`/api/instances/${encodeURIComponent(id)}/shared`);
-    renderSharedSummary(response.shared);
-    setText("instance-shared", JSON.stringify(response.shared, null, 2));
-    return response.shared;
-  }
-
-  async function inspectInstance(id) {
-    state.selectedInstanceId = id;
-    state.currentManualSearchResult = null;
-    views.renderSelectedInstanceTimelineControls();
-    renderSelectedControlAvailability();
-    try {
-      const runtimeSurface = await fetchJson(`/api/instances/${encodeURIComponent(id)}/runtime_surface`);
-      renderSurfaceDiagnosticsSummary(runtimeSurface.diagnostics);
-      renderSurfaceDiagnosticsHighlights(runtimeSurface.diagnostics);
-      renderRuntimeSurface(runtimeSurface.diagnostics);
-      setText("instance-runtime-diagnostics", JSON.stringify(runtimeSurface.diagnostics, null, 2));
-    } catch (err) {
-      const summaryElement = document.getElementById("instance-runtime-summary");
-      summaryElement.textContent = `Failed to load runtime surface summary: ${String(err)}`;
-      summaryElement.className = "preset-help muted";
-      const highlightsElement = document.getElementById("instance-runtime-highlights");
-      highlightsElement.textContent = `Failed to load runtime surface highlights: ${String(err)}`;
-      highlightsElement.className = "preset-help muted";
-      renderRuntimeSurface(undefined);
-      const runtimeSurfaceElement = document.getElementById("instance-runtime-surface-summary");
-      runtimeSurfaceElement.textContent = `Failed to load structured runtime surface: ${String(err)}`;
-      runtimeSurfaceElement.className = "preset-help muted";
-      setText("instance-runtime-diagnostics", `Failed to load runtime diagnostics: ${String(err)}`);
-    }
-    try {
-      await loadSelectedInstanceShared(id);
-    } catch (err) {
-      renderSharedSummary(undefined);
-      setText("instance-shared", `Failed to load shared-content overview: ${String(err)}`);
-    }
-    try {
-      const [detail, diagnostics, logs] = await Promise.all([
-        fetchJson(`/api/instances/${encodeURIComponent(id)}`),
-        fetchJson(`/api/instances/${encodeURIComponent(id)}/diagnostics`),
-        fetchJson(`/api/instances/${encodeURIComponent(id)}/logs?lines=${LOG_LINE_LIMIT}`),
-      ]);
-      setText("instance-detail", JSON.stringify(detail.instance, null, 2));
-      setText("instance-diagnostics", JSON.stringify(diagnostics.snapshot, null, 2));
-      setText("instance-logs", logs.lines.join("\n") || "No per-instance rust-mule lines available.");
-    } catch (err) {
-      setText("instance-detail", `Failed to load instance detail: ${String(err)}`);
-      setText("instance-diagnostics", `Failed to load diagnostics: ${String(err)}`);
-      setText("instance-logs", `Failed to load instance logs: ${String(err)}`);
-    }
-  }
-
-  async function analyzeInstance(id) {
-    state.selectedInstanceId = id;
-    views.renderSelectedInstanceTimelineControls();
-    renderSelectedControlAvailability();
-    setControlState("instances", id, {
-      message: "Analysis in progress...",
-      tone: "pending",
-      actionLabel: "Analyze",
-      outcome: "pending",
-    });
-    setText("instance-analysis", "Running analysis...");
-    try {
-      const result = await postJson(`/api/instances/${encodeURIComponent(id)}/analyze`);
-      setText("instance-analysis", result.analysis.summary || "(no analysis summary)");
-      setControlState("instances", id, {
-        message: "Analysis completed.",
-        tone: "success",
-        actionLabel: "Analyze",
-        outcome: "applied",
-      });
-      await inspectInstance(id);
-    } catch (err) {
-      setControlState("instances", id, {
-        message: `Analysis failed: ${String(err)}`,
-        tone: "error",
-        actionLabel: "Analyze",
-        outcome: "failed",
-      });
-      setText("instance-analysis", `Failed to analyze instance: ${String(err)}`);
-    }
-  }
-
-  async function updateObserverTarget(target) {
-    try {
-      const data = await postJson("/api/observer/target", target);
-      state.currentScheduledTarget = data.target;
-      setText("observer-target", statusCards.describeTarget(data.target));
-      statusCards.renderTargetStatusCard();
-      setInstanceFeedback(`diagnostic target updated to ${statusCards.targetLabel(data.target)}`);
-      await refreshInstances();
-      await refreshOperatorEvents();
-    } catch (err) {
-      setInstanceFeedback(String(err), true);
-    }
-  }
-
-  async function refreshSelectedInstance() {
-    if (!state.selectedInstanceId) {
-      setInstanceFeedback("Select an instance first.", true);
-      return;
-    }
-    await inspectInstance(state.selectedInstanceId);
-  }
-
-  async function analyzeSelectedInstance() {
-    if (!state.selectedInstanceId) {
-      setInstanceFeedback("Select an instance first.", true);
-      return;
-    }
-    await analyzeInstance(state.selectedInstanceId);
-  }
-
-  async function useSelectedInstanceAsTarget() {
-    if (!state.selectedInstanceId) {
-      setInstanceFeedback("Select an instance first.", true);
-      return;
-    }
-    await updateObserverTarget({ kind: "managed_instance", instanceId: state.selectedInstanceId });
-  }
-
-  async function mutateInstance(id, action) {
-    try {
-      if (
-        action === "restart" &&
-        !confirmAction(`Restart managed instance ${id}? This will interrupt its current process.`)
-      ) {
-        setControlState("instances", id, {
-          message: "Restart cancelled.",
-          tone: "neutral",
-          actionLabel: "Restart",
-          outcome: "cancelled",
-        });
-        return;
-      }
-      const pendingVerb = action === "stop" ? "Stopping" : action === "start" ? "Starting" : "Restarting";
-      const pastTense = action === "stop" ? "stopped" : action === "start" ? "started" : "restarted";
-      setControlState("instances", id, {
-        message: `${pendingVerb} instance...`,
-        tone: "pending",
-        pendingAction: action,
-        actionLabel: action[0].toUpperCase() + action.slice(1),
-        outcome: "pending",
-      });
-      const data = await postJson(`/api/instances/${encodeURIComponent(id)}/${action}`);
-      setControlState("instances", data.instance.id, {
-        message: `${pastTense} successfully.`,
-        tone: "success",
-        actionLabel: action[0].toUpperCase() + action.slice(1),
-        outcome: "applied",
-      });
-      setInstanceFeedback(`${pastTense} instance ${data.instance.id}`);
-      await refreshInstances();
-      await inspectInstance(data.instance.id);
-    } catch (err) {
-      setControlState("instances", id, {
-        message: `Action failed: ${String(err)}`,
-        tone: "error",
-        actionLabel: action[0].toUpperCase() + action.slice(1),
-        outcome: "failed",
-      });
-      setInstanceFeedback(String(err), true);
-    }
-  }
-
-  async function mutateSelectedInstance(action) {
-    if (!state.selectedInstanceId) {
-      setInstanceFeedback("Select an instance first.", true);
-      return;
-    }
-    await mutateInstance(state.selectedInstanceId, action);
-  }
-
-  async function createInstance(event) {
-    event.preventDefault();
-    const form = document.getElementById("instance-create-form");
-    const formData = new FormData(form);
-    const id = String(formData.get("id") || "").trim();
-    const apiPortRaw = String(formData.get("apiPort") || "").trim();
-    const payload = { id };
-    if (apiPortRaw) {
-      payload.apiPort = Number(apiPortRaw);
-    }
-
-    try {
-      const data = await postJson("/api/instances", payload);
-      form.reset();
-      setControlState("instances", data.instance.id, {
-        message: "Created as planned instance.",
-        tone: "success",
-        actionLabel: "Create",
-        outcome: "applied",
-      });
-      setInstanceFeedback(`created planned instance ${data.instance.id}`);
-      await refreshInstances();
-      await inspectInstance(data.instance.id);
-    } catch (err) {
-      setInstanceFeedback(String(err), true);
-    }
-  }
-
-  async function refreshSelectedInstanceShared() {
-    if (!state.selectedInstanceId) {
-      setSelectedSharedFeedback("Select an instance first.", true);
-      return;
-    }
-    try {
-      await loadSelectedInstanceShared(state.selectedInstanceId);
-      setSelectedSharedFeedback(`loaded shared-content overview for ${state.selectedInstanceId}`);
-    } catch (err) {
-      setSelectedSharedFeedback(String(err), true);
-    }
-  }
-
-  async function createSelectedInstanceFixture() {
-    if (!state.selectedInstanceId) {
-      setSelectedSharedFeedback("Select an instance first.", true);
-      return;
-    }
-    const fixtureInput = document.getElementById("discoverability-fixture-id");
-    const fixtureId = String(fixtureInput.value || "").trim();
-    try {
-      const result = await postJson(
-        `/api/instances/${encodeURIComponent(state.selectedInstanceId)}/shared/fixtures`,
-        fixtureId ? { fixtureId } : {},
-      );
-      setSelectedSharedFeedback(
-        `created fixture ${result.fixture.fileName} for ${state.selectedInstanceId}`,
-      );
-      await loadSelectedInstanceShared(state.selectedInstanceId);
-      setText("instance-discoverability-result", JSON.stringify(result.fixture, null, 2));
-      renderDiscoverabilitySummary(undefined);
-      await refreshOperatorEvents();
-    } catch (err) {
-      setSelectedSharedFeedback(String(err), true);
-    }
-  }
-
-  async function mutateSelectedInstanceShared(action) {
-    if (!state.selectedInstanceId) {
-      setSelectedSharedFeedback("Select an instance first.", true);
-      return;
-    }
-    try {
-      const result = await postJson(
-        `/api/instances/${encodeURIComponent(state.selectedInstanceId)}/shared/${action}`,
-      );
-      await loadSelectedInstanceShared(state.selectedInstanceId);
-      setText("instance-shared", JSON.stringify(result.shared, null, 2));
-      setSelectedSharedFeedback(`${action} completed for ${state.selectedInstanceId}`);
-      await refreshOperatorEvents();
-    } catch (err) {
-      setSelectedSharedFeedback(String(err), true);
-    }
-  }
-
-  async function refreshDiscoverabilityViews() {
-    try {
-      await Promise.all([refreshDiscoverabilityResults(), refreshSearchHealthResults()]);
-      setSelectedDiscoverabilityFeedback("discoverability and search-health views refreshed");
-    } catch (err) {
-      setSelectedDiscoverabilityFeedback(String(err), true);
-    }
-  }
-
-  async function runDiscoverabilityCheck(event) {
-    event.preventDefault();
-    const runButton = document.getElementById("run-discoverability-check");
-    const publisherSelect = document.getElementById("discoverability-publisher");
-    const searcherSelect = document.getElementById("discoverability-searcher");
-    const publisherInstanceId = document.getElementById("discoverability-publisher").value;
-    const searcherInstanceId = document.getElementById("discoverability-searcher").value;
-    const fixtureId = String(document.getElementById("discoverability-fixture-id").value || "").trim();
-    const timeoutMsRaw = String(document.getElementById("discoverability-timeout-ms").value || "").trim();
-    const pollIntervalMsRaw = String(document.getElementById("discoverability-poll-ms").value || "").trim();
-    const payload = {
-      publisherInstanceId,
-      searcherInstanceId,
-    };
-    if (fixtureId) {
-      payload.fixtureId = fixtureId;
-    }
-    if (timeoutMsRaw) {
-      payload.timeoutMs = Number(timeoutMsRaw);
-    }
-    if (pollIntervalMsRaw) {
-      payload.pollIntervalMs = Number(pollIntervalMsRaw);
-    }
-
-    try {
-      runButton.disabled = true;
-      publisherSelect.disabled = true;
-      searcherSelect.disabled = true;
-      setSelectedDiscoverabilityFeedback("running controlled discoverability check...");
-      const result = await postJson("/api/discoverability/check", payload);
-      renderDiscoverabilitySummary(result.result);
-      setText("instance-discoverability-result", JSON.stringify(result.result, null, 2));
-      setSelectedDiscoverabilityFeedback(
-        `discoverability outcome ${result.result.outcome} for ${publisherInstanceId} -> ${searcherInstanceId}`,
-      );
-      await Promise.all([
-        refreshDiscoverabilityResults(),
-        refreshSearchHealthResults(),
-        refreshOperatorEvents(),
-      ]);
-      if (state.selectedInstanceId === publisherInstanceId || state.selectedInstanceId === searcherInstanceId) {
-        await inspectInstance(state.selectedInstanceId);
-      }
-    } catch (err) {
-      setSelectedDiscoverabilityFeedback(String(err), true);
-      setText(
-        "instance-discoverability-result",
-        `Failed to run discoverability check: ${String(err)}`,
-      );
-    } finally {
-      renderDiscoverabilityOptions(state.currentManagedInstances);
-      renderSelectedControlAvailability();
-    }
-  }
-
-  async function runManualSearch(event) {
-    event.preventDefault();
-    const runButton = document.getElementById("run-manual-search");
-    const modeSelect = document.getElementById("manual-search-mode");
-    const queryInput = document.getElementById("manual-search-query");
-    const keywordIdInput = document.getElementById("manual-search-keyword-id");
-    const mode = modeSelect.value === "active_target" ? "active_target" : "managed_instance";
-    const query = String(queryInput.value || "").trim();
-    const keywordIdHex = String(keywordIdInput.value || "").trim();
-
-    if (!query && !keywordIdHex) {
-      setSelectedManualSearchFeedback("Provide a query or keyword ID.", true);
-      return;
-    }
-    if (mode === "managed_instance" && !state.selectedInstanceId) {
-      setSelectedManualSearchFeedback(
-        "Select an instance first or switch to the active diagnostic target.",
-        true,
-      );
-      return;
-    }
-
-    const payload = { mode };
-    if (mode === "managed_instance") {
-      payload.instanceId = state.selectedInstanceId;
-    }
-    if (query) {
-      payload.query = query;
-    }
-    if (keywordIdHex) {
-      payload.keywordIdHex = keywordIdHex;
-    }
-
-    try {
-      runButton.disabled = true;
-      modeSelect.disabled = true;
-      queryInput.disabled = true;
-      keywordIdInput.disabled = true;
-      setSelectedManualSearchFeedback("dispatching manual search...");
-      const result = await postJson("/api/searches/launch", payload);
-      state.currentManualSearchResult = result.result;
-      renderManualSearchSummary(state.currentManualSearchResult);
-      setText("instance-manual-search-result", JSON.stringify(result.result, null, 2));
-      setSelectedManualSearchFeedback(`manual search dispatched against ${result.result.targetLabel}`);
-      await Promise.all([refreshSearchHealthResults(), refreshOperatorEvents()]);
-      if (mode === "managed_instance" && state.selectedInstanceId) {
-        await inspectInstance(state.selectedInstanceId);
-      }
-    } catch (err) {
-      setSelectedManualSearchFeedback(String(err), true);
-      setText("instance-manual-search-result", `Failed to run manual search: ${String(err)}`);
-    } finally {
-      modeSelect.disabled = false;
-      queryInput.disabled = false;
-      keywordIdInput.disabled = false;
-      renderSelectedControlAvailability();
-    }
-  }
-
-  function handleManualSearchModeChange() {
-    state.currentManualSearchResult = null;
-    renderSelectedControlAvailability();
-  }
-
-  async function applyInstancePreset(event) {
-    event.preventDefault();
-    const form = document.getElementById("instance-preset-form");
-    const formData = new FormData(form);
-    const presetId = String(formData.get("presetId") || "").trim();
-    const prefix = String(formData.get("prefix") || "").trim();
-
-    try {
-      setControlState("presets", prefix, {
-        message: `Applying preset ${presetId}...`,
-        tone: "pending",
-        pendingAction: "apply",
-      });
-      const data = await postJson("/api/instance-presets/apply", { presetId, prefix });
-      setControlState("presets", prefix, {
-        message: `Preset ${data.applied.presetId} applied.`,
-        tone: "success",
-      });
-      for (const instance of data.applied.instances) {
-        setControlState("instances", instance.id, {
-          message: `Created from preset ${data.applied.presetId}.`,
-          tone: "success",
-          actionLabel: "Create",
-          outcome: "applied",
-        });
-      }
-      setInstanceFeedback(
-        `applied preset ${data.applied.presetId}: ${data.applied.instances.map((instance) => instance.id).join(", ")}`,
-      );
-      await refreshInstances();
-    } catch (err) {
-      setControlState("presets", prefix, {
-        message: `Apply failed: ${String(err)}`,
-        tone: "error",
-      });
-      setInstanceFeedback(String(err), true);
-    }
-  }
-
-  async function bulkMutatePreset(prefix, action) {
-    try {
-      if (action !== "start" && action !== "stop" && action !== "restart") {
-        throw new Error(`unsupported preset action: ${action}`);
-      }
-      if (
-        (action === "stop" || action === "restart") &&
-        !confirmAction(
-          `${action === "stop" ? "Stop" : "Restart"} all managed instances in preset group ${prefix}?`,
-        )
-      ) {
-        setControlState("presets", prefix, {
-          message: `${action === "stop" ? "Stop" : "Restart"} cancelled.`,
-          tone: "neutral",
-        });
-        return;
-      }
-      const pendingVerb = action === "stop" ? "Stopping" : action === "start" ? "Starting" : "Restarting";
-      setControlState("presets", prefix, {
-        message: `${pendingVerb} preset...`,
-        tone: "pending",
-        pendingAction: action,
-      });
-      const data = await postJson(`/api/instance-presets/${encodeURIComponent(prefix)}/${action}`);
-      const changedIds = data.result.instances.map((instance) => instance.id);
-      const failureCount = data.result.failures.length;
-      const pastTense = action === "stop" ? "stopped" : action === "start" ? "started" : "restarted";
-      setControlState("presets", prefix, {
-        message:
-          failureCount > 0
-            ? `${pastTense} ${changedIds.length} instances with ${failureCount} failures.`
-            : `${pastTense} ${changedIds.length} instances successfully.`,
-        tone: failureCount > 0 ? "error" : "success",
-      });
-      for (const instance of data.result.instances) {
-        state.instanceControlState.instances[instance.id] = {
-          message: `${pastTense} via preset ${prefix}.`,
-          tone: failureCount > 0 ? "error" : "success",
-          actionLabel: action[0].toUpperCase() + action.slice(1),
-          outcome: failureCount > 0 ? "failed" : "applied",
-          updatedAt: new Date().toISOString(),
-        };
-      }
-      setInstanceFeedback(
-        failureCount > 0
-          ? `${pastTense} preset ${prefix}: ${changedIds.join(", ")} (${failureCount} failures)`
-          : `${pastTense} preset ${prefix}: ${changedIds.join(", ")}`,
-        failureCount > 0,
-      );
-      await refreshInstances();
-      await refreshOperatorEvents();
-    } catch (err) {
-      setControlState("presets", prefix, {
-        message: `Action failed: ${String(err)}`,
-        tone: "error",
-      });
-      setInstanceFeedback(String(err), true);
-    }
-  }
-
-  const views = createInstanceViewsController({
-    state,
-    timeline,
-    statusCards,
-    instancePresets: presets,
-    compare,
-    actions: {
-      analyzeInstance,
-      bulkMutatePreset,
-      inspectInstance,
-      mutateInstance,
-      updateObserverTarget,
-    },
-  });
-
-  async function refreshInstancePresets() {
-    try {
-      const data = await fetchJson("/api/instance-presets");
-      presets.renderInstancePresets(data.presets || []);
-      views.renderInstanceGroups(state.currentManagedInstances);
-    } catch (err) {
-      presets.renderInstancePresets([], `presets unavailable: ${String(err)}`);
-      views.renderInstanceGroups(state.currentManagedInstances);
-    }
-  }
-
+  let actions = null;
   async function refreshInstances() {
     try {
       const data = await fetchJson("/api/instances");
       state.currentManagedInstances = data.instances;
       clearStaleControlState(data.instances);
-      renderDiscoverabilityOptions(data.instances);
+      renderers.renderDiscoverabilityOptions(data.instances);
       views.renderInstanceList(data.instances);
       views.renderInstanceGroups(data.instances);
       timeline.populateOperatorEventFilters();
@@ -957,16 +172,16 @@ export function createInstancesController({
           state.selectedInstanceId = null;
           state.currentManualSearchResult = null;
           views.renderSelectedInstanceTimelineControls();
-          setText("instance-detail", "Selected instance no longer exists.");
-          setText("instance-diagnostics", INSTANCE_DIAGNOSTICS_PLACEHOLDER);
-          setText("instance-analysis", INSTANCE_ANALYSIS_PLACEHOLDER);
-          setText("instance-logs", INSTANCE_LOGS_PLACEHOLDER);
-          setText("instance-shared", INSTANCE_SHARED_PLACEHOLDER);
-          setText("instance-discoverability-result", INSTANCE_DISCOVERABILITY_PLACEHOLDER);
-          setText("instance-manual-search-result", "Select a search target and provide a query or keyword ID.");
-          renderSharedSummary(undefined);
-          renderDiscoverabilitySummary(undefined);
-          renderRuntimeSurface(undefined);
+          renderers.resetSelectedInstanceOutputs({
+            analysis: INSTANCE_ANALYSIS_PLACEHOLDER,
+            detail: "Selected instance no longer exists.",
+            diagnostics: INSTANCE_DIAGNOSTICS_PLACEHOLDER,
+            discoverability: INSTANCE_DISCOVERABILITY_PLACEHOLDER,
+            logs: INSTANCE_LOGS_PLACEHOLDER,
+            manualSearch: "Select a search target and provide a query or keyword ID.",
+            runtimeDiagnostics: "No runtime diagnostics loaded.",
+            shared: INSTANCE_SHARED_PLACEHOLDER,
+          });
         }
       }
       renderSelectedControlAvailability();
@@ -981,40 +196,79 @@ export function createInstancesController({
       views.renderInstanceGroups([]);
       views.renderInstanceList([]);
       views.renderSelectedInstanceTimelineControls();
-      renderDiscoverabilityOptions([]);
-      renderRuntimeSurface(undefined);
+      renderers.renderDiscoverabilityOptions([]);
+      renderers.renderRuntimeSurface(undefined);
       renderSelectedControlAvailability();
       setInstanceFeedback(`instance control unavailable: ${String(err)}`, true);
       statusCards.renderTargetStatusCard();
     }
   }
 
+  const views = createInstanceViewsController({
+    state,
+    timeline,
+    statusCards,
+    instancePresets: presets,
+    compare,
+    actions: {
+      analyzeInstance: (...args) => actions.analyzeInstance(...args),
+      bulkMutatePreset: (...args) => actions.bulkMutatePreset(...args),
+      inspectInstance: (...args) => actions.inspectInstance(...args),
+      mutateInstance: (...args) => actions.mutateInstance(...args),
+      updateObserverTarget: (...args) => actions.updateObserverTarget(...args),
+    },
+  });
+
+  actions = createInstanceWorkflowActions({
+    state,
+    statusCards,
+    setText,
+    fetchJson,
+    postJson,
+    refreshOperatorEvents,
+    refreshDiscoverabilityResults,
+    refreshSearchHealthResults,
+    setControlState,
+    setInstanceFeedback,
+    setSelectedSharedFeedback,
+    setSelectedDiscoverabilityFeedback,
+    setSelectedManualSearchFeedback,
+    confirmAction,
+    renderSelectedControlAvailability,
+    renderSelectedInstanceTimelineControls: views.renderSelectedInstanceTimelineControls,
+    renderers,
+    refreshInstances,
+  });
+
+  function renderControlState() {
+    views.renderInstanceList(state.currentManagedInstances);
+    views.renderInstanceGroups(state.currentManagedInstances);
+    views.renderSelectedInstanceTimelineControls();
+    renderSelectedControlAvailability();
+  }
+
+  async function refreshInstancePresets() {
+    try {
+      const data = await fetchJson("/api/instance-presets");
+      presets.renderInstancePresets(data.presets || []);
+      views.renderInstanceGroups(state.currentManagedInstances);
+    } catch (err) {
+      presets.renderInstancePresets([], `presets unavailable: ${String(err)}`);
+      views.renderInstanceGroups(state.currentManagedInstances);
+    }
+  }
+
   return {
-    analyzeSelectedInstance,
-    analyzeInstance,
-    applyInstancePreset,
-    createInstance,
-    createSelectedInstanceFixture,
-    inspectInstance,
-    mutateSelectedInstanceShared,
-    mutateSelectedInstance,
+    ...actions,
     refreshInstanceCompare: compare.refreshInstanceCompare,
     renderCachedComparison: compare.renderCachedComparison,
-    refreshDiscoverabilityViews,
     refreshInstancePresets,
     refreshInstances,
-    refreshSelectedInstance,
-    refreshSelectedInstanceShared,
-    handleManualSearchModeChange,
     renderSelectedControlAvailability,
     renderCompareTimelineControls: compare.renderCompareTimelineControls,
     renderInstancePresets: presets.renderInstancePresets,
     renderSelectedInstanceTimelineControls: views.renderSelectedInstanceTimelineControls,
     renderSelectedPresetHelp: presets.renderSelectedPresetHelp,
-    runDiscoverabilityCheck,
-    runManualSearch,
     setInstanceFeedback,
-    updateObserverTarget,
-    useSelectedInstanceAsTarget,
   };
 }

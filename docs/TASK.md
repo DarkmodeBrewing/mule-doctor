@@ -34,7 +34,11 @@ The following major slices are already landed on `main`:
 4. Maintainability refactors:
    - operator-console server split into focused modules
    - operator-console frontend split into focused browser modules
+   - 2026-03-23 follow-up pass reduced the remaining oversized operator-console files by splitting:
+     - backend general API routes vs managed-instance/control routes
+     - selected-instance rendering vs workflow/action orchestration
    - tests consolidated under `src/test/`
+   - remaining notable large-file debt is concentrated in `src/test/operatorConsole.test.mjs`
    - Alpine.js evaluated and explicitly deferred
 5. Runtime and search/discoverability groundwork:
    - runtime readiness validation and readiness-contract alignment

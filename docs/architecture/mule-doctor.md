@@ -210,6 +210,9 @@ Current runtime-surface boundary:
 Implementation note:
 
 - the operator console frontend is served as static assets, kept separate from backend auth/API/SSE route logic
+- the backend route surface is now split so `server.ts` owns auth, stream lifecycle, and server startup while focused route modules own general API reads vs managed-instance control routes
+- the browser-side selected-instance flow is now split between controller orchestration, runtime-surface rendering, and workflow/action modules so no single operator-console browser file carries the whole control plane
+- the main remaining large-file maintainability debt is the integration-style `src/test/operatorConsole.test.mjs`, which should be split separately from production-code refactors
 
 Primary purpose:
 
