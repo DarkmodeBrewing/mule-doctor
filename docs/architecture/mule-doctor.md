@@ -59,6 +59,30 @@ The tool-registry implementation is also split by responsibility now:
 - `toolRegistry.ts` owns registry orchestration and tool-profile filtering
 - core log/debug tools, runtime-store tools, rust-mule surface tools, and source tools are registered from separate modules
 
+The rust-mule API client is also split by responsibility now:
+
+- `rustMuleClient.ts` owns request flow and high-level operations
+- `rustMuleClientTypes.ts` owns exported API response/value shapes
+- `rustMuleClientShared.ts` owns normalization, polling, timeout/error helpers, and shared logging
+
+The observer loop is also split by responsibility now:
+
+- `observer.ts` owns scheduling, target resolution flow, and cycle orchestration
+- `observerShared.ts` owns prompt/state/log helpers
+- `observerSearchTracking.ts` owns observed-search lifecycle deduplication and persistence
+
+The managed-instance operator-console route surface is split by responsibility now:
+
+- `serverManagedInstanceRoutes.ts` owns top-level dispatch only
+- collection/preset/discoverability/manual-search routes live in `serverManagedInstanceCollectionRoutes.ts`
+- per-instance detail/logs/diagnostics/lifecycle/shared-content routes live in `serverManagedInstanceItemRoutes.ts`
+
+The managed-instance lifecycle layer is also split by responsibility now:
+
+- `instanceManager.ts` owns lifecycle orchestration, reconciliation, and persistence flow
+- `instanceManagerPlanning.ts` owns id/port planning, runtime-path materialization, binary checks, and rollback helpers
+- the managed-instance test surface is split similarly so planning/config and lifecycle/reconciliation behaviors do not share one test monolith
+
 The operator console is part of the architecture. It exposes a browser-accessible,
 token-protected runtime view and already serves as the bounded control surface
 for mule-doctor-managed local test instances, while external rust-mule nodes
@@ -265,6 +289,11 @@ Example payload:
   ]
 }
 ```
+
+Implementation note:
+
+- `mattermost.ts` owns webhook transport, timeout handling, and inbound command flow
+- payload/attachment construction is split into focused helpers so report formatting stays separate from posting and rate-limit/audit flow
 
 ---
 

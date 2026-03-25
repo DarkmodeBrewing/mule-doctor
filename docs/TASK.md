@@ -38,6 +38,12 @@ The following major slices are already landed on `main`:
      - backend general API routes vs managed-instance/control routes
      - selected-instance rendering vs workflow/action orchestration
    - operator-console integration tests are now split into focused files plus shared fixtures/helpers
+   - tool registry is split by tool domain and rust-mule client is split into request flow vs shared normalization/types helpers
+   - observer loop is split into scheduling/orchestration vs shared helpers vs observed-search tracking
+   - managed-instance operator-console routes are split into dispatcher vs collection/preset/discoverability routes vs per-instance routes
+   - Mattermost integration is split into webhook/command transport vs payload-building and shared formatting helpers
+   - managed-instance lifecycle orchestration is split from instance planning/runtime-path/config materialization helpers
+   - managed-instance tests are split into planning/config vs lifecycle/reconciliation files with shared helpers
    - tests consolidated under `src/test/`
    - Alpine.js evaluated and explicitly deferred
 5. Runtime and search/discoverability groundwork:
