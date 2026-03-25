@@ -436,6 +436,10 @@ test("InstanceManager accepts nested rust-mule template sections and writes owne
 
     assert.match(configRaw, /# mule-doctor-owned keys are generated per instance:/);
     assert.match(configRaw, /# externally supplied template keys may set shared rust-mule defaults:/);
+    assert.match(
+      configRaw,
+      /# rejected template keys that would conflict with mule-doctor-owned runtime isolation:/,
+    );
     assert.match(configRaw, /session_name = "nested-nested-a"/);
     assert.match(configRaw, /host = "10.99.0.20"/);
     assert.match(configRaw, /forward_host = "10.99.0.10"/);
@@ -444,6 +448,67 @@ test("InstanceManager accepts nested rust-mule template sections and writes owne
     assert.match(
       configRaw,
       /share_roots = \["[^"]*\/shared", "\/srv\/nested-fixtures"\]/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager rejects template ownership conflicts for mule-doctor-managed keys", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath,
+      rustMuleConfigTemplate: {
+        sam: {
+          host: "127.0.0.1",
+          sessionName: "forbidden",
+        },
+        general: {
+          dataDir: "/tmp/not-allowed",
+        },
+        api: {
+          port: 20100,
+        },
+      },
+    });
+    await manager.initialize();
+
+    await assert.rejects(
+      manager.createPlannedInstance({ id: "bad-owned-keys" }),
+      /Managed rust-mule config template may not set mule-doctor-owned keys: sam\.session_name, general\.data_dir, api\.port/,
+    );
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("InstanceManager rejects template ownership conflicts for share_roots and flat aliases", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustMuleBinaryPath = join(tmp.dir, "fake-rust-mule");
+    await writeFile(rustMuleBinaryPath, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
+    const manager = new InstanceManager({
+      dataDir: tmp.dir,
+      instanceRootDir: join(tmp.dir, "instances"),
+      rustMuleBinaryPath,
+      rustMuleConfigTemplate: {
+        generalAutoOpenUi: true,
+        samSessionName: "forbidden-flat",
+        sharing: {
+          shareRoots: ["/srv/direct-share-roots"],
+        },
+      },
+    });
+    await manager.initialize();
+
+    await assert.rejects(
+      manager.createPlannedInstance({ id: "bad-flat-owned-keys" }),
+      /Managed rust-mule config template may not set mule-doctor-owned keys: sharing\.share_roots, sam\.session_name, general\.auto_open_ui/,
     );
   } finally {
     await tmp.cleanup();
@@ -467,7 +532,7 @@ test("InstanceManager rejects invalid numeric template values", async () => {
 
     await assert.rejects(
       manager.createPlannedInstance({ id: "bad-template" }),
-      /Invalid numeric value for port: NaN/,
+      /Managed rust-mule config template field 'samPort' must be a finite number/,
     );
   } finally {
     await tmp.cleanup();

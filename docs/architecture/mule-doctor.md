@@ -591,11 +591,20 @@ The `InstanceManager` is responsible for:
 - allowed instance definitions
 - integration point for `ManagedInstancePresetService`, which applies built-in or configured cluster presets via planned instance creation
 - runtime directory creation
+- generated per-instance `config.toml` ownership enforcement
 - process start/stop/restart
 - port allocation and conflict checks
 - health and lifecycle state
 - log locations
 - cleanup of mule-doctor-owned test instances
+
+Managed config ownership boundary:
+
+- mule-doctor always generates and owns `sam.session_name`, `general.data_dir`, `general.auto_open_ui`, and `api.port`
+- the managed template may supply shared defaults such as `sam.host`, `sam.forward_host`, logging settings, API auth/debug settings, and additional sharing roots
+- the current operator-facing input surface for those shared defaults is one bounded JSON template env var plus the in-process template object used by `InstanceManager`
+- direct template ownership of conflicting keys such as `sam.session_name`, `general.data_dir`, `general.auto_open_ui`, `api.port`, or `sharing.share_roots` is rejected explicitly
+- `sharing.share_roots` is still rendered by mule-doctor with the managed shared directory first; operators may only append extra roots through the supported template field
 
 The observer, runtime store, and reporting layers currently support
 single-target managed-instance observation through an explicit active

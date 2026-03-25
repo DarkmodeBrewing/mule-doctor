@@ -178,6 +178,14 @@ Acceptance criteria:
 
 ## Task L: Formalize Managed rust-mule config.toml Template Ownership
 
+Current status:
+
+- mule-doctor now enforces the managed config ownership boundary in code instead of only documenting it
+- conflicting template keys for mule-doctor-owned settings are rejected explicitly during config rendering
+- the generated `config.toml` header now lists mule-doctor-owned keys, externally managed template keys, and explicitly rejected conflicting keys
+- mule-doctor now also accepts one bounded operator-facing input surface for this contract via `MULE_DOCTOR_MANAGED_RUST_MULE_CONFIG_TEMPLATE_JSON`
+- remaining work should focus on whether any additional operator ergonomics are needed beyond the current template object plus bounded JSON env input
+
 1. Turn the current managed-instance config generation into an explicit ownership model for per-instance `config.toml` files.
 2. Preserve the existing split of responsibility:
    - externally supplied base/template values provide shared network/runtime settings such as `sam.host` and `sam.forward_host`
