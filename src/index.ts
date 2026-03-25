@@ -29,6 +29,7 @@ import { ManagedInstanceSharingService } from "./instances/managedInstanceSharin
 import { ManagedInstanceDiscoverabilityService } from "./instances/managedInstanceDiscoverability.js";
 import { DiagnosticTargetService } from "./instances/diagnosticTargetService.js";
 import { ManagedInstancePresetService } from "./instances/managedInstancePresets.js";
+import { parseManagedRustMuleConfigTemplateJson } from "./instances/rustMuleConfig.js";
 import { ObserverTargetResolver } from "./observerTargetResolver.js";
 import { validateStartupReadiness } from "./startup/readiness.js";
 
@@ -78,6 +79,17 @@ function parseBooleanEnv(name: string): boolean | undefined {
   process.exit(1);
 }
 
+function parseManagedTemplateJsonEnv(name: string) {
+  const raw = optionalEnv(name);
+  if (raw === undefined) return undefined;
+  try {
+    return parseManagedRustMuleConfigTemplateJson(raw, name);
+  } catch (err) {
+    log("error", "index", String(err));
+    process.exit(1);
+  }
+}
+
 async function main(): Promise<void> {
   const uiEnabled = parseBooleanEnv("MULE_DOCTOR_UI_ENABLED") ?? false;
   const uiLogBufferLines = parsePositiveIntEnv("MULE_DOCTOR_UI_LOG_BUFFER_LINES");
@@ -115,6 +127,9 @@ async function main(): Promise<void> {
   const managedInstanceRootDir = optionalEnv("MULE_DOCTOR_MANAGED_INSTANCE_ROOT");
   const managedApiPortStart = parsePositiveIntEnv("MULE_DOCTOR_MANAGED_API_PORT_START");
   const managedApiPortEnd = parsePositiveIntEnv("MULE_DOCTOR_MANAGED_API_PORT_END");
+  const managedRustMuleConfigTemplate = parseManagedTemplateJsonEnv(
+    "MULE_DOCTOR_MANAGED_RUST_MULE_CONFIG_TEMPLATE_JSON",
+  );
 
   await validateStartupReadiness({
     tokenPath,
@@ -188,6 +203,7 @@ async function main(): Promise<void> {
     apiPortStart: managedApiPortStart,
     apiPortEnd: managedApiPortEnd,
     rustMuleBinaryPath: managedRustMuleBinaryPath,
+    rustMuleConfigTemplate: managedRustMuleConfigTemplate,
   });
   try {
     await configuredManagedInstances.initialize();

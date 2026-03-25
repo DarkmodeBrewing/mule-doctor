@@ -109,6 +109,7 @@ These variables control mule-doctor's local managed rust-mule instances.
 | `MULE_DOCTOR_MANAGED_INSTANCE_ROOT` | `/data/instances` | Root directory for managed-instance runtime trees |
 | `MULE_DOCTOR_MANAGED_API_PORT_START` | `19000` | Start of allowed API-port range for managed instances |
 | `MULE_DOCTOR_MANAGED_API_PORT_END` | `19999` | End of allowed API-port range for managed instances |
+| `MULE_DOCTOR_MANAGED_RUST_MULE_CONFIG_TEMPLATE_JSON` | unset | JSON object for the bounded managed rust-mule template contract |
 
 Notes:
 
@@ -182,6 +183,7 @@ It splits responsibility between:
 
 - externally supplied base/template values
 - mule-doctor-owned per-instance values
+- explicitly rejected template keys that would conflict with mule-doctor-owned runtime isolation
 
 ### mule-doctor-owned per-instance values
 
@@ -196,7 +198,10 @@ These are generated or enforced per managed instance:
 
 ### Base/template-supplied values
 
-These can be supplied through the managed rust-mule config template object used by [InstanceManager](../src/instances/instanceManager.ts).
+These can now be supplied through either:
+
+- the managed rust-mule config template object used by [InstanceManager](../src/instances/instanceManager.ts)
+- the operator-facing `MULE_DOCTOR_MANAGED_RUST_MULE_CONFIG_TEMPLATE_JSON` environment variable
 
 The input contract supports:
 
@@ -226,6 +231,27 @@ Preferred nested template shape:
   },
   sessionNamePrefix: "managed"
 }
+```
+
+Example environment form:
+
+```bash
+MULE_DOCTOR_MANAGED_RUST_MULE_CONFIG_TEMPLATE_JSON='{
+  "sam": {
+    "host": "127.0.0.1",
+    "forwardHost": "127.0.0.1"
+  },
+  "general": {
+    "logLevel": "info"
+  },
+  "api": {
+    "authMode": "headless_remote"
+  },
+  "sharing": {
+    "extraShareRoots": ["/srv/fixtures"]
+  },
+  "sessionNamePrefix": "managed"
+}'
 ```
 
 Supported externally managed fields:
@@ -258,13 +284,21 @@ These keys are not template-owned even if an operator conceptually wants to set 
 | `general.data_dir` | always generated from the instance runtime directory |
 | `general.auto_open_ui` | always forced to `false` |
 | `api.port` | always generated/assigned by mule-doctor |
+| `sharing.share_roots` | direct ownership is rejected; use `sharing.extraShareRoots` so mule-doctor can keep the managed shared dir first |
+
+Current behavior for conflicts:
+
+- mule-doctor now rejects managed-instance template input that tries to set any of the keys above
+- the rejection happens when rendering the per-instance `config.toml`, before the managed instance is launched
+- both nested template keys such as `sam.sessionName` and backward-compatible flat aliases such as `samSessionName` are rejected when they collide with mule-doctor-owned settings
 
 Important note:
 
 - these template values are supported by the config-rendering path
-- they are not currently wired from standalone environment variables automatically
+- they are now wired through one bounded JSON env var rather than many per-field env vars
 - they must be supplied through the managed-instance template configuration path before launch
 - generated `config.toml` files now include ownership comments at the top so operators can see the split directly in the rendered file
+- unsupported keys or invalid field types are rejected explicitly when the template input is parsed
 
 ## Runtime Readiness Expectations
 
@@ -391,8 +425,6 @@ MULE_DOCTOR_UI_PORT=18080
 
 What is documented here but still not ideal in implementation:
 
-- the managed-instance config template is not yet documented elsewhere as a first-class operator contract
-- base-template values for managed rust-mule instances are not currently exposed through their own env vars
 - the full rust-mule readiness contract is still being aligned with the new `200 + ready: true/false` upstream behavior
 
 Those are tracked backlog items, not hidden behavior.
