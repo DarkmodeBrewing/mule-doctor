@@ -44,6 +44,8 @@ The following major slices are already landed on `main`:
    - Mattermost integration is split into webhook/command transport vs payload-building and shared formatting helpers
    - managed-instance lifecycle orchestration is split from instance planning/runtime-path/config materialization helpers
    - managed-instance tests are split into planning/config vs lifecycle/reconciliation files with shared helpers
+   - rust-mule client tests are split into read-surface vs debug/write-path files with shared fetch/token helpers
+   - observer tests are split into context/target behavior vs scheduler/control behavior with shared stubs
    - tests consolidated under `src/test/`
    - Alpine.js evaluated and explicitly deferred
 5. Runtime and search/discoverability groundwork:

@@ -64,12 +64,14 @@ The rust-mule API client is also split by responsibility now:
 - `rustMuleClient.ts` owns request flow and high-level operations
 - `rustMuleClientTypes.ts` owns exported API response/value shapes
 - `rustMuleClientShared.ts` owns normalization, polling, timeout/error helpers, and shared logging
+- the client test surface is split the same way so read-only API coverage is separate from debug/write-path mutation coverage
 
 The observer loop is also split by responsibility now:
 
 - `observer.ts` owns scheduling, target resolution flow, and cycle orchestration
 - `observerShared.ts` owns prompt/state/log helpers
 - `observerSearchTracking.ts` owns observed-search lifecycle deduplication and persistence
+- the observer test surface is split so context/target behavior and scheduler/control behavior stay isolated as the loop evolves
 
 The managed-instance operator-console route surface is split by responsibility now:
 
