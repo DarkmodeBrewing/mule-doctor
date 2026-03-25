@@ -8,10 +8,7 @@ export const MANAGED_INSTANCE_MULE_DOCTOR_OWNED_CONFIG_KEYS = [
 ] as const;
 
 export const MANAGED_INSTANCE_REJECTED_TEMPLATE_KEYS = [
-  "sam.session_name",
-  "general.data_dir",
-  "general.auto_open_ui",
-  "api.port",
+  ...MANAGED_INSTANCE_MULE_DOCTOR_OWNED_CONFIG_KEYS,
   "sharing.share_roots",
 ] as const;
 
@@ -213,7 +210,6 @@ function normalizeTemplate(
 > &
   Pick<ManagedRustMuleConfigTemplate, "sessionNamePrefix"> {
   const source = parseManagedRustMuleConfigTemplateInput(template);
-  assertNoManagedOwnershipConflicts(source);
   return {
     sessionNamePrefix: source.sessionNamePrefix,
     sam: {
@@ -318,19 +314,16 @@ export function parseManagedRustMuleConfigTemplateInput(
     );
   }
   if (hasOwn(source, "samSessionName")) {
-    template.samSessionName = expectString(source.samSessionName, "samSessionName") as never;
+    template.samSessionName = true as never;
   }
   if (hasOwn(source, "generalDataDir")) {
-    template.generalDataDir = expectString(source.generalDataDir, "generalDataDir") as never;
+    template.generalDataDir = true as never;
   }
   if (hasOwn(source, "generalAutoOpenUi")) {
-    template.generalAutoOpenUi = expectBoolean(
-      source.generalAutoOpenUi,
-      "generalAutoOpenUi",
-    ) as never;
+    template.generalAutoOpenUi = true as never;
   }
   if (hasOwn(source, "apiPort")) {
-    template.apiPort = expectNumber(source.apiPort, "apiPort") as never;
+    template.apiPort = true as never;
   }
   if (hasOwn(source, "sessionNamePrefix")) {
     template.sessionNamePrefix = expectString(source.sessionNamePrefix, "sessionNamePrefix");
@@ -464,7 +457,7 @@ function parseSamSection(value: unknown): NonNullable<ManagedRustMuleConfigTempl
     );
   }
   if (hasOwn(sectionValue, "sessionName")) {
-    parsed.sessionName = expectString(sectionValue.sessionName, "sam.sessionName") as never;
+    parsed.sessionName = true as never;
   }
   return parsed;
 }
@@ -495,10 +488,10 @@ function parseGeneralSection(
     parsed.logFileLevel = expectString(sectionValue.logFileLevel, "general.logFileLevel");
   }
   if (hasOwn(sectionValue, "dataDir")) {
-    parsed.dataDir = expectString(sectionValue.dataDir, "general.dataDir") as never;
+    parsed.dataDir = true as never;
   }
   if (hasOwn(sectionValue, "autoOpenUi")) {
-    parsed.autoOpenUi = expectBoolean(sectionValue.autoOpenUi, "general.autoOpenUi") as never;
+    parsed.autoOpenUi = true as never;
   }
   return parsed;
 }
@@ -528,7 +521,7 @@ function parseApiSection(value: unknown): NonNullable<ManagedRustMuleConfigTempl
     );
   }
   if (hasOwn(sectionValue, "port")) {
-    parsed.port = expectNumber(sectionValue.port, "api.port") as never;
+    parsed.port = true as never;
   }
   return parsed;
 }
@@ -553,7 +546,7 @@ function parseSharingSection(
     );
   }
   if (hasOwn(sectionValue, "shareRoots")) {
-    parsed.shareRoots = expectStringArray(sectionValue.shareRoots, "sharing.shareRoots") as never;
+    parsed.shareRoots = true as never;
   }
   return parsed;
 }

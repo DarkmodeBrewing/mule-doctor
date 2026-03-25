@@ -71,4 +71,12 @@ test("parseManagedRustMuleConfigTemplateJson rejects invalid JSON and ownership 
       ),
     /may not set mule-doctor-owned keys: sam\.session_name/,
   );
+
+  assert.throws(
+    () =>
+      parseManagedRustMuleConfigTemplateInput({
+        apiPort: "19000",
+      }),
+    /may not set mule-doctor-owned keys: api\.port/,
+  );
 });
