@@ -54,6 +54,11 @@ The design intentionally separates:
 
 This keeps the system deterministic and easier to extend.
 
+The tool-registry implementation is also split by responsibility now:
+
+- `toolRegistry.ts` owns registry orchestration and tool-profile filtering
+- core log/debug tools, runtime-store tools, rust-mule surface tools, and source tools are registered from separate modules
+
 The operator console is part of the architecture. It exposes a browser-accessible,
 token-protected runtime view and already serves as the bounded control surface
 for mule-doctor-managed local test instances, while external rust-mule nodes
