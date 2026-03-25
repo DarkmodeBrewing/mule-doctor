@@ -46,6 +46,7 @@ The following major slices are already landed on `main`:
    - managed-instance tests are split into planning/config vs lifecycle/reconciliation files with shared helpers
    - rust-mule client tests are split into read-surface vs debug/write-path files with shared fetch/token helpers
    - observer tests are split into context/target behavior vs scheduler/control behavior with shared stubs
+   - tool-registry tests are split by core/runtime/surface/source domains with shared stubs so the test surface mirrors the production registry split
    - tests consolidated under `src/test/`
    - Alpine.js evaluated and explicitly deferred
 5. Runtime and search/discoverability groundwork:

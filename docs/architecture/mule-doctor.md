@@ -58,6 +58,7 @@ The tool-registry implementation is also split by responsibility now:
 
 - `toolRegistry.ts` owns registry orchestration and tool-profile filtering
 - core log/debug tools, runtime-store tools, rust-mule surface tools, and source tools are registered from separate modules
+- the tool-registry test surface is split by those same domains so core/runtime/surface/source behaviors evolve independently
 
 The rust-mule API client is also split by responsibility now:
 
