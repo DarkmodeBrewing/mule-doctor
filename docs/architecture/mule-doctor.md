@@ -246,6 +246,7 @@ Implementation note:
 - the browser-side selected-instance flow is now split between controller orchestration, runtime-surface rendering, and workflow/action modules so no single operator-console browser file carries the whole control plane
 - the operator-console integration coverage is split across focused route/auth/SSE test files with shared stub fixtures so the test surface can keep growing without one monolithic file
 - the managed-instance test-stub layer under the operator-console tests is split by lifecycle, diagnostics, workflow, and invocation concerns so route tests do not all depend on one oversized helper module
+- the managed rust-mule config layer is split between a stable public entrypoint, shared contract/types helpers, parser/validation logic, and TOML rendering so config ownership rules do not live in one large file
 
 Primary purpose:
 

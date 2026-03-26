@@ -44,6 +44,7 @@ The following major slices are already landed on `main`:
    - Mattermost integration is split into webhook/command transport vs payload-building and shared formatting helpers
    - managed-instance lifecycle orchestration is split from instance planning/runtime-path/config materialization helpers
    - managed-instance tests are split into planning/config vs lifecycle/reconciliation files with shared helpers
+   - managed rust-mule config handling is split into shared contract/types, parser/validation, and TOML rendering modules behind a stable public entrypoint
    - rust-mule client tests are split into read-surface vs debug/write-path files with shared fetch/token helpers
    - observer tests are split into context/target behavior vs scheduler/control behavior with shared stubs
    - tool-registry tests are split by core/runtime/surface/source domains with shared stubs so the test surface mirrors the production registry split
