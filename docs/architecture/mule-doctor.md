@@ -243,10 +243,12 @@ Implementation note:
 
 - the operator console frontend is served as static assets, kept separate from backend auth/API/SSE route logic
 - the backend route surface is now split so `server.ts` owns auth, stream lifecycle, and server startup while focused route modules own general API reads vs managed-instance control routes
+- the general operator-console API routing is further split between a small dispatcher, shared route context, control/history routes, and read-only log/runtime routes
 - the browser-side selected-instance flow is now split between controller orchestration, runtime-surface rendering, and workflow/action modules so no single operator-console browser file carries the whole control plane
 - the operator-console integration coverage is split across focused route/auth/SSE test files with shared stub fixtures so the test surface can keep growing without one monolithic file
 - the managed-instance test-stub layer under the operator-console tests is split by lifecycle, diagnostics, workflow, and invocation concerns so route tests do not all depend on one oversized helper module
 - the managed rust-mule config layer is split between a stable public entrypoint, shared contract/types helpers, parser/validation logic, and TOML rendering so config ownership rules do not live in one large file
+- the source-code tool layer is split between a thin public coordinator, shared contracts/helpers, bounded filesystem operations, and git-blame parsing so source inspection logic does not all live in one module
 
 Primary purpose:
 
