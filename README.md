@@ -5,6 +5,7 @@ Observability and diagnostic agent for `rust-mule` nodes.
 ## Docs
 
 - Configuration reference: [docs/configuration.md](docs/configuration.md)
+- Operations runbook: [docs/runbook.md](docs/runbook.md)
 - Operator console HTTP API: [docs/api.md](docs/api.md)
 - LLM tool capability reference: [docs/llm_tools.md](docs/llm_tools.md)
 - Architecture: [docs/architecture/mule-doctor.md](docs/architecture/mule-doctor.md)
@@ -30,7 +31,7 @@ Minimum required variables:
 - `OPENAI_API_KEY`
 - `MATTERMOST_WEBHOOK_URL`
 
-For the full runtime contract, including optional env vars, container entrypoint variables, managed-instance settings, and config ownership, see [docs/configuration.md](docs/configuration.md).
+For the full runtime contract, including optional env vars, container entrypoint variables, managed-instance settings, and config ownership, see [docs/configuration.md](docs/configuration.md). For a start-to-finish operating guide, see [docs/runbook.md](docs/runbook.md).
 
 ## Scripts
 

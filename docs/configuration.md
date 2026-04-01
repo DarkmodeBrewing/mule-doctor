@@ -2,6 +2,8 @@
 
 This document is the runtime configuration reference for mule-doctor.
 
+For the operator-oriented startup and validation procedure, see [runbook.md](./runbook.md).
+
 It covers:
 
 - mule-doctor application environment variables
