@@ -3,276 +3,31 @@
 ## Branch
 
 - `main`
-- Latest merged PR at time of update: #91
-- Last updated: 2026-03-19
+- Latest merged PR at time of update: #110
+- Last updated: 2026-04-01
 
-## Status
+## Current Status
 
-- Recent work landed on `main` includes LLM invocation hardening and auditability:
-  - prompt hardening
-  - human-triggered rate limits
-  - analyzer tool/time budgets
-  - invocation audit storage and operator-console surfaces
-- Managed-instance diagnostics/cache hardening, operator-console navigation shortcuts, timeline-context feedback, and frontend modularization are also landed on `main`.
-- Next highest-value work remains:
-  - continue operator-console control-plane completion
-  - tighten runtime/container validation
-  - expand CI beyond the current `npm run check` path
+- `main` includes the full maintainability refactor pass across the main operator-console, observer, rust-mule client, tool-registry, managed-instance, and test surfaces.
+- The shipped baseline now also includes:
+  - bounded operator-console control flows for managed instances
+  - runtime/container contract enforcement and documentation
+  - CI coverage for fast checks plus Docker build/layout validation
+  - persisted search-health lifecycle tracking across controlled discoverability, managed observation, observer-target observation, and manual operator-triggered searches
+  - formal managed `config.toml` ownership enforcement
 
-## Completed Work
+## Next Likely Work
 
-- Updated observer loop scheduling to prevent overlapping cycles:
-  - replaced fixed `setInterval` cycle dispatch with chained `setTimeout` after each cycle finishes.
-  - added duplicate-start guard (`started` flag).
-  - stop now clears pending timeout and disables follow-up scheduling.
-- Added observer test coverage for non-overlapping behavior with a slow analyzer.
-- Updated source proposal handling:
-  - `propose_patch` now writes artifacts to `/data/mule-doctor/proposals` by default.
-  - `SourceCodeTools` now accepts explicit `proposalDir` override.
-  - `artifactPath` now returns absolute path to the saved patch.
-- Wired proposal directory through app/tool wiring:
-  - `index.ts` computes `${MULE_DOCTOR_DATA_DIR || "/data/mule-doctor"}/proposals`.
-  - `ToolRegistry` passes `proposalDir` into `SourceCodeTools`.
-- Updated tests (`sourceCodeTools` + `toolRegistry`) to use temp proposal directories and assert absolute artifact paths.
-- Updated README runtime notes for the canonical proposal artifact location.
-- Updated container tooling for source-code operations:
-  - installed `git` in the runtime image (`runner` stage).
-  - retained `/opt/rust-mule/.git` metadata in the bundled source tree.
-  - removed rust-mule `origin` remote during image build to prevent accidental push from container context.
-- Addressed PR #15 review feedback:
-  - normalized/validated `proposalDir` handling (`undefined` -> default, relative -> source-root relative, empty string rejected).
-  - strengthened observer scheduling semantics across `stop()` + `start()` transitions with in-flight cycle/generation guards.
-  - added tests for duplicate `start()` and `stop()`/`start()` while a cycle is in flight.
-  - clarified README wording that proposal artifact path is default/configurable.
-- Added lint/format toolchain:
-  - installed dev dependencies: `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-config-prettier`, `prettier`, `globals`.
-  - added flat ESLint config (`eslint.config.mjs`) and Prettier config/ignore files.
-  - added npm scripts: `lint`, `lint:fix`, `format`, `format:check`.
-  - updated `check` script to run `typecheck + lint + test`.
-- Addressed PR #18 review feedback:
-  - aligned declared Node engine with ESLint v10 requirements (`>=20.19.0`).
-  - pinned CI Node setup to `20.19.0` and renamed CI job to explicitly reflect lint stage.
-  - restored intended indentation in architecture tree under `mule-doctor` using a fenced `text` block.
-- Ran `npm run format` across the repository and fixed new lint findings surfaced by ESLint.
-- Migrated LLM client integration to official OpenAI SDK:
-  - added runtime dependency: `openai`.
-  - refactored `src/llm/analyzer.ts` to use `OpenAI` client (`chat.completions.create`) instead of manual `fetch`.
-  - preserved existing tool-calling loop semantics and usage tracking behavior.
-  - improved API error wrapping via structured SDK error handling.
-  - enhanced SDK error formatting to explicitly include API status/code/type when available.
-- Security and reliability hardening:
-  - enforced required bearer token path at startup (`RUST_MULE_TOKEN_PATH`).
-  - made rust-mule auth/debug token file load failures explicit and fatal when configured.
-  - added bounded HTTP timeouts for rust-mule API calls and Mattermost webhook posts.
-  - made read-only rust-mule endpoint calls resilient to transient/unavailable endpoints (including 404 and timeout), with warning logs and safe fallback values.
-  - guarded analyzer against empty OpenAI choices responses.
-  - removed tool-result payload snippets from analyzer logs to reduce sensitive-data leakage.
-  - fixed log watcher offset progression so read failures do not skip unread log bytes.
-  - blocked sensitive paths in source tools (`read_file`/`git_blame`) and excluded sensitive files from search scanning.
-  - added `propose_patch` maximum diff size enforcement to prevent oversized proposal artifacts.
-  - expanded tests for timeout handling and source-tool sensitive path protections.
-- Addressed PR #20 review feedback:
-  - exported `RUST_MULE_TOKEN_PATH` in `entrypoint.sh` so the Node process receives the validated value.
-  - widened sensitive `.env` path detection to block `.env` directory segments as well as files.
-  - aligned `propose_patch` byte-limit enforcement with exact bytes written to disk.
-  - updated `LogWatcher` to advance offsets by consumed bytes and always close/destroy stream resources in `finally`.
-  - made core read endpoints treat HTTP 403 as non-recoverable (while keeping debug endpoint fallback behavior).
-  - added test coverage for `.env` directory blocking, log-watcher offset handling, and core-read 403 behavior.
-- Added deferred backlog item in `docs/TASK.md` for an operator observability web console:
-  - browser UI for app logs, LLM logs, and patch proposal artifacts.
-  - explicit requirement to expose a dedicated container port and map it in docker-compose.
-  - security defaults and read-only constraints documented.
-- Implemented operator console phase 1:
-  - added optional in-process `OperatorConsoleServer` with read-only routes:
-    - `/` (UI)
-    - `/api/health`
-    - `/api/logs/app`
-    - `/api/logs/rust-mule`
-    - `/api/llm/logs` and `/api/llm/logs/:file`
-    - `/api/proposals` and `/api/proposals/:file`
-  - added stdout log buffering (`installStdoutLogBuffer`) so app logs can be inspected from the UI.
-  - wired console startup in `index.ts` behind env toggles, with graceful failure behavior (app continues if UI fails to start).
-  - documented and wired container access:
-    - Dockerfile `EXPOSE 17835 18080`
-    - compose maps UI port but keeps the UI disabled by default; enabling host access requires explicit `MULE_DOCTOR_UI_ENABLED=true`
-    - env vars added: `MULE_DOCTOR_UI_ENABLED`, `MULE_DOCTOR_UI_HOST`, `MULE_DOCTOR_UI_PORT`, `MULE_DOCTOR_UI_LOG_BUFFER_LINES`
-  - added integration-style test coverage for console health/log/proposal endpoints.
-  - addressed PR #22 review feedback:
-    - only install stdout log buffering when the UI or explicit buffer sizing is enabled.
-    - await operator console shutdown with timeout before process exit.
-    - hardened operator console responses with `Cache-Control: no-store`, `Pragma: no-cache`, and `X-Content-Type-Options: nosniff`.
-    - tightened filename validation for console file reads and strengthened resolved-path escape checks.
-    - added focused test coverage for stdout log buffer chunk handling and restore behavior.
-    - updated compose/docs so unauthenticated UI exposure is opt-in instead of default.
-- Operator console phase 2 underway:
-  - adding token-based auth for the UI shell and all `/api/*` routes.
-  - adding SSE streams for live app-log and rust-mule-log viewing.
-  - extending UI to support authenticated access and live stream consumption.
-  - expanding test coverage for auth and stream behavior.
-- Documentation updated for the next architectural direction:
-  - architecture now explicitly documents the operator console as part of the system.
-  - architecture now distinguishes external observation mode from future mule-doctor-managed local test instances.
-  - backlog now includes `InstanceManager` and operator-console control-plane tasks for multi-instance rust-mule supervision.
-  - backlog now also includes splitting the operator-console frontend into static assets instead of inline HTML in server code.
-- Operator-console static asset split underway:
-  - moving the frontend into `src/operatorConsole/public/`
-  - serving HTML/CSS/JS statically from the existing Node server
-  - preserving the current auth, API, and SSE behavior while simplifying `server.ts`
-- Instance-manager foundation underway:
-  - adding persisted managed-instance metadata separate from process launch
-  - adding deterministic runtime directory planning under `/data/instances/<id>`
-  - reserving unique API ports for planned instances
-  - generating bounded per-instance `config.toml` files from confirmed rust-mule settings (`sam.session_name`, `general.data_dir`, `api.port`) plus optional shared template overrides
-  - aligning managed runtime token/log paths with rust-mule `general.data_dir`
-  - explicitly deferring process spawn until rust-mule startup behavior is confirmed
-- Managed-instance launcher phase underway:
-  - adding a bounded process-launch abstraction for rust-mule child-process lifecycle
-  - persisting per-instance runtime process state (`pid`, command, cwd, last exit)
-  - reconciling stale `running` records on mule-doctor startup and polling reconciled live pids so status does not stick forever after a mule-doctor restart
-  - deferring operator-console lifecycle controls until backend launch behavior is in place
-- Managed-instance diagnostics routing underway:
-  - adding a `ManagedInstanceDiagnosticsService` that builds per-instance `RustMuleClient` objects from managed runtime metadata
-  - loading managed-instance bearer/debug tokens from each instance runtime directory before snapshot collection
-  - exposing operator-console diagnostics route for a selected managed instance
-  - extending the console UI to show selected-instance diagnostics alongside detail and per-instance logs
-- Managed-instance on-demand analysis underway:
-  - adding a `ManagedInstanceAnalysisService` that reuses `Analyzer` + `ToolRegistry` against a selected managed instance
-  - capturing a bounded recent log snapshot from the selected instance for tool-based analysis
-  - exposing an operator-console route for on-demand analysis of the selected managed instance
-  - preserving the background observer/Mattermost pipeline on the original configured external client for now
-- Active diagnostic target routing underway:
-  - adding a persisted `activeDiagnosticTarget` runtime-state field
-  - adding a `DiagnosticTargetService` to validate and store `external` vs `managed_instance:<id>` selection
-  - exposing operator-console API/UI hooks for inspecting and updating the active diagnostic target
-  - routing the scheduled observer through a resolved active target each cycle
-  - recording `lastObservedTarget` in runtime state and labeling history entries with the observed target
-  - labeling periodic Mattermost reports with the observed target
-  - emitting explicit degraded/unavailable reports with `healthScore=0` when the selected target cannot be resolved at cycle start
-  - surfacing observer target/runtime state in the operator-console health endpoint and UI
-- Scheduler/operator visibility completed on `main`:
-  - scheduled-target status card and managed-instance target badges
-  - persisted/redacted `lastTargetFailureReason`
-  - bounded `Run cycle now` control
-  - scheduler execution state in runtime/API/UI
-  - bounded operator event timeline
-  - read-only managed-instance comparison view
-- Managed-instance cluster presets underway:
-  - adding a bounded preset catalog (`pair`, `trio`) for local test clusters
-  - adding `InstanceManager.createPlannedInstances()` for batch planned-instance creation with rollback on failure
-  - exposing preset list/apply flows through the operator console API/UI
-  - preserving the single-target scheduler model; preset application does not change active observer targeting
-- Preset-group bulk start underway:
-  - persisting preset membership metadata on managed-instance records
-  - exposing a bounded backend `start preset group` flow
-  - surfacing preset groups in the operator console with one-click group start
-  - keeping group-start failures local to the operation rather than fatal to mule-doctor
-- Preset-group bulk stop/restart underway:
-  - extending the same bounded preset-group model to `stop` and `restart`
-  - preserving partial-failure reporting per group action
-  - keeping scheduled observer targeting unchanged during preset-group lifecycle operations
-- Operator-console cluster grouping underway:
-  - making preset groups first-class cards in the UI
-  - surfacing planned/running/stopped/failed counts per group
-  - surfacing per-group failure summaries
-  - keeping standalone instances visible separately from preset groups
-  - adding group-level shortcuts into the existing compare view
-- Operator-event filtering underway:
-  - adding client-side filters for preset group, managed instance, and event type
-  - reusing the existing recent operator-events payload rather than adding new API query parameters
-- Preset metadata/help underway:
-  - surfacing preset descriptions and node-layout summaries in the preset apply UI
-  - reusing preset metadata on cluster cards so operators can see intended layout at a glance
-  - keeping this slice UI-only with no lifecycle or scheduler changes
-- Operator timeline readability underway:
-  - adding clearer per-type event titles and summaries in the filtered timeline
-  - surfacing target and outcome badges for event rows
-  - keeping the slice UI-only on top of the existing `/api/operator/events` payload
-- Operator timeline grouping underway:
-  - grouping adjacent repeated events in the browser to reduce timeline noise
-  - adding collapse/expand behavior per grouped event block
-  - preserving a raw ungrouped view via a client-side toggle
-- Operator timeline density controls underway:
-  - adding quick toggles for target changes, run requests, and failures
-  - layering those toggles on top of the existing timeline filters
-  - keeping the slice UI-only with no new API or persistence behavior
-- Operator timeline saved views underway:
-  - adding built-in views such as `All`, `Failures`, `Targeting`, and `Run activity`
-  - applying those views by setting the current client-side controls rather than introducing persistence
-  - keeping the underlying controls editable after a view is applied
-- Managed-instance diagnostics/cache hardening underway:
-  - rebuilt cached managed-instance clients when API host/port or token paths change under the same instance id
-  - replaced one-shot managed log snapshots with reusable file-backed recent log sources
-  - added regression tests for both client invalidation and log-source freshness
-- Cluster-to-timeline shortcuts underway:
-  - added `View group events` and `View events` actions to cluster cards and grouped member cards
-  - added failure-focused timeline shortcuts across preset groups, grouped members, standalone instances, the scheduled target card, the scheduler card, and the selected-instance section
-  - reused the existing client-side timeline filters and saved views instead of adding new backend APIs
-  - scrolls operators directly to the timeline card after applying filters
-- Compare-to-timeline shortcuts underway:
-  - added `View left events` / `View right events` and failure-focused compare actions near the compare surface
-  - reused the existing instance-scoped timeline navigation helper instead of adding backend APIs
-  - refreshed compare shortcut enabled state after both manual selector changes and programmatic compare selection updates
-  - aligned compare button wording with the rest of the console and wrapped the selected-instance section in the standard subsection layout after review follow-up
-- Timeline-context feedback completed:
-  - added a live operator-timeline context summary derived from the existing client-side filter/view state
-  - updated that summary when timeline shortcuts and manual filter changes apply new scope/view combinations
-  - kept the slice UI-only with no backend API changes
-- Operator-console frontend modularization completed:
-  - split `src/operatorConsole/public/app.js` into focused browser modules:
-    - `constants.js`
-    - `dom.js`
-    - `api.js`
-    - `statusCards.js`
-    - `timeline.js`
-    - `instances.js`
-  - kept `app.js` as the bootstrap/orchestration entrypoint
-  - updated operator-console tests to validate the new static asset/module layout
+- Task J refinement:
+  - richer lifecycle context/reporting for non-controlled searches
+  - any additional operator workflows that should surface that data more directly
+- Task F refinement:
+  - any additional release-oriented validation that proves worthwhile beyond the current fast checks plus Docker build/layout validation
+- Task M refinement:
+  - doc alignment and any additional tightening at human-triggered LLM invocation boundaries discovered through real use
 
-## Key Decisions
+## Notes
 
-- Use non-overlapping observer scheduling to avoid concurrent diagnostic cycles when analysis exceeds the configured interval.
-- Keep proposal artifacts on disk under `/data` by default for operational visibility and reviewer access.
-- Preserve test portability by injecting per-test temp `proposalDir` instead of writing to `/data` in test runs.
-- For bundled source safety, preserve local git history for `git_blame` while stripping `origin` remote.
-- Keep external rust-mule nodes observer-only, while allowing future controlled lifecycle actions only for mule-doctor-owned local test instances.
-- Use a bounded `InstanceManager` as the future control plane rather than allowing the UI to shell out directly.
-- Build `InstanceManager` in two steps: first metadata/path/port/config planning, then process lifecycle once rust-mule startup assumptions are verified.
-- Port allocation in this phase guarantees non-overlap inside the managed-instance catalog only; probing host-level port availability is deferred until launch wiring.
-- Managed-instance lifecycle should fail locally per instance and never take down mule-doctor as a whole.
-- Managed-instance diagnostics should be selected-instance scoped first; do not jump directly to observing all managed instances concurrently until the per-instance client/session model is stable.
-- Keep selected-instance analysis on-demand until target-aware observer scheduling and reporting semantics are explicitly designed.
-- Active diagnostic target selection must persist in runtime state before the scheduled observer is rerouted.
-- Scheduled observation should remain single-target even though the console can inspect many managed instances.
-- Keep the existing external analyzer for Mattermost command handling, while the scheduled observer may construct target-specific analyzers/tool registries per cycle.
-- Cluster presets should create planned instances in one backend operation rather than driving per-instance creation loops from the browser.
-- Preset application must not implicitly start instances or retarget the scheduled observer.
-- Bulk preset-group lifecycle should operate on persisted preset membership metadata rather than inferring groups from ad hoc naming alone.
-- Preset-group lifecycle semantics should stay symmetric across `start`, `stop`, and `restart` rather than special-casing `start` only.
-- Operator-console cluster grouping should improve readability without introducing new lifecycle semantics or scheduler coupling.
-- Group-level compare shortcuts should reuse the existing compare flow rather than introducing a new comparison backend.
-- Timeline filtering should stay UI-first until there is evidence that the existing event payload size is insufficient.
-- Preset definitions should carry enough operator-facing metadata that preset intent is visible in the console without requiring external docs.
-- Operator timeline readability should be improved in the browser before considering new event APIs or storage changes.
-- Timeline grouping should remain client-side and optional so operators can still inspect the raw event order when needed.
-- Timeline density controls should bias the current view toward high-signal events without replacing the base filter model.
-- Saved timeline views should remain built-in and ephemeral until there is evidence that operators need persisted custom views.
-- Cluster-event navigation should reuse the existing filtered timeline rather than introducing duplicate event views.
-- Managed-instance diagnostics should not cache RustMuleClient instances across endpoint/token changes under the same instance id.
-- Managed-target analysis should use a reusable recent-log source rather than a one-shot static tail snapshot.
-- Introduce frontend modularization before reevaluating any lightweight reactive framework so architecture changes are driven by clearer boundaries rather than by the current monolith shape.
-
-## Validation
-
-- `npm run lint` passes.
-- `npm run check` passes (typecheck + lint + build + full test suite).
-
-## Next Steps
-
-- Break down `src/operatorConsole/server.ts`:
-  - extract interfaces/types into dedicated files
-  - separate route handling, static-asset serving, auth/session helpers, and SSE/log streaming helpers where the boundaries are clear
-  - preserve the current API and auth behavior while making the server module smaller and easier to review
-- After that, continue frontend maintainability work only if still needed:
-  - optional further decomposition inside the new browser modules if one module remains disproportionately large
-  - reevaluate Alpine or another lightweight reactive layer only after the modularized frontend boundaries have proven stable
-- Keep concurrent multi-instance observation deferred until cluster setup and comparison workflows are stable.
+- [docs/TASK.md](../TASK.md) is the current backlog/source of truth for what remains.
+- [docs/architecture/mule-doctor.md](../architecture/mule-doctor.md) is the current runtime/module overview.
+- This handoff file is intentionally brief and should summarize current branch state plus next likely work, rather than restating the full historical delivery log.

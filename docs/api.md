@@ -119,6 +119,7 @@ Common status codes:
 | `POST` | `/api/instances/{id}/shared/republish_keywords` | Trigger keyword republish |
 | `GET` | `/api/instances/compare?left={id}&right={id}` | Compare two managed instances |
 | `POST` | `/api/discoverability/check` | Run a controlled discoverability check between managed instances |
+| `POST` | `/api/searches/launch` | Launch a manual keyword search against the active target or a managed instance |
 
 ### Managed Instance Presets
 
@@ -747,6 +748,58 @@ Error behavior:
 - returns `429` when human-triggered managed-instance analysis is rate-limited; response includes `retryAfterSec`
 - returns `404` for missing managed instances
 - returns `501` if managed-instance analysis is unavailable
+
+### `POST /api/searches/launch`
+
+Launches a manual keyword search through mule-doctor's operator workflow and records a dispatch-time `operator_triggered_search` lifecycle entry in search-health history.
+
+Request body:
+
+```json
+{
+  "mode": "managed_instance",
+  "instanceId": "lab-a",
+  "query": "fixture token"
+}
+```
+
+Alternative request body:
+
+```json
+{
+  "mode": "active_target",
+  "keywordIdHex": "abcd1234"
+}
+```
+
+Rules:
+
+- `mode` must be either `active_target` or `managed_instance`
+- `instanceId` is required when `mode` is `managed_instance`
+- exactly one of `query` or `keywordIdHex` must be provided
+
+Response:
+
+```json
+{
+  "ok": true,
+  "result": {
+    "source": "operator_triggered_search",
+    "target": { "kind": "managed_instance", "instanceId": "lab-a" },
+    "targetLabel": "managed instance lab-a",
+    "searchId": "search-123",
+    "query": "fixture token",
+    "keywordIdHex": null,
+    "dispatchedAt": "2026-03-25T14:00:00.000Z"
+  }
+}
+```
+
+Error behavior:
+
+- returns `400` for malformed payloads, missing `instanceId`, or ambiguous input that includes both `query` and `keywordIdHex`
+- returns `404` for missing managed instances
+- returns `501` if manual operator search support is unavailable in the current runtime
 
 ### `POST /api/instances/{id}/start`
 

@@ -82,6 +82,8 @@ The following major slices are already landed on `main`:
 
 ## Task D: Operator Console Control Plane Completion
 
+Status: complete for current scope. The operator console is now the bounded control surface for mule-doctor-managed local instances, with authenticated UI/API flows for lifecycle actions, targeting, analysis, shared-content maintenance, controlled discoverability, manual keyword search launch, compare views, runtime-surface inspection, and operator-event auditing. Remaining work here should be treated as incremental UX polish discovered during future feature work.
+
 1. Extend the operator console from observability-first into the bounded control surface for mule-doctor-managed local instances.
 2. Review the remaining lifecycle/control gaps in the current UI/API and close the highest-value ones first.
 3. Preserve explicit safety boundaries so external nodes remain observer-only.
@@ -95,6 +97,8 @@ Acceptance criteria:
 
 ## Task E: Runtime and Container Hardening
 
+Status: complete for current scope. The runtime/container contract is documented and enforced across the image layout, entrypoint bootstrap, startup readiness checks, healthcheck behavior, and local/manual smoke harness. Remaining work here should be limited to incremental contract cleanup when runtime behavior changes.
+
 1. Recheck the live container/runtime layout against `docs/architecture/mule-doctor.md`.
 2. Add or tighten startup/entrypoint behavior where the architecture and runtime still differ.
 3. Document production/runtime dependencies and any remaining operational assumptions.
@@ -104,13 +108,6 @@ Acceptance criteria:
 - Container boots reliably in the documented layout.
 - Runtime assumptions are explicit rather than implicit in scripts or code.
 - Operators can follow the documented runtime contract without source inspection.
-
-Current status:
-
-- runtime/container contract docs have been aligned with the shipped image, entrypoint, readiness checks, and smoke flow
-- startup now fails early for misconfigured source paths and missing managed-instance rust-mule binaries
-- `entrypoint.sh` now waits for a readable, non-empty token file before mule-doctor starts
-- remaining work here should be incremental follow-ups, not the next main delivery track
 
 ## Task F: Release and CI Hardening
 
@@ -135,7 +132,7 @@ Current status:
 - smoke-harness contract tests now cover generated files and failure diagnostics without depending on a live I2P/SAM-backed rust-mule runtime
 - `entrypoint.sh` and `container-healthcheck.sh` now have script-level contract coverage for token wait behavior, process/pid assumptions, and authenticated readiness checks
 - full `npm run smoke:docker` runtime validation remains environment-specific because rust-mule needs an available SAM/I2P dependency and is not portable to GitHub-hosted runners
-- remaining Task F work should focus on release-oriented validation and any additional high-value integration coverage beyond `npm run check` plus Docker build validation
+- remaining Task F work is follow-up only and should focus on any additional release-oriented validation that materially improves confidence beyond the current `npm run check` plus Docker build/layout validation path
 
 ## Task J: Track Full Search Lifecycle and Search Health Signals
 
@@ -165,7 +162,7 @@ Current status:
 - managed-instance surface diagnostics now also persist deduplicated observed search lifecycle records for active and terminal keyword searches
 - observer cycles now also persist deduplicated observed search lifecycle records for the active diagnostic target, including externally configured targets
 - operator console manual keyword search dispatch now records first-class lifecycle entries against the selected managed instance or active diagnostic target
-- remaining work should focus on refining search-lifecycle context richness for non-controlled searches and tightening any remaining operator workflows that should emit or surface search lifecycle state more directly
+- remaining work should focus on refinement only: richer lifecycle context for non-controlled searches, tighter operator workflows around that data, and any additional reporting surfaces that prove useful in practice
 
 ## Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
 
@@ -195,13 +192,15 @@ Acceptance criteria:
 
 ## Task L: Formalize Managed rust-mule config.toml Template Ownership
 
+Status: complete for current scope. mule-doctor now enforces the managed-vs-operator config ownership boundary in code, exposes one bounded operator-facing template input surface, rejects conflicting managed keys explicitly, and documents the generated `config.toml` contract clearly enough for routine use.
+
 Current status:
 
 - mule-doctor now enforces the managed config ownership boundary in code instead of only documenting it
 - conflicting template keys for mule-doctor-owned settings are rejected explicitly during config rendering
 - the generated `config.toml` header now lists mule-doctor-owned keys, externally managed template keys, and explicitly rejected conflicting keys
 - mule-doctor now also accepts one bounded operator-facing input surface for this contract via `MULE_DOCTOR_MANAGED_RUST_MULE_CONFIG_TEMPLATE_JSON`
-- remaining work should focus on whether any additional operator ergonomics are needed beyond the current template object plus bounded JSON env input
+- remaining work here should be treated as operator-ergonomics follow-up only if real usage shows the bounded JSON input is insufficient
 
 1. Turn the current managed-instance config generation into an explicit ownership model for per-instance `config.toml` files.
 2. Preserve the existing split of responsibility:
@@ -286,6 +285,6 @@ Acceptance criteria:
 
 ## Recommended Next Order
 
-1. Task F: Release and CI Hardening
-2. Task J: Track Full Search Lifecycle and Search Health Signals
-3. Task E: Runtime and Container Hardening follow-up cleanup only
+1. Task J: Track Full Search Lifecycle and Search Health Signals follow-up refinement
+2. Task F: Release and CI Hardening follow-up refinement
+3. Task M: Human-triggered LLM boundary refinement and doc alignment

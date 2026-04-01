@@ -165,9 +165,13 @@ Notes:
 - `n` is optional
 - default `10`
 - bounded to `1..100`
-- currently records controlled discoverability searches as the first search-health source
+- records normalized lifecycle entries from controlled discoverability, managed-instance observation, observer-target observation, and operator-triggered manual search launch
 - includes readiness-at-dispatch, transport context, state transitions, and terminal outcome in a normalized mule-doctor-owned shape
-- `source` is currently `controlled_discoverability`
+- `source` can currently be:
+  - `controlled_discoverability`
+  - `managed_instance_observation`
+  - `observer_target_observation`
+  - `operator_triggered_search`
 - `transportAtDispatch.*.degradedIndicators` is mule-doctor-derived context such as:
   - `no_live_peers`
   - `status_not_ready`

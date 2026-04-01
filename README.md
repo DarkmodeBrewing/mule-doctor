@@ -100,16 +100,15 @@ Smoke prerequisites:
 - `OPENAI_API_KEY` and `MATTERMOST_WEBHOOK_URL` may be omitted for smoke use; the harness injects safe placeholder values unless you override them
 - if you override `RUST_MULE_TOKEN_PATH`, it must stay under `/data` because the harness validates host-mounted artifacts directly
 
-Note: rust-mule readiness handling is being aligned with the newer `200 + ready: true/false` contract in code and tests, but the broader observer/search workflow work is still tracked in [docs/TASK.md](docs/TASK.md).
-
 Operator console (optional):
 
 - `GET /` serves the token-protected operator console UI.
 - The UI and `/api/*` routes are guarded by `MULE_DOCTOR_UI_AUTH_TOKEN`.
 - JSON endpoints and request/response details are documented in [docs/api.md](docs/api.md).
 - Live log streaming is available through SSE at `/api/stream/app` and `/api/stream/rust-mule`.
-- The selected-instance panel now shows a compact rust-mule surface summary over searches, shared publish state, shared actions, and downloads, with the raw summary payload still available underneath.
+- The selected-instance panel now shows a compact rust-mule surface summary over searches, shared publish state, shared actions, and downloads, with structured runtime-surface detail available through the UI and API.
 - The selected-instance panel is also the primary bounded control surface for mule-doctor-managed local instances: lifecycle, targeting, analysis, shared-content actions, and controlled discoverability.
+- Operators can also launch manual keyword searches from the console, with those dispatches recorded into search-health history.
 - Frontend assets are served statically from the built-in operator-console public bundle rather than inline backend HTML templates.
 - Docker compose maps UI port `${MULE_DOCTOR_UI_PORT:-18080}`, but keeps the UI disabled by default.
 - To access the console from the host, explicitly set `MULE_DOCTOR_UI_ENABLED=true`, provide `MULE_DOCTOR_UI_AUTH_TOKEN`, and keep `MULE_DOCTOR_UI_HOST=0.0.0.0` inside the container.
