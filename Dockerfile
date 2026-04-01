@@ -14,6 +14,7 @@ WORKDIR /opt
 RUN git clone "${RUST_MULE_REPO}" /opt/rust-mule \
     && cd /opt/rust-mule \
     && git checkout "${RUST_MULE_REF}" \
+    && printf 'Resolved rust-mule ref: %s\n' "$(git rev-parse HEAD)" \
     && git remote remove origin
 
 WORKDIR /opt/rust-mule
