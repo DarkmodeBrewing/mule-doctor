@@ -128,6 +128,7 @@ Current status:
 
 - PRs now validate the Docker/compose build path in a dedicated workflow so container regressions surface before merge
 - PR CI also validates the packaged runtime image layout and metadata so release-image drift is caught before merge
+- Docker CI now also validates the pinned non-root runtime identity and verifies the shipped runtime user can write the expected `/data` subpaths
 - pushes to `main` now rerun the fast check suite and Docker validation so the mainline release path is continuously revalidated
 - smoke-harness contract tests now cover generated files and failure diagnostics without depending on a live I2P/SAM-backed rust-mule runtime
 - `entrypoint.sh` and `container-healthcheck.sh` now have script-level contract coverage for token wait behavior, process/pid assumptions, and authenticated readiness checks

@@ -157,11 +157,17 @@ Important distinction:
 Runtime contract summary:
 
 - the image provides defaults for `/opt/rust-mule`, `/app`, `/data`, and the bundled healthcheck script
+- the image runtime user is pinned to `node` (`1000:1000`) so `/data` bind-mount ownership is deterministic
 - `entrypoint.sh` owns rust-mule process bootstrap inside the container
 - mule-doctor process startup only begins after the token file at `RUST_MULE_TOKEN_PATH` is readable and non-empty
 - mule-doctor then performs its own readiness validation before wiring runtime services
 - the Docker `HEALTHCHECK` is a steady-state probe, not a bootstrap mechanism
 - `npm run smoke:docker` is the canonical end-to-end validation path for the composed container stack
+
+Bind-mount ownership note:
+
+- if `/data` is provided as a host bind mount, the host path should be writable by `1000:1000`
+- startup readiness errors for `/data` paths now include an operator hint to `chown -R 1000:1000 <host-data-dir>` when the failure looks like a permission problem
 
 ## 3. Managed rust-mule config.toml Generation
 

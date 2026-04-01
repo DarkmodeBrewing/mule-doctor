@@ -71,10 +71,16 @@ Runtime contract layers:
 Container runtime hardening:
 
 - the image now includes a Docker `HEALTHCHECK`
+- the image runtime user is pinned to `node` (`1000:1000`) so bind-mounted `/data` ownership is deterministic
 - it verifies both tracked processes are alive and that rust-mule local readiness has reached:
   - `/api/v1/status.ready == true`
   - `/api/v1/searches.ready == true`
 - when the operator console is enabled, it also verifies mule-doctor `GET /api/health`
+
+Bind-mount note:
+
+- if `/data` is a host bind mount, the host path should be writable by `1000:1000`
+- if startup reports `/data` permission failures, fix the host mount ownership with `chown -R 1000:1000 <host-data-dir>`
 
 End-to-end smoke harness:
 

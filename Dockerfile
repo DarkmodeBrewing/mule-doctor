@@ -45,10 +45,8 @@ COPY --from=rust-builder /opt/rust-mule /opt/rust-mule
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh /app/scripts/container-healthcheck.sh
 
-RUN groupadd --system mule \
-    && useradd --system --gid mule --home-dir /app --shell /usr/sbin/nologin mule \
-    && mkdir -p /data /data/logs /data/mule-doctor \
-    && chown -R mule:mule /data
+RUN mkdir -p /data /data/logs /data/mule-doctor \
+    && chown -R node:node /data
 
 ENV NODE_ENV=production
 ENV RUST_MULE_API_URL=http://127.0.0.1:17835
@@ -66,6 +64,6 @@ ENV MULE_DOCTOR_UI_PORT=18080
 VOLUME ["/data"]
 EXPOSE 17835 18080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=150s --retries=3 CMD ["/app/scripts/container-healthcheck.sh"]
-USER mule
+USER node
 
 CMD ["/entrypoint.sh"]

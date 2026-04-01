@@ -5,7 +5,12 @@ import { access, chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/prom
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { validateStartupReadiness } from "../../dist/startup/readiness.js";
+import {
+  buildContainerVolumeOwnershipHint,
+  CONTAINER_RUNTIME_GID,
+  CONTAINER_RUNTIME_UID,
+  validateStartupReadiness,
+} from "../../dist/startup/readiness.js";
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "mule-doctor-readiness-"));
@@ -167,4 +172,22 @@ test("validateStartupReadiness rejects existing read-only state files", async (t
   } finally {
     await tmp.cleanup();
   }
+});
+
+test("buildContainerVolumeOwnershipHint recommends chown for /data permission errors", () => {
+  const hint = buildContainerVolumeOwnershipHint("/data/mule-doctor/state.json", { code: "EACCES" });
+
+  assert.match(hint, new RegExp(`${CONTAINER_RUNTIME_UID}:${CONTAINER_RUNTIME_GID}`));
+  assert.match(hint, /chown -R/);
+});
+
+test("buildContainerVolumeOwnershipHint ignores non-/data or non-permission errors", () => {
+  assert.equal(
+    buildContainerVolumeOwnershipHint("/tmp/mule-doctor/state.json", { code: "EACCES" }),
+    "",
+  );
+  assert.equal(
+    buildContainerVolumeOwnershipHint("/data/mule-doctor/state.json", { code: "ENOENT" }),
+    "",
+  );
 });

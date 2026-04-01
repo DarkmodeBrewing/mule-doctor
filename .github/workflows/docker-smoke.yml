@@ -92,6 +92,31 @@ jobs:
             [ "$MULE_DOCTOR_UI_PORT" = "18080" ]
           '
 
+      - name: Validate Runtime User Identity
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: |
+          docker run --rm --entrypoint bash "$IMAGE_REF" -lc '
+            set -euo pipefail
+            [ "$(id -u)" = "1000" ]
+            [ "$(id -g)" = "1000" ]
+          '
+
+      - name: Validate Runtime User Can Write Data Paths
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: |
+          docker run --rm --entrypoint bash "$IMAGE_REF" -lc '
+            set -euo pipefail
+            mkdir -p /data/logs /data/mule-doctor /data/mule-doctor/proposals
+            for path in /data/logs /data/mule-doctor /data/mule-doctor/proposals; do
+              probe="$path/.ci-write-probe"
+              printf "ok\n" >"$probe"
+              test -f "$probe"
+              rm -f "$probe"
+            done
+          '
+
       - name: Validate Docker Image Metadata
         env:
           IMAGE_ID: ${{ steps.image.outputs.image_id }}
@@ -102,6 +127,6 @@ jobs:
           healthcheck="$(docker image inspect "$IMAGE_ID" --format '{{ json .Config.Healthcheck.Test }}')"
 
           [ "$workdir" = "/app" ]
-          [ "$user" = "mule" ]
+          [ "$user" = "node" ]
           [ "$cmd" = '["/entrypoint.sh"]' ]
           [ "$healthcheck" = '["CMD","/app/scripts/container-healthcheck.sh"]' ]
