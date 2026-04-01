@@ -4,7 +4,7 @@ mule-doctor is an AI-assisted diagnostic and operator agent for rust-mule nodes.
 
 It continuously observes node behavior through the rust-mule control plane (API), log files, optional source code access, and an operator-facing console. The system analyzes network health, detects anomalies, and reports observations to developers.
 
-The tool is designed for debugging and research of Kademlia-based distributed hash table (DHT) behavior during development and soak testing.
+The tool is designed for debugging and research of Kademlia-based distributed hash table (DHT) behavior during development and soak testing, while also providing a bounded local control plane for mule-doctor-owned test instances.
 
 ---
 
@@ -118,9 +118,10 @@ Future automated testing will only occur in isolated sandbox instances.
 
 ## Threat Model and Failure Modes
 
-mule-doctor is designed as an **observability and diagnostics tool**, not as a
-control plane for rust-mule. Several safety boundaries are enforced to prevent
-unintended interference with the running node.
+mule-doctor is designed as an **observability and diagnostics tool for external
+nodes** and a **bounded control plane for mule-doctor-owned local test
+instances**. Several safety boundaries are enforced to prevent unintended
+interference with any running node.
 
 ### Potential Risks
 
@@ -137,7 +138,7 @@ LLM-driven diagnostics introduce several risks:
 The following safeguards are implemented:
 
 - read-only access to rust-mule runtime state
-- no automatic modification of binaries or configuration
+- no automatic modification of externally managed binaries or configuration
 - sandbox-only compilation for experimental patches
 - structured tool responses to prevent misinterpretation
 - token usage logging and daily cost reporting
@@ -164,8 +165,9 @@ The core design rule is:
 For externally managed nodes, the system operates strictly as an **observer and
 advisor**, never as an automatic control mechanism.
 
-For future managed local test instances started by mule-doctor itself, the
-system may perform explicit lifecycle actions such as start, stop, and restart,
+For managed local test instances started by mule-doctor itself, the system may
+perform explicit lifecycle actions such as start, stop, restart, targeted
+analysis, shared-content maintenance, and controlled discoverability checks,
 but only against those mule-doctor-owned instances and only through a bounded
 instance-management layer.
 
@@ -230,6 +232,8 @@ Current phase:
   - start / stop / restart preset group
   - selected-instance diagnostics / analysis / compare views
   - selected-instance shared-content and discoverability actions
+  - selected-instance manual keyword search launch
+  - selected-instance structured runtime-surface diagnostics
   - set active diagnostic target
 
 Current runtime-surface boundary:
@@ -259,7 +263,7 @@ Primary purpose:
 - inspect mule-doctor runtime health
 - inspect rust-mule logs and LLM logs
 - review saved patch proposals
-- provide a future home for controlled local test-instance management
+- provide the bounded browser control plane for mule-doctor-managed local test-instance workflows
 
 Required runtime controls:
 

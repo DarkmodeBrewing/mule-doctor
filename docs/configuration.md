@@ -318,7 +318,7 @@ Specifically, mule-doctor readiness does not:
 - verify rust-mule HTTP readiness flags
 - verify container process supervision
 
-rust-mule readiness semantics are currently evolving toward explicit payload readiness flags rather than HTTP `503`/`504` responses. Task E's current runtime/container hardening work is focused on keeping the documented contract and the shipped container behavior aligned as those readiness semantics continue to evolve.
+rust-mule readiness is treated through explicit payload flags such as `status.ready` and `searches.ready`, rather than older `503`/`504` assumptions.
 
 ### Container healthcheck behavior
 
