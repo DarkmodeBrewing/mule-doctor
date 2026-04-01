@@ -15,7 +15,6 @@ import {
   type ProcessLauncher,
 } from "./processLauncher.js";
 import {
-  buildRuntimePaths,
   clampPollMs,
   clampPort,
   type CreateManagedInstanceInput,

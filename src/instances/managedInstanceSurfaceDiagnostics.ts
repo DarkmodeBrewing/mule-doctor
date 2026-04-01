@@ -10,21 +10,13 @@ import {
   buildManagedInstanceSurfaceSnapshot,
 } from "./managedInstanceSurfaceDiagnosticsView.js";
 import type {
-  ManagedDownloadDetail,
   ManagedInstanceSurfaceDiagnosticsSnapshot,
   ManagedInstanceSurfaceDiagnosticsSummary,
-  ManagedKeywordSearchThreadDetail,
-  ManagedSharedActionDetail,
-  ManagedSharedFileDetail,
 } from "./managedInstanceSurfaceDiagnosticsTypes.js";
 
 export type {
-  ManagedDownloadDetail,
   ManagedInstanceSurfaceDiagnosticsSnapshot,
   ManagedInstanceSurfaceDiagnosticsSummary,
-  ManagedKeywordSearchThreadDetail,
-  ManagedSharedActionDetail,
-  ManagedSharedFileDetail,
 } from "./managedInstanceSurfaceDiagnosticsTypes.js";
 
 export class ManagedInstanceSurfaceDiagnosticsService {
