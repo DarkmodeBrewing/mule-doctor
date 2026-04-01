@@ -113,7 +113,7 @@ test("OperatorConsoleServer redacts operator event messages", async () => {
       {
         timestamp: "2026-03-08T02:00:00.000Z",
         type: "diagnostic_target_changed",
-        message: "Failed to read /workspace/secret.env while rotating token",
+        message: "Failed to rotate token=super-secret-value while reconnecting",
         target: { kind: "external" },
         actor: "operator_console",
       },
@@ -139,7 +139,8 @@ test("OperatorConsoleServer redacts operator event messages", async () => {
     assert.equal(res.status, 200);
     const payload = await res.json();
     assert.equal(payload.events.length, 1);
-    assert.equal(payload.events[0].message.includes("/workspace/secret.env"), false);
+    assert.equal(payload.events[0].message.includes("super-secret-value"), false);
+    assert.equal(payload.events[0].message.includes("token=[redacted]"), true);
 
     await server.stop();
   } finally {
