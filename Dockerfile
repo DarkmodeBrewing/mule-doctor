@@ -31,9 +31,6 @@ RUN npm run build
 
 FROM node:20-bookworm-slim AS runner
 
-ARG MULE_UID=1000
-ARG MULE_GID=1000
-
 RUN apt-get update && apt-get install -y \
     git \
     ca-certificates \
@@ -48,10 +45,8 @@ COPY --from=rust-builder /opt/rust-mule /opt/rust-mule
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh /app/scripts/container-healthcheck.sh
 
-RUN groupadd --gid "$MULE_GID" mule \
-    && useradd --uid "$MULE_UID" --gid mule --home-dir /app --shell /usr/sbin/nologin mule \
-    && mkdir -p /data /data/logs /data/mule-doctor \
-    && chown -R mule:mule /data
+RUN mkdir -p /data /data/logs /data/mule-doctor \
+    && chown -R node:node /data
 
 ENV NODE_ENV=production
 ENV RUST_MULE_API_URL=http://127.0.0.1:17835
@@ -69,6 +64,6 @@ ENV MULE_DOCTOR_UI_PORT=18080
 VOLUME ["/data"]
 EXPOSE 17835 18080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=150s --retries=3 CMD ["/app/scripts/container-healthcheck.sh"]
-USER mule
+USER node
 
 CMD ["/entrypoint.sh"]

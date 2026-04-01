@@ -127,6 +127,6 @@ jobs:
           healthcheck="$(docker image inspect "$IMAGE_ID" --format '{{ json .Config.Healthcheck.Test }}')"
 
           [ "$workdir" = "/app" ]
-          [ "$user" = "mule" ]
+          [ "$user" = "node" ]
           [ "$cmd" = '["/entrypoint.sh"]' ]
           [ "$healthcheck" = '["CMD","/app/scripts/container-healthcheck.sh"]' ]

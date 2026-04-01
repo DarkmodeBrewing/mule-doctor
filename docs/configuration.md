@@ -157,7 +157,7 @@ Important distinction:
 Runtime contract summary:
 
 - the image provides defaults for `/opt/rust-mule`, `/app`, `/data`, and the bundled healthcheck script
-- the image runtime user is pinned to `mule` (`1000:1000`) so `/data` bind-mount ownership is deterministic
+- the image runtime user is pinned to `node` (`1000:1000`) so `/data` bind-mount ownership is deterministic
 - `entrypoint.sh` owns rust-mule process bootstrap inside the container
 - mule-doctor process startup only begins after the token file at `RUST_MULE_TOKEN_PATH` is readable and non-empty
 - mule-doctor then performs its own readiness validation before wiring runtime services

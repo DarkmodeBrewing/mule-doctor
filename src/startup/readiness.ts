@@ -2,7 +2,7 @@ import { access, mkdir, stat } from "fs/promises";
 import { constants } from "fs";
 import { dirname, resolve } from "path";
 
-export const CONTAINER_RUNTIME_USER = "mule";
+export const CONTAINER_RUNTIME_USER = "node";
 export const CONTAINER_RUNTIME_UID = 1000;
 export const CONTAINER_RUNTIME_GID = 1000;
 

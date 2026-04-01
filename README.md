@@ -71,7 +71,7 @@ Runtime contract layers:
 Container runtime hardening:
 
 - the image now includes a Docker `HEALTHCHECK`
-- the image runtime user is pinned to `mule` (`1000:1000`) so bind-mounted `/data` ownership is deterministic
+- the image runtime user is pinned to `node` (`1000:1000`) so bind-mounted `/data` ownership is deterministic
 - it verifies both tracked processes are alive and that rust-mule local readiness has reached:
   - `/api/v1/status.ready == true`
   - `/api/v1/searches.ready == true`
