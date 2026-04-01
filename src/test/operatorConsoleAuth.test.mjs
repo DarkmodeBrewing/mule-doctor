@@ -430,10 +430,20 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     });
     assert.equal(invalidPathRes.status, 400);
 
+    const malformedProposalPathRes = await fetch(`${baseUrl}/api/proposals/%E0%A4%A`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(malformedProposalPathRes.status, 400);
+
     const invalidDriveLikePathRes = await fetch(`${baseUrl}/api/proposals/D%3Asecret.patch`, {
       headers: { Cookie: cookie },
     });
     assert.equal(invalidDriveLikePathRes.status, 400);
+
+    const malformedLlmPathRes = await fetch(`${baseUrl}/api/llm/logs/%E0%A4%A`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(malformedLlmPathRes.status, 400);
 
     const malformedCookieHealthRes = await fetch(`${baseUrl}/api/health`, {
       headers: { Cookie: "mule_doctor_ui_token=%E0%A4%A" },

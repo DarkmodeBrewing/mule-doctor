@@ -4,185 +4,68 @@
  * Polls endpoints periodically and exposes typed response helpers.
  */
 
-import { readFile } from "fs/promises";
+import {
+  DEFAULT_HTTP_TIMEOUT_MS,
+  HttpError,
+  isRecoverableReadError,
+  log,
+  normalizeBootstrapResult,
+  normalizeDownloads,
+  normalizeLookupStats,
+  normalizeRoutingBuckets,
+  normalizeSearchDetail,
+  normalizeSearches,
+  normalizeSharedActions,
+  normalizeSharedFiles,
+  normalizeStatus,
+  normalizeTraceLookupResult,
+  readString,
+  RequestTimeoutError,
+} from "./rustMuleClientShared.js";
+import { RustMuleClientTransport } from "./rustMuleClientTransport.js";
+import type {
+  BootstrapJobResult,
+  LookupStats,
+  NodeInfo,
+  Peer,
+  PollOptions,
+  RoutingBucket,
+  RustMuleDownloadsResponse,
+  RustMuleKeywordSearchResponse,
+  RustMuleReadiness,
+  RustMuleSearchDetailResponse,
+  RustMuleSearchesResponse,
+  RustMuleSharedActionsResponse,
+  RustMuleSharedFilesResponse,
+  RustMuleStatus,
+  TraceLookupResult,
+} from "./rustMuleClientTypes.js";
 
-export interface NodeInfo {
-  nodeId: string;
-  version: string;
-  uptime: number;
-  [key: string]: unknown;
-}
-
-export interface Peer {
-  id: string;
-  address: string;
-  latencyMs?: number;
-  [key: string]: unknown;
-}
-
-export interface RoutingBucket {
-  index: number;
-  count: number;
-  size: number;
-  [key: string]: unknown;
-}
-
-export interface LookupStats {
-  total: number;
-  successful: number;
-  failed: number;
-  avgDurationMs: number;
-  matchPerSent: number;
-  timeoutsPerSent: number;
-  outboundShaperDelayedTotal: number;
-  [key: string]: unknown;
-}
-
-export interface RustMuleStatus {
-  ready: boolean;
-  [key: string]: unknown;
-}
-
-export interface RustMuleKeywordSearchInfo {
-  search_id_hex?: string;
-  keyword_id_hex?: string;
-  keyword_label?: string;
-  state?: string;
-  created_secs_ago?: number;
-  hits?: number;
-  want_search?: boolean;
-  publish_enabled?: boolean;
-  got_publish_ack?: boolean;
-  [key: string]: unknown;
-}
-
-export interface RustMuleSearchesResponse {
-  ready: boolean;
-  searches: RustMuleKeywordSearchInfo[];
-  [key: string]: unknown;
-}
-
-export interface RustMuleKeywordHit {
-  file_id_hex?: string;
-  filename?: string;
-  file_size?: number;
-  file_type?: string;
-  publish_info?: Record<string, unknown>;
-  origin?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-export interface RustMuleSearchDetailResponse {
-  search: RustMuleKeywordSearchInfo;
-  hits: RustMuleKeywordHit[];
-  [key: string]: unknown;
-}
-
-export interface RustMuleKeywordSearchResponse {
-  keyword_id_hex?: string;
-  search_id_hex?: string;
-  [key: string]: unknown;
-}
-
-export interface RustMuleSharedFileEntry {
-  identity?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-export interface RustMuleSharedFilesResponse {
-  files: RustMuleSharedFileEntry[];
-  [key: string]: unknown;
-}
-
-export interface RustMuleSharedActionStatus {
-  [key: string]: unknown;
-}
-
-export interface RustMuleSharedActionsResponse {
-  actions: RustMuleSharedActionStatus[];
-  [key: string]: unknown;
-}
-
-export interface RustMuleDownloadEntry {
-  [key: string]: unknown;
-}
-
-export interface RustMuleDownloadsResponse {
-  downloads: RustMuleDownloadEntry[];
-  [key: string]: unknown;
-}
-
-export interface RustMuleReadiness {
-  statusReady: boolean;
-  searchesReady: boolean;
-  ready: boolean;
-  status: RustMuleStatus;
-  searches: RustMuleSearchesResponse;
-}
-
-export interface BootstrapJobResult {
-  jobId: string;
-  status: string;
-  [key: string]: unknown;
-}
-
-export interface TraceLookupHop {
-  peerQueried: string;
-  distance?: number;
-  rttMs?: number;
-  contactsReturned?: number;
-  error?: string;
-  [key: string]: unknown;
-}
-
-export interface TraceLookupResult {
-  traceId: string;
-  status: string;
-  hops: TraceLookupHop[];
-  [key: string]: unknown;
-}
-
-interface RequestOptions {
-  debug?: boolean;
-}
-
-interface PollOptions {
-  pollIntervalMs?: number;
-  maxWaitMs?: number;
-}
-
-class RequestTimeoutError extends Error {
-  readonly timeoutMs: number;
-
-  constructor(method: string, url: string, timeoutMs: number) {
-    super(`${method} ${url} timed out after ${timeoutMs}ms`);
-    this.name = "RequestTimeoutError";
-    this.timeoutMs = timeoutMs;
-  }
-}
-
-class HttpError extends Error {
-  readonly status: number;
-
-  constructor(method: string, url: string, status: number) {
-    super(`${method} ${url} failed with status ${status}`);
-    this.name = "HttpError";
-    this.status = status;
-  }
-}
-
-const DEFAULT_POLL_INTERVAL_MS = 500;
-const DEFAULT_MAX_WAIT_MS = 15_000;
-const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
+export type {
+  BootstrapJobResult,
+  LookupStats,
+  NodeInfo,
+  Peer,
+  RoutingBucket,
+  RustMuleDownloadEntry,
+  RustMuleDownloadsResponse,
+  RustMuleKeywordHit,
+  RustMuleKeywordSearchInfo,
+  RustMuleKeywordSearchResponse,
+  RustMuleReadiness,
+  RustMuleSearchDetailResponse,
+  RustMuleSearchesResponse,
+  RustMuleSharedActionsResponse,
+  RustMuleSharedActionStatus,
+  RustMuleSharedFileEntry,
+  RustMuleSharedFilesResponse,
+  RustMuleStatus,
+  TraceLookupHop,
+  TraceLookupResult,
+} from "./rustMuleClientTypes.js";
 
 export class RustMuleClient {
-  private readonly baseUrl: string;
-  private readonly apiPrefix: string;
-  private readonly tokenPath: string | undefined;
-  private readonly debugTokenPath: string | undefined;
-  private readonly httpTimeoutMs: number;
-  private authToken: string | undefined;
-  private debugToken: string | undefined;
+  private readonly transport: RustMuleClientTransport;
 
   constructor(
     baseUrl: string,
@@ -191,107 +74,17 @@ export class RustMuleClient {
     debugTokenPath?: string,
     httpTimeoutMs = DEFAULT_HTTP_TIMEOUT_MS,
   ) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
-    const trimmedPrefix = apiPrefix.trim();
-    if (trimmedPrefix === "") {
-      this.apiPrefix = "";
-    } else {
-      const withoutTrailing = trimmedPrefix.replace(/\/+$/, "");
-      this.apiPrefix = withoutTrailing.startsWith("/") ? withoutTrailing : `/${withoutTrailing}`;
-    }
-    this.tokenPath = tokenPath;
-    this.debugTokenPath = debugTokenPath;
-    this.httpTimeoutMs = clampInt(httpTimeoutMs, DEFAULT_HTTP_TIMEOUT_MS, 100, 120_000);
+    this.transport = new RustMuleClientTransport(
+      baseUrl,
+      tokenPath,
+      apiPrefix,
+      debugTokenPath,
+      httpTimeoutMs,
+    );
   }
 
-  /** Load bearer/debug tokens from disk (if configured). */
   async loadToken(): Promise<void> {
-    if (this.tokenPath) {
-      try {
-        const token = (await readFile(this.tokenPath, "utf8")).trim();
-        if (!token) {
-          throw new Error("Auth token file is empty");
-        }
-        this.authToken = token;
-        log("info", "rustMuleClient", "Auth token loaded");
-      } catch (err) {
-        throw new Error(`Failed to load auth token from ${this.tokenPath}: ${String(err)}`, {
-          cause: err,
-        });
-      }
-    }
-
-    if (this.debugTokenPath) {
-      try {
-        const token = (await readFile(this.debugTokenPath, "utf8")).trim();
-        if (!token) {
-          throw new Error("Debug token file is empty");
-        }
-        this.debugToken = token;
-        log("info", "rustMuleClient", "Debug token loaded");
-      } catch (err) {
-        throw new Error(`Failed to load debug token from ${this.debugTokenPath}: ${String(err)}`, {
-          cause: err,
-        });
-      }
-    }
-  }
-
-  private headers(options: RequestOptions = {}): Record<string, string> {
-    const h: Record<string, string> = { "Content-Type": "application/json" };
-    if (this.authToken) h["Authorization"] = `Bearer ${this.authToken}`;
-    if (options.debug && this.debugToken) {
-      h["X-Debug-Token"] = this.debugToken;
-    }
-    return h;
-  }
-
-  private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const url = `${this.baseUrl}${this.apiPrefix}${path}`;
-    const res = await this.fetchWithTimeout("GET", url, { headers: this.headers(options) });
-    if (!res.ok) {
-      throw new HttpError("GET", url, res.status);
-    }
-    return res.json() as Promise<T>;
-  }
-
-  private async post<T>(
-    path: string,
-    body: Record<string, unknown> = {},
-    options: RequestOptions = {},
-  ): Promise<T> {
-    const url = `${this.baseUrl}${this.apiPrefix}${path}`;
-    const res = await this.fetchWithTimeout("POST", url, {
-      method: "POST",
-      headers: this.headers(options),
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      throw new HttpError("POST", url, res.status);
-    }
-    return res.json() as Promise<T>;
-  }
-
-  private async fetchWithTimeout(
-    method: string,
-    url: string,
-    init: RequestInit,
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, this.httpTimeoutMs);
-
-    try {
-      return await fetch(url, { ...init, signal: controller.signal });
-    } catch (err) {
-      if (isAbortError(err)) {
-        throw new RequestTimeoutError(method, url, this.httpTimeoutMs);
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeout);
-    }
+    await this.transport.loadToken();
   }
 
   async getNodeInfo(): Promise<NodeInfo> {
@@ -317,55 +110,30 @@ export class RustMuleClient {
   }
 
   async getStatus(): Promise<RustMuleStatus> {
-    const status = await this.get<Record<string, unknown>>("/status");
-    return {
-      ...status,
-      ready: status["ready"] === true,
-    };
+    const status = await this.transport.get<Record<string, unknown>>("/status");
+    return normalizeStatus(status);
   }
 
   async getSearches(): Promise<RustMuleSearchesResponse> {
-    const payload = await this.get<Record<string, unknown>>("/searches");
-    return {
-      ...payload,
-      ready: payload["ready"] === true,
-      searches: Array.isArray(payload["searches"]) ? (payload["searches"] as RustMuleKeywordSearchInfo[]) : [],
-    };
+    const payload = await this.transport.get<Record<string, unknown>>("/searches");
+    return normalizeSearches(payload);
   }
 
   async getSearchDetail(searchId: string): Promise<RustMuleSearchDetailResponse> {
-    const payload = await this.get<Record<string, unknown>>(
+    const payload = await this.transport.get<Record<string, unknown>>(
       `/searches/${encodeURIComponent(searchId)}`,
     );
-    const search =
-      typeof payload["search"] === "object" &&
-      payload["search"] !== null &&
-      !Array.isArray(payload["search"])
-        ? (payload["search"] as RustMuleKeywordSearchInfo)
-        : {};
-    return {
-      ...payload,
-      search,
-      hits: Array.isArray(payload["hits"]) ? (payload["hits"] as RustMuleKeywordHit[]) : [],
-    };
+    return normalizeSearchDetail(payload);
   }
 
   async getSharedFiles(): Promise<RustMuleSharedFilesResponse> {
-    const payload = await this.get<Record<string, unknown>>("/shared");
-    return {
-      ...payload,
-      files: Array.isArray(payload["files"]) ? (payload["files"] as RustMuleSharedFileEntry[]) : [],
-    };
+    const payload = await this.transport.get<Record<string, unknown>>("/shared");
+    return normalizeSharedFiles(payload);
   }
 
   async getSharedActions(): Promise<RustMuleSharedActionsResponse> {
-    const payload = await this.get<Record<string, unknown>>("/shared/actions");
-    return {
-      ...payload,
-      actions: Array.isArray(payload["actions"])
-        ? (payload["actions"] as RustMuleSharedActionStatus[])
-        : [],
-    };
+    const payload = await this.transport.get<Record<string, unknown>>("/shared/actions");
+    return normalizeSharedActions(payload);
   }
 
   async reindexShared(): Promise<RustMuleSharedActionsResponse> {
@@ -381,13 +149,8 @@ export class RustMuleClient {
   }
 
   async getDownloads(): Promise<RustMuleDownloadsResponse> {
-    const payload = await this.get<Record<string, unknown>>("/downloads");
-    return {
-      ...payload,
-      downloads: Array.isArray(payload["downloads"])
-        ? (payload["downloads"] as RustMuleDownloadEntry[])
-        : [],
-    };
+    const payload = await this.transport.get<Record<string, unknown>>("/downloads");
+    return normalizeDownloads(payload);
   }
 
   async startKeywordSearch(input: {
@@ -405,7 +168,10 @@ export class RustMuleClient {
     } else if (query) {
       payload["query"] = query;
     }
-    const response = await this.post<Record<string, unknown>>("/kad/search_keyword", payload);
+    const response = await this.transport.post<Record<string, unknown>>(
+      "/kad/search_keyword",
+      payload,
+    );
     return {
       ...response,
       keyword_id_hex:
@@ -430,7 +196,9 @@ export class RustMuleClient {
 
   async getPeers(): Promise<Peer[]> {
     try {
-      const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>("/kad/peers");
+      const payload = await this.transport.get<{ peers?: Array<Record<string, unknown>> }>(
+        "/kad/peers",
+      );
       const peers = Array.isArray(payload.peers) ? payload.peers : [];
       return peers.map((p) => ({
         ...p,
@@ -458,19 +226,10 @@ export class RustMuleClient {
 
   async getRoutingBuckets(): Promise<RoutingBucket[]> {
     try {
-      const payload = await this.get<{
+      const payload = await this.transport.get<{
         buckets?: Array<Record<string, unknown>>;
       }>("/debug/routing/buckets", { debug: true });
-      const buckets = payload.buckets ?? [];
-      return buckets.map((b) => {
-        const count = typeof b["count"] === "number" ? b["count"] : 0;
-        return {
-          ...b,
-          index: typeof b["index"] === "number" ? b["index"] : 0,
-          count,
-          size: count,
-        };
-      });
+      return normalizeRoutingBuckets(payload);
     } catch (err) {
       const unavailableDebugEndpoint =
         err instanceof HttpError &&
@@ -499,7 +258,7 @@ export class RustMuleClient {
   async getLookupStats(): Promise<LookupStats> {
     let events: Record<string, unknown>;
     try {
-      events = await this.get<Record<string, unknown>>("/events");
+      events = await this.transport.get<Record<string, unknown>>("/events");
     } catch (err) {
       if (!isRecoverableReadError(err)) {
         throw err;
@@ -508,48 +267,11 @@ export class RustMuleClient {
       events = {};
     }
 
-    const total = typeof events["sent_reqs_total"] === "number" ? events["sent_reqs_total"] : 0;
-    const matched =
-      typeof events["tracked_out_matched_total"] === "number"
-        ? events["tracked_out_matched_total"]
-        : 0;
-    const hasMatchedField = typeof events["tracked_out_matched_total"] === "number";
-    const timeouts = typeof events["timeouts_total"] === "number" ? events["timeouts_total"] : 0;
-    const unmatched =
-      typeof events["tracked_out_unmatched_total"] === "number"
-        ? events["tracked_out_unmatched_total"]
-        : 0;
-    const expired =
-      typeof events["tracked_out_expired_total"] === "number"
-        ? events["tracked_out_expired_total"]
-        : 0;
-    const outboundShaperDelayedTotal =
-      typeof events["outbound_shaper_delayed_total"] === "number"
-        ? events["outbound_shaper_delayed_total"]
-        : 0;
-
-    const successful = hasMatchedField
-      ? matched
-      : typeof events["recv_ress_total"] === "number"
-        ? events["recv_ress_total"]
-        : 0;
-
-    const failed = timeouts + unmatched + expired;
-
-    return {
-      ...events,
-      total,
-      successful,
-      failed,
-      avgDurationMs: 0,
-      matchPerSent: total > 0 ? matched / total : 0,
-      timeoutsPerSent: total > 0 ? timeouts / total : 0,
-      outboundShaperDelayedTotal,
-    };
+    return normalizeLookupStats(events);
   }
 
   async triggerBootstrap(options: PollOptions = {}): Promise<BootstrapJobResult> {
-    const started = await this.post<Record<string, unknown>>(
+    const started = await this.transport.post<Record<string, unknown>>(
       "/debug/bootstrap/restart",
       {},
       { debug: true },
@@ -559,16 +281,12 @@ export class RustMuleClient {
       throw new Error(`Bootstrap restart response missing job_id: ${JSON.stringify(started)}`);
     }
 
-    const result = await this.pollDebugResult<Record<string, unknown>>(
+    const result = await this.transport.pollDebugResult<Record<string, unknown>>(
       `/debug/bootstrap/jobs/${encodeURIComponent(jobId)}`,
       options,
     );
 
-    return {
-      ...result,
-      jobId,
-      status: inferStatus(result),
-    };
+    return normalizeBootstrapResult(result, jobId);
   }
 
   async traceLookup(targetId?: string, options: PollOptions = {}): Promise<TraceLookupResult> {
@@ -577,7 +295,7 @@ export class RustMuleClient {
       body["target_id"] = targetId.trim();
     }
 
-    const started = await this.post<Record<string, unknown>>("/debug/trace_lookup", body, {
+    const started = await this.transport.post<Record<string, unknown>>("/debug/trace_lookup", body, {
       debug: true,
     });
     const traceId = readString(started, ["trace_id", "traceId"]);
@@ -585,150 +303,16 @@ export class RustMuleClient {
       throw new Error(`Trace lookup response missing trace_id: ${JSON.stringify(started)}`);
     }
 
-    const result = await this.pollDebugResult<Record<string, unknown>>(
+    const result = await this.transport.pollDebugResult<Record<string, unknown>>(
       `/debug/trace_lookup/${encodeURIComponent(traceId)}`,
       options,
     );
 
-    return {
-      ...result,
-      traceId,
-      status: inferStatus(result),
-      hops: normalizeTraceHops(result["hops"]),
-    };
-  }
-
-  private async pollDebugResult<T extends Record<string, unknown>>(
-    path: string,
-    options: PollOptions = {},
-  ): Promise<T> {
-    const pollIntervalMs = clampInt(options.pollIntervalMs, DEFAULT_POLL_INTERVAL_MS, 10, 30_000);
-    const maxWaitMs = clampInt(options.maxWaitMs, DEFAULT_MAX_WAIT_MS, 100, 300_000);
-
-    const deadline = Date.now() + maxWaitMs;
-    while (true) {
-      const result = await this.get<Record<string, unknown>>(path, { debug: true });
-      if (isTerminalDebugResult(result)) {
-        return result as T;
-      }
-      if (Date.now() >= deadline) {
-        throw new Error(`Timed out polling ${path} after ${maxWaitMs}ms`);
-      }
-      await sleep(pollIntervalMs);
-    }
+    return normalizeTraceLookupResult(result, traceId);
   }
 
   private async postSharedAction(path: string): Promise<RustMuleSharedActionsResponse> {
-    const payload = await this.post<Record<string, unknown>>(path, { confirm: true });
-    return {
-      ...payload,
-      actions: Array.isArray(payload["actions"])
-        ? (payload["actions"] as RustMuleSharedActionStatus[])
-        : [],
-    };
+    const payload = await this.transport.post<Record<string, unknown>>(path, { confirm: true });
+    return normalizeSharedActions(payload);
   }
-}
-
-function normalizeTraceHops(raw: unknown): TraceLookupHop[] {
-  if (!Array.isArray(raw)) return [];
-
-  return raw.map((hop) => {
-    const payload = typeof hop === "object" && hop !== null ? (hop as Record<string, unknown>) : {};
-    return {
-      ...payload,
-      peerQueried:
-        readString(payload, ["peer_queried", "peerQueried", "peer", "node_id"]) ?? "unknown",
-      distance: readNumber(payload, ["distance", "distance_to_target"]),
-      rttMs: readNumber(payload, ["rtt_ms", "rttMs", "latency_ms"]),
-      contactsReturned: readNumber(payload, ["contacts_returned", "contactsReturned"]),
-      error: readString(payload, ["error", "err"]),
-    };
-  });
-}
-
-function isTerminalDebugResult(payload: Record<string, unknown>): boolean {
-  const status = readString(payload, ["status", "state"]);
-  if (status) {
-    const normalized = status.toLowerCase();
-    if (
-      normalized === "completed" ||
-      normalized === "succeeded" ||
-      normalized === "failed" ||
-      normalized === "error" ||
-      normalized === "done"
-    ) {
-      return true;
-    }
-  }
-
-  if (typeof payload["completed"] === "boolean") return payload["completed"];
-  if (typeof payload["done"] === "boolean") return payload["done"];
-  if (typeof payload["success"] === "boolean" && payload["success"] === true) return true;
-  if (typeof payload["finished_at"] === "string") return true;
-  return false;
-}
-
-function inferStatus(payload: Record<string, unknown>): string {
-  return readString(payload, ["status", "state"]) ?? "completed";
-}
-
-function readString(payload: Record<string, unknown>, keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = payload[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function readNumber(payload: Record<string, unknown>, keys: string[]): number | undefined {
-  for (const key of keys) {
-    const value = payload[key];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function clampInt(value: number | undefined, fallback: number, min: number, max: number): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
-  return Math.min(max, Math.max(min, value));
-}
-
-function isAbortError(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "name" in err &&
-    typeof err["name"] === "string" &&
-    err["name"] === "AbortError"
-  );
-}
-
-function isRecoverableReadError(err: unknown): boolean {
-  if (err instanceof RequestTimeoutError) {
-    return true;
-  }
-  if (!(err instanceof HttpError)) {
-    return false;
-  }
-  return (
-    err.status === 404 ||
-    err.status === 429 ||
-    err.status === 500 ||
-    err.status === 502 ||
-    err.status === 503 ||
-    err.status === 504
-  );
-}
-
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Minimal structured logger shared across the module.
-function log(level: string, module: string, msg: string): void {
-  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
 }

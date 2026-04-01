@@ -7,26 +7,27 @@
 import type { Analyzer } from "./llm/analyzer.js";
 import type { MattermostClient } from "./integrations/mattermost.js";
 import type { RustMuleClient } from "./api/rustMuleClient.js";
+import type { RustMuleReadiness } from "./api/rustMuleClient.js";
 import type { LogWatcher } from "./logs/logWatcher.js";
 import type { RuntimeStore } from "./storage/runtimeStore.js";
 import type { SearchHealthLog } from "./searchHealth/searchHealthLog.js";
 import type {
   DiagnosticTargetRef,
-  HistoryEntry,
   ObserverCycleOutcome,
-  RuntimeState,
 } from "./types/contracts.js";
-import { getNetworkHealth } from "./health/healthScore.js";
-import type { NetworkHealthResult } from "./health/healthScore.js";
-import { redactText } from "./logs/redaction.js";
 import type { OperatorEventLog } from "./operatorConsole/operatorEventLog.js";
-import type { RustMuleReadiness, RustMuleSearchDetailResponse } from "./api/rustMuleClient.js";
-import { createSearchHealthRecordFromObserverTargetObservation } from "./searchHealth/records.js";
 import type {
-  ObserverTargetDescriptor,
-  ObserverTargetRuntime,
   ObserverTargetResolver,
+  ObserverTargetRuntime,
 } from "./observerTargetResolver.js";
+import {
+  collectAndPersistObserverContext,
+  runObserverCycle,
+} from "./observerCycleRunner.js";
+import {
+  buildCycleStatePatch,
+  log,
+} from "./observerShared.js";
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -52,16 +53,6 @@ export interface ObserverStatus {
 export interface ObserverRunNowResult {
   accepted: boolean;
   reason?: string;
-}
-
-export interface ObserverCycleContext {
-  targetLabel: string;
-  nodeInfo: Record<string, unknown>;
-  peerCount: number;
-  routingBucketCount: number;
-  lookupStats: Record<string, unknown>;
-  networkHealth: NetworkHealthResult;
-  recentHistory: HistoryEntry[];
 }
 
 type AnalyzerFactory = (target: ObserverTargetRuntime) => Analyzer;
@@ -181,342 +172,62 @@ export class Observer {
   }
 
   private async runCycle(): Promise<void> {
-    log("info", "observer", "Running diagnostic cycle");
-    try {
-      const targetDescriptor = await this.describeTarget();
-      const cycleStartedAt = new Date().toISOString();
-      await this.markCycleStarted(cycleStartedAt, targetDescriptor.target);
-      await this.eventLog?.append({
-        type: "observer_cycle_started",
-        message: `Observer cycle started for ${targetDescriptor.label}`,
-        target: targetDescriptor.target,
-      });
-
-      let target: ObserverTargetRuntime | undefined;
-      let readiness: RustMuleReadiness | undefined;
-      try {
-        target = await this.resolveTarget();
-      } catch (err) {
-        await this.handleUnavailableTarget(targetDescriptor, err, cycleStartedAt);
-        return;
-      }
-      if (target) {
-        try {
-          readiness = await this.ensureTargetReady(target);
-        } catch (err) {
-          await this.handleUnavailableTarget(targetDescriptor, err, cycleStartedAt);
-          return;
-        }
-      }
-
-      const context = await this.collectAndPersistContext(target, readiness);
-      const prompt = buildObserverAnalysisPrompt(context);
-      const analyzer = target && this.analyzerFactory ? this.analyzerFactory(target) : this.analyzer;
-      const summary = await analyzer.analyze(prompt, {
-        surface: "observer_cycle",
-        trigger: "scheduled",
-        target: targetDescriptor.target,
-      });
-      await this.mattermost.postPeriodicReport({
-        summary,
-        target: targetDescriptor.target,
-        targetLabel: context?.targetLabel ?? targetDescriptor.label,
-        healthScore: context?.networkHealth.score,
-        peerCount: context?.peerCount,
-        routingBucketCount: context?.routingBucketCount,
-        lookupSuccessPct:
-          typeof context?.networkHealth.components.lookup_success === "number"
-            ? context.networkHealth.components.lookup_success
-            : undefined,
-        lookupTimeoutPct:
-          typeof context?.lookupStats.timeoutsPerSent === "number"
-            ? context.lookupStats.timeoutsPerSent * 100
-            : undefined,
-      });
-
-      const usageSummary = await analyzer.consumeDailyUsageReport();
-      if (usageSummary) {
-        await this.mattermost.postDailyUsageReport(usageSummary);
-      }
-
-      await this.finishCycle({
-        target: targetDescriptor.target,
-        startedAt: cycleStartedAt,
-        outcome: "success",
-      });
-      await this.eventLog?.append({
-        type: "observer_cycle_completed",
-        message: `Observer cycle completed successfully for ${targetDescriptor.label}`,
-        target: targetDescriptor.target,
-        outcome: "success",
-      });
-    } catch (err) {
-      await this.handleCycleError(err);
-    }
+    await runObserverCycle({
+      analyzer: this.analyzer,
+      analyzerFactory: this.analyzerFactory,
+      mattermost: this.mattermost,
+      client: this.client,
+      logWatcher: this.logWatcher,
+      runtimeStore: this.runtimeStore,
+      searchHealthLog: this.searchHealthLog,
+      targetResolver: this.targetResolver,
+      eventLog: this.eventLog,
+      lastObservedSearchSignatures: this.lastObservedSearchSignatures,
+      lastObservedSearchStates: this.lastObservedSearchStates,
+      getCurrentCycleState: () => ({
+        startedAt: this.currentCycleStartedAt,
+        target: this.currentCycleTarget,
+      }),
+      clearCurrentCycleState: () => {
+        this.currentCycleStartedAt = undefined;
+        this.currentCycleTarget = undefined;
+      },
+      markCycleStarted: this.markCycleStarted.bind(this),
+      finishCycle: this.finishCycle.bind(this),
+    });
   }
 
   private async collectAndPersistContext(
     target?: ObserverTargetRuntime,
     readiness?: RustMuleReadiness,
-  ): Promise<ObserverCycleContext | undefined> {
-    const resolvedTarget = target ?? (await this.resolveTarget());
-    if (!resolvedTarget || !this.runtimeStore) {
-      return undefined;
-    }
-
-    try {
-      const [nodeInfo, peers, routingBuckets, lookupStats, recentHistory, targetReadiness] =
-        await Promise.all([
-        resolvedTarget.client.getNodeInfo(),
-        resolvedTarget.client.getPeers(),
-        resolvedTarget.client.getRoutingBuckets(),
-        resolvedTarget.client.getLookupStats(),
-        this.runtimeStore.getRecentHistory(10),
-        readiness ? Promise.resolve(readiness) : resolvedTarget.client.getReadiness(),
-      ]);
-
-      const timestamp = new Date().toISOString();
-      const avgHops = readAverageHops(lookupStats);
-      const health = getNetworkHealth({
-        peerCount: peers.length,
-        routingBuckets,
-        lookupStats,
-        avgHops,
-      });
-      const lookupSuccess =
-        typeof lookupStats.matchPerSent === "number"
-          ? lookupStats.matchPerSent
-          : health.components.lookup_success / 100;
-
-      const historyEntry: HistoryEntry = {
-        timestamp,
-        target: resolvedTarget.target,
-        peerCount: peers.length,
-        routingBalance: health.components.bucket_balance / 100,
-        lookupSuccess,
-        avgHops,
-        healthScore: health.score,
-      };
-      await this.runtimeStore.appendHistory(historyEntry);
-
-      const statePatch: RuntimeState = {
-        lastRun: timestamp,
-        lastHealthScore: health.score,
-        logOffset: resolvedTarget.logOffset,
-        lastObservedTarget: resolvedTarget.target,
-        lastTargetFailureReason: undefined,
-      };
-      await this.runtimeStore.updateState(statePatch);
-      await this.recordObservedSearchHealth(resolvedTarget, targetReadiness, peers.length, timestamp);
-
-      return {
-        targetLabel: resolvedTarget.label,
-        nodeInfo,
-        peerCount: peers.length,
-        routingBucketCount: routingBuckets.length,
-        lookupStats,
-        networkHealth: health,
-        recentHistory,
-      };
-    } catch (err) {
-      log("warn", "observer", `Context persistence failed: ${String(err)}`);
-      return undefined;
-    }
-  }
-
-  private async resolveTarget(): Promise<ObserverTargetRuntime | undefined> {
-    if (this.targetResolver) {
-      return this.targetResolver.resolve();
-    }
-    if (!this.client || !this.logWatcher) {
-      return undefined;
-    }
-    return {
-      target: { kind: "external" },
-      label: "external configured rust-mule client",
-      client: this.client,
-      logSource: this.logWatcher,
-      logOffset: this.logWatcher.getOffset(),
-    };
-  }
-
-  private async ensureTargetReady(target: ObserverTargetRuntime): Promise<RustMuleReadiness> {
-    const readiness = await target.client.getReadiness();
-    if (readiness.ready) {
-      return readiness;
-    }
-
-    const reasons: string[] = [];
-    if (!readiness.statusReady) {
-      reasons.push("/api/v1/status.ready=false");
-    }
-    if (!readiness.searchesReady) {
-      reasons.push("/api/v1/searches.ready=false");
-    }
-
-    throw new Error(
-      `rust-mule target not ready (${reasons.join(", ") || "readiness checks incomplete"})`,
-    );
-  }
-
-  private async recordObservedSearchHealth(
-    target: ObserverTargetRuntime,
-    readiness: RustMuleReadiness,
-    peerCount: number,
-    recordedAt: string,
-  ): Promise<void> {
-    if (!this.searchHealthLog || readiness.searches.searches.length === 0) {
-      return;
-    }
-
-    const activeKeys = new Set<string>();
-    const detailPromises = readiness.searches.searches.map(async (search) => {
-      const key = buildObservedSearchCacheKey(target.target, search);
-      activeKeys.add(key);
-      const state = readString(search.state) ?? "unknown";
-      const hits = typeof search.hits === "number" ? search.hits : 0;
-      const shouldFetchDetail =
-        hits > 0 ||
-        !isSearchActive(state) ||
-        this.lastObservedSearchStates.get(key) !== state;
-      if (!shouldFetchDetail) {
-        return undefined;
-      }
-      const searchId = readString(search.search_id_hex);
-      if (!searchId) {
-        return undefined;
-      }
-      try {
-        return await target.client.getSearchDetail(searchId);
-      } catch {
-        return undefined;
-      }
-    });
-    const details = await Promise.all(detailPromises);
-
-    this.pruneObservedSearchCaches(target.target, activeKeys);
-
-    for (let index = 0; index < readiness.searches.searches.length; index += 1) {
-      const search = readiness.searches.searches[index];
-      const record = createSearchHealthRecordFromObserverTargetObservation({
-        target: target.target,
-        label: target.label,
-        readiness,
-        peerCount,
-        search,
-        detail: details[index],
-        recordedAt,
-      });
-      const key = buildObservedSearchCacheKey(target.target, search, details[index]);
-      this.lastObservedSearchStates.set(key, record.finalState);
-      const signature = buildObservedSearchSignature(record);
-      if (this.lastObservedSearchSignatures.get(key) === signature) {
-        continue;
-      }
-      this.lastObservedSearchSignatures.set(key, signature);
-      await this.searchHealthLog.append(record);
-    }
-  }
-
-  private pruneObservedSearchCaches(target: DiagnosticTargetRef, activeKeys: Set<string>): void {
-    const prefix = `${observerSearchTargetKey(target)}:`;
-    for (const key of this.lastObservedSearchSignatures.keys()) {
-      if (key.startsWith(prefix) && !activeKeys.has(key)) {
-        this.lastObservedSearchSignatures.delete(key);
-        this.lastObservedSearchStates.delete(key);
-      }
-    }
-  }
-
-  private async describeTarget(): Promise<ObserverTargetDescriptor> {
-    if (this.targetResolver) {
-      return this.targetResolver.describeActiveTarget();
-    }
-    return {
-      target: { kind: "external" },
-      label: "external configured rust-mule client",
-    };
-  }
-
-  private async handleUnavailableTarget(
-    target: ObserverTargetDescriptor,
-    err: unknown,
-    startedAt: string,
-  ): Promise<void> {
-    const reason = redactText(err instanceof Error ? err.message : String(err));
-    log("warn", "observer", `Active target unavailable (${target.label}): ${reason}`);
-
-    const timestamp = new Date().toISOString();
-    if (this.runtimeStore) {
-      await this.runtimeStore.appendHistory({
-        timestamp,
-        target: target.target,
-        healthScore: 0,
-      });
-      await this.runtimeStore.updateState({
-        lastRun: timestamp,
-        lastHealthScore: 0,
-        lastObservedTarget: target.target,
-        lastTargetFailureReason: reason,
-        logOffset: undefined,
-        ...buildCycleStatePatch({
-          target: target.target,
-          startedAt,
-          completedAt: timestamp,
-          outcome: "unavailable",
-          lastRun: timestamp,
+  ) {
+    return collectAndPersistObserverContext(
+      {
+        analyzer: this.analyzer,
+        analyzerFactory: this.analyzerFactory,
+        mattermost: this.mattermost,
+        client: this.client,
+        logWatcher: this.logWatcher,
+        runtimeStore: this.runtimeStore,
+        searchHealthLog: this.searchHealthLog,
+        targetResolver: this.targetResolver,
+        eventLog: this.eventLog,
+        lastObservedSearchSignatures: this.lastObservedSearchSignatures,
+        lastObservedSearchStates: this.lastObservedSearchStates,
+        getCurrentCycleState: () => ({
+          startedAt: this.currentCycleStartedAt,
+          target: this.currentCycleTarget,
         }),
-      });
-    }
-
-    this.currentCycleStartedAt = undefined;
-    this.currentCycleTarget = undefined;
-
-      await this.mattermost.postPeriodicReport({
-        summary: `Active diagnostic target unavailable: ${reason}`,
-        target: target.target,
-        targetLabel: target.label,
-        healthScore: 0,
-      });
-    await this.eventLog?.append({
-      type: "observer_cycle_completed",
-      message: `Observer cycle unavailable for ${target.label}: ${reason}`,
-      target: target.target,
-      outcome: "unavailable",
-    });
-  }
-
-  private async handleCycleError(err: unknown): Promise<void> {
-    const reason = redactText(err instanceof Error ? err.message : String(err));
-    log("error", "observer", `Cycle failed: ${reason}`);
-    const completedAt = new Date().toISOString();
-    const target = this.currentCycleTarget;
-    const startedAt = this.currentCycleStartedAt ?? completedAt;
-    this.currentCycleStartedAt = undefined;
-    this.currentCycleTarget = undefined;
-
-    if (!this.runtimeStore) {
-      return;
-    }
-
-    await this.runtimeStore.updateState({
-      lastRun: completedAt,
-      lastObservedTarget: target,
-      lastTargetFailureReason: reason,
-      ...buildCycleStatePatch({
-        target,
-        startedAt,
-        completedAt,
-        outcome: "error",
-        lastRun: completedAt,
-      }),
-    });
-    await this.eventLog?.append({
-      type: "observer_cycle_completed",
-      message: `Observer cycle failed: ${reason}`,
+        clearCurrentCycleState: () => {
+          this.currentCycleStartedAt = undefined;
+          this.currentCycleTarget = undefined;
+        },
+        markCycleStarted: this.markCycleStarted.bind(this),
+        finishCycle: this.finishCycle.bind(this),
+      },
       target,
-      outcome: "error",
-    });
+      readiness,
+    );
   }
 
   private async markCycleStarted(
@@ -556,139 +267,4 @@ export class Observer {
     );
   }
 }
-
-function buildObservedSearchSignature(record: {
-  finalState: string;
-  resultCount: number;
-  outcome: string;
-  readinessAtDispatch: {
-    searcher: {
-      ready: boolean;
-    };
-  };
-  transportAtDispatch: {
-    searcher: {
-      peerCount: number;
-    };
-  };
-}): string {
-  return JSON.stringify({
-    finalState: record.finalState,
-    resultCount: record.resultCount,
-    outcome: record.outcome,
-    ready: record.readinessAtDispatch.searcher.ready,
-    peerCount: record.transportAtDispatch.searcher.peerCount,
-  });
-}
-
-function observerSearchTargetKey(target: DiagnosticTargetRef): string {
-  return target.kind === "managed_instance" && target.instanceId
-    ? `managed:${target.instanceId}`
-    : "external";
-}
-
-function buildObservedSearchCacheKey(
-  target: DiagnosticTargetRef,
-  search: {
-    search_id_hex?: unknown;
-    keyword_id_hex?: unknown;
-    keyword_label?: unknown;
-  },
-  detail?: RustMuleSearchDetailResponse,
-): string {
-  const query =
-    readString(search.keyword_label) ??
-    readString(detail?.search?.keyword_label) ??
-    readString(search.search_id_hex) ??
-    readString(detail?.search?.search_id_hex) ??
-    readString(search.keyword_id_hex) ??
-    "search";
-  const searchId =
-    readString(search.search_id_hex) ??
-    readString(detail?.search?.search_id_hex) ??
-    readString(search.keyword_id_hex) ??
-    query;
-  return `${observerSearchTargetKey(target)}:${searchId}`;
-}
-
-function isSearchActive(state: string): boolean {
-  const normalized = state.toLowerCase();
-  return normalized !== "completed" && normalized !== "complete" && normalized !== "done" && normalized !== "timed_out";
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-export function buildObserverAnalysisPrompt(context: ObserverCycleContext | undefined): string {
-  if (!context) {
-    return [
-      "Analyze the current rust-mule target and provide a focused diagnostic report.",
-      "Use tools only if you need to verify a material uncertainty or fill a missing evidence gap.",
-      "Do not broad-scan by default. Keep tool use bounded and evidence-based.",
-      "Return:",
-      "1. Overall status",
-      "2. Confirmed issues",
-      "3. Probable issues or risks",
-      "4. Hypotheses or unknowns",
-      "5. Supporting evidence",
-      "6. Recommended next steps",
-    ].join("\n");
-  }
-
-  return [
-    `Analyze ${context.targetLabel} using the provided observer snapshot as the baseline context.`,
-    "Inspect the snapshot first.",
-    "Only call tools if you need to verify a suspected issue, refresh stale information, or fill a material evidence gap.",
-    "Do not re-fetch everything by default. Keep tool use bounded and evidence-based.",
-    "Return:",
-    "1. Overall status",
-    "2. Confirmed issues",
-    "3. Probable issues or risks",
-    "4. Hypotheses or unknowns",
-    "5. Supporting evidence",
-    "6. Recommended next steps",
-    "",
-    "Observer snapshot:",
-    JSON.stringify(context),
-  ].join("\n");
-}
-
-function buildCycleStatePatch(config: {
-  target: DiagnosticTargetRef | undefined;
-  startedAt: string;
-  completedAt: string;
-  outcome: ObserverCycleOutcome;
-  lastRun?: string;
-}): RuntimeState {
-  const startedMs = Date.parse(config.startedAt);
-  const completedMs = Date.parse(config.completedAt);
-  const durationMs =
-    Number.isFinite(startedMs) && Number.isFinite(completedMs)
-      ? Math.max(0, completedMs - startedMs)
-      : undefined;
-  return {
-    currentCycleStartedAt: undefined,
-    currentCycleTarget: undefined,
-    lastCycleStartedAt: config.startedAt,
-    lastCycleCompletedAt: config.completedAt,
-    lastCycleDurationMs: durationMs,
-    lastCycleOutcome: config.outcome,
-    lastRun: config.lastRun,
-  };
-}
-
-function readAverageHops(lookupStats: Record<string, unknown>): number | undefined {
-  const candidates = ["avgHops", "avg_hops", "average_hops"];
-  for (const key of candidates) {
-    const value = lookupStats[key];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function log(level: string, module: string, msg: string): void {
-  process.stdout.write(JSON.stringify({ ts: new Date().toISOString(), level, module, msg }) + "\n");
-}
+export { buildObserverAnalysisPrompt } from "./observerShared.js";

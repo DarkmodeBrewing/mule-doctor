@@ -5,6 +5,10 @@ This document describes the tool surface that mule-doctor exposes to the LLM dur
 Source of truth:
 
 - [toolRegistry.ts](../src/tools/toolRegistry.ts)
+- [toolRegistryCoreTools.ts](../src/tools/toolRegistryCoreTools.ts)
+- [toolRegistryRuntimeTools.ts](../src/tools/toolRegistryRuntimeTools.ts)
+- [toolRegistrySurfaceTools.ts](../src/tools/toolRegistrySurfaceTools.ts)
+- [toolRegistrySourceTools.ts](../src/tools/toolRegistrySourceTools.ts)
 - [sourceCodeTools.ts](../src/tools/sourceCodeTools.ts)
 
 ## Overview
@@ -44,10 +48,12 @@ Unknown tool names also return structured failure results instead of throwing in
 
 ## Tool Categories
 
-The current tool surface falls into two groups:
+The current tool surface is organized into four registration groups:
 
-1. general diagnostic and source-inspection tools
-2. rust-mule-specific runtime and debug tools
+1. core diagnostic and debug tools
+2. runtime-store history and summary tools
+3. rust-mule search/shared/download surface tools
+4. optional source-inspection tools
 
 ## General Tools
 

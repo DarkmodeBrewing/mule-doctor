@@ -54,6 +54,38 @@ The design intentionally separates:
 
 This keeps the system deterministic and easier to extend.
 
+The tool-registry implementation is also split by responsibility now:
+
+- `toolRegistry.ts` owns registry orchestration and tool-profile filtering
+- core log/debug tools, runtime-store tools, rust-mule surface tools, and source tools are registered from separate modules
+- the tool-registry test surface is split by those same domains so core/runtime/surface/source behaviors evolve independently
+
+The rust-mule API client is also split by responsibility now:
+
+- `rustMuleClient.ts` owns request flow and high-level operations
+- `rustMuleClientTypes.ts` owns exported API response/value shapes
+- `rustMuleClientShared.ts` owns normalization, polling, timeout/error helpers, and shared logging
+- the client test surface is split the same way so read-only API coverage is separate from debug/write-path mutation coverage
+
+The observer loop is also split by responsibility now:
+
+- `observer.ts` owns scheduling, target resolution flow, and cycle orchestration
+- `observerShared.ts` owns prompt/state/log helpers
+- `observerSearchTracking.ts` owns observed-search lifecycle deduplication and persistence
+- the observer test surface is split so context/target behavior and scheduler/control behavior stay isolated as the loop evolves
+
+The managed-instance operator-console route surface is split by responsibility now:
+
+- `serverManagedInstanceRoutes.ts` owns top-level dispatch only
+- collection/preset/discoverability/manual-search routes live in `serverManagedInstanceCollectionRoutes.ts`
+- per-instance detail/logs/diagnostics/lifecycle/shared-content routes live in `serverManagedInstanceItemRoutes.ts`
+
+The managed-instance lifecycle layer is also split by responsibility now:
+
+- `instanceManager.ts` owns lifecycle orchestration, reconciliation, and persistence flow
+- `instanceManagerPlanning.ts` owns id/port planning, runtime-path materialization, binary checks, and rollback helpers
+- the managed-instance test surface is split similarly so planning/config and lifecycle/reconciliation behaviors do not share one test monolith
+
 The operator console is part of the architecture. It exposes a browser-accessible,
 token-protected runtime view and already serves as the bounded control surface
 for mule-doctor-managed local test instances, while external rust-mule nodes
@@ -211,8 +243,16 @@ Implementation note:
 
 - the operator console frontend is served as static assets, kept separate from backend auth/API/SSE route logic
 - the backend route surface is now split so `server.ts` owns auth, stream lifecycle, and server startup while focused route modules own general API reads vs managed-instance control routes
+- the general operator-console API routing is further split between a small dispatcher, shared route context, control/history routes, and read-only log/runtime routes
 - the browser-side selected-instance flow is now split between controller orchestration, runtime-surface rendering, and workflow/action modules so no single operator-console browser file carries the whole control plane
 - the operator-console integration coverage is split across focused route/auth/SSE test files with shared stub fixtures so the test surface can keep growing without one monolithic file
+- the managed-instance test-stub layer under the operator-console tests is split by lifecycle, diagnostics, workflow, and invocation concerns so route tests do not all depend on one oversized helper module
+- the managed rust-mule config layer is split between a stable public entrypoint, shared contract/types helpers, parser/validation logic, and TOML rendering so config ownership rules do not live in one large file
+- the source-code tool layer is split between a thin public coordinator, shared contracts/helpers, bounded filesystem operations, and git-blame parsing so source inspection logic does not all live in one module
+- the observer runtime is split between scheduler/control flow in `observer.ts`, cycle execution in a dedicated runner, shared prompt/state helpers, and observed-search lifecycle tracking
+- the rust-mule client layer is split between a public endpoint facade, request/token/poll transport, shared response normalization helpers, and shared types so the API surface stays stable while transport concerns remain isolated
+- the managed-instance surface diagnostics layer is split between service orchestration, runtime-surface shaping/highlights, observed-search lifecycle recording, and shared snapshot/detail types
+- the managed-instance manager is split between a catalog/queue facade and dedicated lifecycle/process reconciliation helpers so start/stop/reconcile behavior does not live in one file
 
 Primary purpose:
 
@@ -260,6 +300,11 @@ Example payload:
   ]
 }
 ```
+
+Implementation note:
+
+- `mattermost.ts` owns webhook transport, timeout handling, and inbound command flow
+- payload/attachment construction is split into focused helpers so report formatting stays separate from posting and rate-limit/audit flow
 
 ---
 

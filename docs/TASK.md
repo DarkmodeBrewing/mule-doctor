@@ -38,6 +38,23 @@ The following major slices are already landed on `main`:
      - backend general API routes vs managed-instance/control routes
      - selected-instance rendering vs workflow/action orchestration
    - operator-console integration tests are now split into focused files plus shared fixtures/helpers
+   - tool registry is split by tool domain and rust-mule client is split into request flow vs shared normalization/types helpers
+   - observer loop is split into scheduling/orchestration vs shared helpers vs observed-search tracking
+   - managed-instance operator-console routes are split into dispatcher vs collection/preset/discoverability routes vs per-instance routes
+   - Mattermost integration is split into webhook/command transport vs payload-building and shared formatting helpers
+   - managed-instance lifecycle orchestration is split from instance planning/runtime-path/config materialization helpers
+   - managed-instance tests are split into planning/config vs lifecycle/reconciliation files with shared helpers
+   - managed rust-mule config handling is split into shared contract/types, parser/validation, and TOML rendering modules behind a stable public entrypoint
+   - operator-console general API routing is split into dispatcher, control/history routes, read-only log/runtime routes, and shared route context
+   - source code tools are split into a thin coordinator plus shared contract helpers, filesystem/path operations, and git-blame parsing
+   - observer runtime is split between scheduler/control flow, cycle execution, shared prompt/state helpers, and observed-search tracking
+   - rust-mule client is split between the public endpoint facade, request/token/poll transport, shared normalization helpers, and shared types
+   - managed-instance surface diagnostics are split between service orchestration, runtime-surface view shaping, observed-search recording, and shared detail types
+   - managed-instance lifecycle is split between the catalog/queue facade and dedicated lifecycle/process reconciliation helpers
+   - rust-mule client tests are split into read-surface vs debug/write-path files with shared fetch/token helpers
+   - observer tests are split into context/target behavior vs scheduler/control behavior with shared stubs
+   - tool-registry tests are split by core/runtime/surface/source domains with shared stubs so the test surface mirrors the production registry split
+   - operator-console managed-instance test stubs are split by lifecycle, diagnostics, workflows, and invocation/audit concerns behind a thin compatibility export
    - tests consolidated under `src/test/`
    - Alpine.js evaluated and explicitly deferred
 5. Runtime and search/discoverability groundwork:
