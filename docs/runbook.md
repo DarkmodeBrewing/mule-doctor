@@ -196,6 +196,37 @@ npm run smoke:docker
 
 Use `npm run smoke:docker` only when the environment can actually let `rust-mule` become ready. It is not a portable substitute for hosted CI.
 
+## Rebuild With a Specific rust-mule Commit
+
+If you need to guarantee exactly which bundled `rust-mule` source revision is built into the image, pin `RUST_MULE_REF` to a commit SHA instead of a moving branch name such as `main`.
+
+Recommended rebuild pattern:
+
+```bash
+docker compose down
+docker compose build --no-cache --pull --progress=plain \
+  --build-arg RUST_MULE_REPO=https://github.com/DarkmodeBrewing/rust-mule.git \
+  --build-arg RUST_MULE_REF=<exact-rust-mule-commit-sha>
+docker compose up
+```
+
+Notes:
+
+- this is more reliable than building against a moving branch tip
+- the Docker build now prints the resolved bundled `rust-mule` commit during the clone/checkout step
+- after build, you can verify the bundled source commit inside the image with:
+
+```bash
+docker run --rm --user root --entrypoint bash mule-doctor-mule-doctor -lc \
+  'cd /opt/rust-mule && git rev-parse HEAD && cat .git/HEAD'
+```
+
+- you can compare that to the current remote branch tip with:
+
+```bash
+git ls-remote https://github.com/DarkmodeBrewing/rust-mule.git refs/heads/main
+```
+
 ## First Real Validation Pass
 
 Recommended first practical validation:
@@ -246,6 +277,23 @@ Check:
 - Docker is installed and `docker compose` works
 - the environment can bind the requested ports
 - the backing environment provides the SAM/I2P dependency that `rust-mule` needs to reach readiness
+
+### Bundled rust-mule source looks stale after rebuild
+
+Use a pinned rebuild instead of relying on a moving branch ref:
+
+```bash
+docker compose build --no-cache --pull --progress=plain \
+  --build-arg RUST_MULE_REPO=https://github.com/DarkmodeBrewing/rust-mule.git \
+  --build-arg RUST_MULE_REF=<exact-rust-mule-commit-sha>
+```
+
+Then verify the bundled commit:
+
+```bash
+docker run --rm --user root --entrypoint bash mule-doctor-mule-doctor -lc \
+  'cd /opt/rust-mule && git rev-parse HEAD && cat .git/HEAD'
+```
 
 ## Related Docs
 
