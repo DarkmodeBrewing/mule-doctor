@@ -424,3 +424,217 @@ test("SearchHealthLog sanitizes records when reading from runtime store", async 
   assert.deepEqual(records[0].transportAtDispatch.publisher.degradedIndicators, ["ok"]);
   assert.deepEqual(records[0].transportAtDispatch.searcher.degradedIndicators, []);
 });
+
+test("SearchHealthLog filters recent records by source, outcome, dispatch readiness, and target", async () => {
+  const records = [
+    {
+      recordedAt: "2026-03-24T10:00:00.000Z",
+      source: "operator_triggered_search",
+      query: "manual-a",
+      searchId: "search-1",
+      dispatchedAt: "2026-03-24T10:00:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 3, degradedIndicators: [] },
+        searcher: { peerCount: 3, degradedIndicators: [] },
+      },
+      states: [],
+      resultCount: 0,
+      outcome: "active",
+      finalState: "running",
+      observedContext: {
+        instanceId: "searcher-a",
+      },
+    },
+    {
+      recordedAt: "2026-03-24T10:05:00.000Z",
+      source: "observer_target_observation",
+      query: "observer-b",
+      searchId: "search-2",
+      dispatchedAt: "2026-03-24T10:04:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: false, searchesReady: false, ready: false },
+        searcher: { statusReady: false, searchesReady: false, ready: false },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 0, degradedIndicators: ["no_live_peers"] },
+        searcher: { peerCount: 0, degradedIndicators: ["no_live_peers"] },
+      },
+      states: [],
+      resultCount: 0,
+      outcome: "timed_out",
+      finalState: "timed_out",
+      observerContext: {
+        target: { kind: "external" },
+        label: "external configured rust-mule client",
+      },
+    },
+    {
+      recordedAt: "2026-03-24T10:06:00.000Z",
+      source: "controlled_discoverability",
+      query: "fixture",
+      searchId: "search-3",
+      dispatchedAt: "2026-03-24T10:05:00.000Z",
+      readinessAtDispatch: {
+        publisher: { statusReady: true, searchesReady: true, ready: true },
+        searcher: { statusReady: true, searchesReady: true, ready: true },
+      },
+      transportAtDispatch: {
+        publisher: { peerCount: 2, degradedIndicators: [] },
+        searcher: { peerCount: 2, degradedIndicators: [] },
+      },
+      states: [],
+      resultCount: 1,
+      outcome: "found",
+      finalState: "completed",
+      controlledContext: {
+        publisherInstanceId: "lab-a",
+        searcherInstanceId: "lab-b",
+        fixture: {
+          fixtureId: "fixture",
+          fileName: "fixture.txt",
+          relativePath: "fixture.txt",
+          sizeBytes: 16,
+        },
+      },
+    },
+  ];
+
+  const log = new SearchHealthLog({
+    async getRecentSearchHealthResults() {
+      return records;
+    },
+  });
+
+  assert.equal(
+    (await log.listRecent(10, { source: "operator_triggered_search" })).length,
+    1,
+  );
+  assert.equal(
+    (await log.listRecent(10, { outcome: "timed_out" }))[0].observerContext.label,
+    "external configured rust-mule client",
+  );
+  assert.equal(
+    (await log.listRecent(10, { dispatchReady: false }))[0].searchId,
+    "search-2",
+  );
+  assert.equal(
+    (await log.listRecent(10, { target: "lab-b" }))[0].controlledContext.searcherInstanceId,
+    "lab-b",
+  );
+  assert.equal(
+    (await log.listRecent(10, { target: "external" }))[0].observerContext.target.kind,
+    "external",
+  );
+});
+
+test("SearchHealthLog filters within a bounded recent scan window and returns the most recent matches", async () => {
+  const records = Array.from({ length: 120 }, (_, index) => ({
+    recordedAt: `2026-03-24T10:${String(index).padStart(2, "0")}:00.000Z`,
+    source: "managed_instance_observation",
+    query: `search-${index}`,
+    searchId: `search-${index}`,
+    dispatchedAt: `2026-03-24T09:${String(index).padStart(2, "0")}:00.000Z`,
+    readinessAtDispatch: {
+      publisher: { statusReady: true, searchesReady: true, ready: true },
+      searcher: { statusReady: true, searchesReady: true, ready: true },
+    },
+    transportAtDispatch: {
+      publisher: { peerCount: 2, degradedIndicators: [] },
+      searcher: { peerCount: 2, degradedIndicators: [] },
+    },
+    states: [],
+    resultCount: 0,
+    outcome: index >= 70 && index < 80 ? "timed_out" : "active",
+    finalState: index >= 70 && index < 80 ? "timed_out" : "running",
+    observedContext: {
+      instanceId: index >= 70 && index < 80 ? "needle-instance" : "other-instance",
+    },
+  }));
+
+  let requestedLimit = 0;
+  const log = new SearchHealthLog({
+    async getRecentSearchHealthResults(limit) {
+      requestedLimit = limit;
+      return records.slice(-limit);
+    },
+  });
+
+  const filtered = await log.listRecent(3, {
+    source: "managed_instance_observation",
+    outcome: "timed_out",
+    target: "needle-instance",
+  });
+
+  assert.equal(requestedLimit, 50);
+  assert.deepEqual(
+    filtered.map((record) => record.searchId),
+    ["search-77", "search-78", "search-79"],
+  );
+});
+
+test("SearchHealthLog summarizes filtered records", async () => {
+  const log = new SearchHealthLog({
+    async getRecentSearchHealthResults() {
+      return [
+        {
+          recordedAt: "2026-03-24T10:00:00.000Z",
+          source: "operator_triggered_search",
+          query: "manual-a",
+          searchId: "search-1",
+          dispatchedAt: "2026-03-24T10:00:00.000Z",
+          readinessAtDispatch: {
+            publisher: { statusReady: true, searchesReady: true, ready: true },
+            searcher: { statusReady: true, searchesReady: true, ready: true },
+          },
+          transportAtDispatch: {
+            publisher: { peerCount: 3, degradedIndicators: [] },
+            searcher: { peerCount: 3, degradedIndicators: [] },
+          },
+          states: [],
+          resultCount: 0,
+          outcome: "active",
+          finalState: "running",
+          observedContext: {
+            instanceId: "searcher-a",
+          },
+        },
+        {
+          recordedAt: "2026-03-24T10:05:00.000Z",
+          source: "operator_triggered_search",
+          query: "manual-b",
+          searchId: "search-2",
+          dispatchedAt: "2026-03-24T10:04:00.000Z",
+          readinessAtDispatch: {
+            publisher: { statusReady: false, searchesReady: false, ready: false },
+            searcher: { statusReady: false, searchesReady: false, ready: false },
+          },
+          transportAtDispatch: {
+            publisher: { peerCount: 0, degradedIndicators: ["no_live_peers"] },
+            searcher: { peerCount: 0, degradedIndicators: ["no_live_peers"] },
+          },
+          states: [],
+          resultCount: 0,
+          outcome: "timed_out",
+          finalState: "timed_out",
+          observedContext: {
+            instanceId: "searcher-b",
+          },
+        },
+      ];
+    },
+  });
+
+  const summary = await log.summarizeRecent(10, {
+    source: "operator_triggered_search",
+    dispatchReady: false,
+  });
+
+  assert.equal(summary.totalSearches, 1);
+  assert.equal(summary.timedOutCount, 1);
+  assert.equal(summary.dispatchNotReadyCount, 1);
+  assert.equal(summary.latestInstanceId, "searcher-b");
+});

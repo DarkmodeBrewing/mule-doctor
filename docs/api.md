@@ -1028,7 +1028,7 @@ Query parameters:
 - `source`: optional exact filter for `controlled_discoverability`, `operator_triggered_search`, `managed_instance_observation`, or `observer_target_observation`
 - `outcome`: optional exact filter for `active`, `found`, `completed_empty`, or `timed_out`
 - `dispatchReady`: optional exact filter for `ready` or `not_ready`
-- `target`: optional case-insensitive substring filter across controlled instance ids, observed managed instance ids, and observer-target labels
+- `target`: optional case-insensitive substring filter across controlled instance ids, observed managed instance ids, observer-target labels, observer target kinds such as `external`, and observer target `instanceId` values when present
 
 Response:
 
@@ -1105,6 +1105,10 @@ Response:
 ```json
 {
   "ok": true,
+  "filters": {
+    "outcome": "timed_out",
+    "target": "external"
+  },
   "summary": {
     "windowSize": 8,
     "totalSearches": 8,
