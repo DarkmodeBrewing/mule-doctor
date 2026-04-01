@@ -1025,12 +1025,20 @@ Notes:
 Query parameters:
 
 - `limit`: optional integer, default `20`, min `1`, max `200`
+- `source`: optional exact filter for `controlled_discoverability`, `operator_triggered_search`, `managed_instance_observation`, or `observer_target_observation`
+- `outcome`: optional exact filter for `active`, `found`, `completed_empty`, or `timed_out`
+- `dispatchReady`: optional exact filter for `ready` or `not_ready`
+- `target`: optional case-insensitive substring filter across controlled instance ids, observed managed instance ids, and observer-target labels
 
 Response:
 
 ```json
 {
   "ok": true,
+  "filters": {
+    "source": "operator_triggered_search",
+    "target": "searcher-a"
+  },
   "results": [
     {
       "recordedAt": "2026-03-13T12:05:00.000Z",
@@ -1082,7 +1090,7 @@ Response:
 Notes:
 
 - search-health records are mule-doctor-owned normalized lifecycle records
-- current `source` values are limited to `controlled_discoverability`
+- current `source` values are `controlled_discoverability`, `operator_triggered_search`, `managed_instance_observation`, and `observer_target_observation`
 - the goal of this surface is to preserve lifecycle evidence without requiring consumers to correlate raw upstream endpoints every time
 
 ### `GET /api/search-health/summary?limit={n}`
@@ -1090,6 +1098,7 @@ Notes:
 Query parameters:
 
 - `limit`: optional integer, default `20`, min `1`, max `200`
+- supports the same optional `source`, `outcome`, `dispatchReady`, and `target` filters as `/api/search-health/results`
 
 Response:
 

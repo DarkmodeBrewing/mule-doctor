@@ -274,6 +274,137 @@ test("OperatorConsoleServer returns search health summary", async () => {
   }
 });
 
+test("OperatorConsoleServer filters persisted search health results", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const searchHealthStore = new StubSearchHealthResultsStore();
+    searchHealthStore.records.push(
+      {
+        recordedAt: "2026-03-24T10:05:00.000Z",
+        source: "operator_triggered_search",
+        query: "manual-a",
+        searchId: "search-manual-a",
+        dispatchedAt: "2026-03-24T10:00:00.000Z",
+        readinessAtDispatch: {
+          publisher: { statusReady: true, searchesReady: true, ready: true },
+          searcher: { statusReady: true, searchesReady: true, ready: true },
+        },
+        transportAtDispatch: {
+          publisher: { peerCount: 3, degradedIndicators: [] },
+          searcher: { peerCount: 3, degradedIndicators: [] },
+        },
+        states: [{ observedAt: "2026-03-24T10:05:00.000Z", state: "running", hits: 0 }],
+        resultCount: 0,
+        outcome: "active",
+        finalState: "running",
+        observedContext: { instanceId: "searcher-a" },
+      },
+      {
+        recordedAt: "2026-03-24T10:10:00.000Z",
+        source: "observer_target_observation",
+        query: "observer-b",
+        searchId: "search-observer-b",
+        dispatchedAt: "2026-03-24T10:08:00.000Z",
+        readinessAtDispatch: {
+          publisher: { statusReady: false, searchesReady: false, ready: false },
+          searcher: { statusReady: false, searchesReady: false, ready: false },
+        },
+        transportAtDispatch: {
+          publisher: { peerCount: 0, degradedIndicators: ["no_live_peers"] },
+          searcher: { peerCount: 0, degradedIndicators: ["no_live_peers"] },
+        },
+        states: [{ observedAt: "2026-03-24T10:10:00.000Z", state: "timed_out", hits: 0 }],
+        resultCount: 0,
+        outcome: "timed_out",
+        finalState: "timed_out",
+        observerContext: {
+          target: { kind: "external" },
+          label: "external configured rust-mule client",
+        },
+      },
+    );
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      searchHealthResults: searchHealthStore,
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(
+      `${server.publicAddress()}/api/search-health/results?limit=5&source=operator_triggered_search&dispatchReady=ready&target=searcher-a`,
+      {
+        headers: { Cookie: cookie },
+      },
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.results.length, 1);
+    assert.equal(body.results[0].source, "operator_triggered_search");
+    assert.equal(body.results[0].observedContext.instanceId, "searcher-a");
+
+    const summaryRes = await fetch(
+      `${server.publicAddress()}/api/search-health/summary?limit=5&outcome=timed_out&target=external`,
+      {
+        headers: { Cookie: cookie },
+      },
+    );
+    assert.equal(summaryRes.status, 200);
+    const summaryBody = await summaryRes.json();
+    assert.equal(summaryBody.summary.totalSearches, 1);
+    assert.equal(summaryBody.summary.timedOutCount, 1);
+    assert.equal(summaryBody.summary.latestTargetLabel, "external configured rust-mule client");
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer rejects invalid search health filters", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      searchHealthResults: new StubSearchHealthResultsStore(),
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(
+      `${server.publicAddress()}/api/search-health/results?dispatchReady=maybe`,
+      {
+        headers: { Cookie: cookie },
+      },
+    );
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.match(body.error, /invalid search health dispatchReady filter/);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
 test("OperatorConsoleServer returns LLM invocation audit results", async () => {
   const tmp = await makeTempDir();
   try {

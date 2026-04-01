@@ -91,6 +91,56 @@ function renderSearchHealthSummary(summary) {
   element.textContent = parts.join(" • ");
 }
 
+function getSearchHealthFilters() {
+  const source = document.getElementById("search-health-source-filter")?.value?.trim();
+  const outcome = document.getElementById("search-health-outcome-filter")?.value?.trim();
+  const dispatchReady = document.getElementById("search-health-dispatch-filter")?.value?.trim();
+  const target = document.getElementById("search-health-target-filter")?.value?.trim();
+  return {
+    source: source || undefined,
+    outcome: outcome || undefined,
+    dispatchReady: dispatchReady || undefined,
+    target: target || undefined,
+  };
+}
+
+function buildSearchHealthQuery(limit) {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  const filters = getSearchHealthFilters();
+  if (filters.source) {
+    params.set("source", filters.source);
+  }
+  if (filters.outcome) {
+    params.set("outcome", filters.outcome);
+  }
+  if (filters.dispatchReady) {
+    params.set("dispatchReady", filters.dispatchReady);
+  }
+  if (filters.target) {
+    params.set("target", filters.target);
+  }
+  return params.toString();
+}
+
+function describeSearchHealthFilters() {
+  const filters = getSearchHealthFilters();
+  const parts = [];
+  if (filters.source) {
+    parts.push(`source ${filters.source}`);
+  }
+  if (filters.outcome) {
+    parts.push(`outcome ${filters.outcome}`);
+  }
+  if (filters.dispatchReady) {
+    parts.push(filters.dispatchReady === "ready" ? "ready at dispatch" : "not ready at dispatch");
+  }
+  if (filters.target) {
+    parts.push(`target ${filters.target}`);
+  }
+  return parts.join(" • ");
+}
+
 function renderLlmInvocationSummary(summary) {
   const element = document.getElementById("llm-invocation-summary");
   if (!summary || typeof summary.totalInvocations !== "number" || summary.totalInvocations === 0) {
@@ -180,6 +230,9 @@ function renderSearchHealthItem(record) {
   if (record.source === "operator_triggered_search") {
     badges.appendChild(createBadge("manual", "instance"));
   }
+  if (record.source === "controlled_discoverability") {
+    badges.appendChild(createBadge("controlled", "instance"));
+  }
   line.appendChild(badges);
 
   const detail = document.createElement("div");
@@ -187,9 +240,17 @@ function renderSearchHealthItem(record) {
   const finalState = record.finalState || "unknown";
   const fixtureName = record.controlledContext?.fixture?.fileName;
   const peerLabel = record.observedContext?.instanceId ? "observed peers" : "searcher peers";
+  const sourceLabel =
+    record.source === "controlled_discoverability"
+      ? "controlled discoverability"
+      : record.source === "operator_triggered_search"
+        ? "manual dispatch"
+        : record.source === "observer_target_observation"
+          ? "observer target observation"
+          : "managed instance observation";
   detail.textContent =
-    `${record.query}${fixtureName ? ` via ${fixtureName}` : ""} • final state ${finalState} • ` +
-    `${record.transportAtDispatch?.searcher?.peerCount ?? 0} ${peerLabel} • recorded ${formatRecordedAt(record.recordedAt)}`;
+    `${sourceLabel} • ${record.query}${fixtureName ? ` via ${fixtureName}` : ""} • final state ${finalState} • ` +
+    `${record.transportAtDispatch?.searcher?.peerCount ?? 0} ${peerLabel} • dispatched ${formatRecordedAt(record.dispatchedAt)} • recorded ${formatRecordedAt(record.recordedAt)}`;
 
   item.appendChild(line);
   item.appendChild(detail);
@@ -274,20 +335,24 @@ export function createDiscoverabilityController(fetchJson) {
   async function refreshSearchHealthResults() {
     const list = document.getElementById("search-health-results");
     list.replaceChildren();
+    const query = buildSearchHealthQuery(24);
+    const filterDescription = describeSearchHealthFilters();
     try {
-      const summaryData = await fetchJson("/api/search-health/summary?limit=8");
+      const summaryData = await fetchJson(`/api/search-health/summary?${query}`);
       renderSearchHealthSummary(summaryData.summary);
     } catch {
       renderSearchHealthSummary(undefined);
     }
 
     try {
-      const data = await fetchJson("/api/search-health/results?limit=8");
+      const data = await fetchJson(`/api/search-health/results?${query}`);
       const results = Array.isArray(data.results) ? [...data.results].reverse() : [];
       if (!results.length) {
         const item = document.createElement("li");
         item.className = "muted";
-        item.textContent = "No search health history recorded yet.";
+        item.textContent = filterDescription
+          ? `No search health history matched: ${filterDescription}.`
+          : "No search health history recorded yet.";
         list.appendChild(item);
         return;
       }

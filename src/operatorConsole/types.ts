@@ -3,7 +3,7 @@ import type { ManagedInstanceSurfaceDiagnosticsSnapshot } from "../instances/man
 import type { OperatorSearchDispatchResult } from "./operatorSearchService.js";
 import type { LlmInvocationAuditSink } from "../llm/invocationAuditLog.js";
 import type { LlmInvocationGate } from "../llm/invocationGate.js";
-import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary, SearchHealthRecord, SearchHealthSummary, LlmInvocationRecord, LlmInvocationSummary } from "../types/contracts.js";
+import type { DiagnosticTargetRef, ManagedInstanceAnalysisResult, ManagedInstanceDiagnosticSnapshot, ManagedInstancePresetActionResult, ManagedInstancePresetDefinition, ManagedInstanceRecord, ObserverCycleOutcome, OperatorEventEntry, RuntimeState, AppliedManagedInstancePreset, ApplyManagedInstancePresetInput, ManagedInstanceSharedOverview, ManagedSharedFixture, ManagedDiscoverabilityCheckResult, ManagedDiscoverabilityRecord, ManagedDiscoverabilitySummary, SearchHealthRecord, SearchHealthRecordFilters, SearchHealthSummary, LlmInvocationRecord, LlmInvocationSummary } from "../types/contracts.js";
 
 export interface ListedFile {
   name: string;
@@ -111,8 +111,8 @@ export interface DiscoverabilityResultsStore {
 }
 
 export interface SearchHealthResultsStore {
-  listRecent(limit?: number): Promise<SearchHealthRecord[]>;
-  summarizeRecent(limit?: number): Promise<SearchHealthSummary>;
+  listRecent(limit?: number, filters?: SearchHealthRecordFilters): Promise<SearchHealthRecord[]>;
+  summarizeRecent(limit?: number, filters?: SearchHealthRecordFilters): Promise<SearchHealthSummary>;
   appendControlledDiscoverability(result: ManagedDiscoverabilityCheckResult): Promise<void>;
 }
 
