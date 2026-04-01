@@ -49,6 +49,7 @@ The following major slices are already landed on `main`:
    - source code tools are split into a thin coordinator plus shared contract helpers, filesystem/path operations, and git-blame parsing
    - observer runtime is split between scheduler/control flow, cycle execution, shared prompt/state helpers, and observed-search tracking
    - rust-mule client is split between the public endpoint facade, request/token/poll transport, shared normalization helpers, and shared types
+   - managed-instance surface diagnostics are split between service orchestration, runtime-surface view shaping, observed-search recording, and shared detail types
    - rust-mule client tests are split into read-surface vs debug/write-path files with shared fetch/token helpers
    - observer tests are split into context/target behavior vs scheduler/control behavior with shared stubs
    - tool-registry tests are split by core/runtime/surface/source domains with shared stubs so the test surface mirrors the production registry split
