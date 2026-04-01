@@ -2,6 +2,10 @@ import { access, mkdir, stat } from "fs/promises";
 import { constants } from "fs";
 import { dirname, resolve } from "path";
 
+export const CONTAINER_RUNTIME_USER = "mule";
+export const CONTAINER_RUNTIME_UID = 1000;
+export const CONTAINER_RUNTIME_GID = 1000;
+
 export interface StartupReadinessConfig {
   tokenPath: string;
   debugTokenPath?: string;
@@ -53,7 +57,7 @@ async function checkReadableFile(path: string, label: string, errors: string[]):
     }
     await access(resolved, constants.R_OK);
   } catch (err) {
-    errors.push(`${label} is not readable: ${describePathError(path, err)}`);
+    errors.push(`${label} is not readable: ${describePathError(path, err)}${buildContainerVolumeOwnershipHint(path, err)}`);
   }
 }
 
@@ -67,7 +71,7 @@ async function checkExistingDirectory(path: string, label: string, errors: strin
     }
     await access(resolved, constants.R_OK | constants.X_OK);
   } catch (err) {
-    errors.push(`${label} is unavailable: ${describePathError(path, err)}`);
+    errors.push(`${label} is unavailable: ${describePathError(path, err)}${buildContainerVolumeOwnershipHint(path, err)}`);
   }
 }
 
@@ -97,7 +101,7 @@ async function checkWritableDirectory(
     }
     await access(resolved, constants.R_OK | constants.W_OK | constants.X_OK);
   } catch (err) {
-    errors.push(`${label} is not writable: ${describePathError(path, err)}`);
+    errors.push(`${label} is not writable: ${describePathError(path, err)}${buildContainerVolumeOwnershipHint(path, err)}`);
   }
 }
 
@@ -121,7 +125,7 @@ async function checkWritableFileParent(
       await checkWritableDirectory(parent, `${label} parent`, errors, true);
       return;
     }
-    errors.push(`${label} is not writable: ${describePathError(path, err)}`);
+    errors.push(`${label} is not writable: ${describePathError(path, err)}${buildContainerVolumeOwnershipHint(path, err)}`);
   }
 }
 
@@ -135,4 +139,17 @@ function getErrorCode(err: unknown): string | undefined {
   }
   const code = Reflect.get(err, "code");
   return typeof code === "string" ? code : undefined;
+}
+
+export function buildContainerVolumeOwnershipHint(path: string, err: unknown): string {
+  const resolved = resolve(path);
+  const code = getErrorCode(err);
+  if (!resolved.startsWith("/data") || (code !== "EACCES" && code !== "EPERM")) {
+    return "";
+  }
+  return (
+    ` If this path is backed by the /data bind mount, ensure the host path is owned by ` +
+    `${CONTAINER_RUNTIME_USER} (${CONTAINER_RUNTIME_UID}:${CONTAINER_RUNTIME_GID}), for example: ` +
+    `chown -R ${CONTAINER_RUNTIME_UID}:${CONTAINER_RUNTIME_GID} <host-data-dir>.`
+  );
 }

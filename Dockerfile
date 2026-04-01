@@ -31,6 +31,9 @@ RUN npm run build
 
 FROM node:20-bookworm-slim AS runner
 
+ARG MULE_UID=1000
+ARG MULE_GID=1000
+
 RUN apt-get update && apt-get install -y \
     git \
     ca-certificates \
@@ -45,8 +48,8 @@ COPY --from=rust-builder /opt/rust-mule /opt/rust-mule
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh /app/scripts/container-healthcheck.sh
 
-RUN groupadd --system mule \
-    && useradd --system --gid mule --home-dir /app --shell /usr/sbin/nologin mule \
+RUN groupadd --gid "$MULE_GID" mule \
+    && useradd --uid "$MULE_UID" --gid mule --home-dir /app --shell /usr/sbin/nologin mule \
     && mkdir -p /data /data/logs /data/mule-doctor \
     && chown -R mule:mule /data
 
