@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { SourceCodeToolsFs } from "./sourceCodeToolsFs.js";
 import { gitBlame } from "./sourceCodeToolsGit.js";
 import {
@@ -11,6 +11,7 @@ import {
   isRustProjectTextFile,
   isRustSourceFile,
   resolveProposalDir,
+  toPosixPath,
   type GitBlameResult,
   type ProposePatchResult,
   type ReadFileResult,
@@ -139,6 +140,7 @@ export class SourceCodeTools {
   async gitBlame(pathRaw: string, lineRaw: number): Promise<GitBlameResult> {
     const safePath = this.fsTools.resolveUserPath(pathRaw);
     await this.fsTools.assertPathWithinRoot(safePath);
+    this.fsTools.assertPathAllowed(toPosixPath(relative(this.rootPath, safePath)), "git_blame");
     return gitBlame(this.rootPath, safePath, lineRaw);
   }
 }

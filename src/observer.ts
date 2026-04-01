@@ -7,6 +7,7 @@
 import type { Analyzer } from "./llm/analyzer.js";
 import type { MattermostClient } from "./integrations/mattermost.js";
 import type { RustMuleClient } from "./api/rustMuleClient.js";
+import type { RustMuleReadiness } from "./api/rustMuleClient.js";
 import type { LogWatcher } from "./logs/logWatcher.js";
 import type { RuntimeStore } from "./storage/runtimeStore.js";
 import type { SearchHealthLog } from "./searchHealth/searchHealthLog.js";
@@ -19,7 +20,10 @@ import type {
   ObserverTargetResolver,
   ObserverTargetRuntime,
 } from "./observerTargetResolver.js";
-import { runObserverCycle } from "./observerCycleRunner.js";
+import {
+  collectAndPersistObserverContext,
+  runObserverCycle,
+} from "./observerCycleRunner.js";
 import {
   buildCycleStatePatch,
   log,
@@ -191,6 +195,39 @@ export class Observer {
       markCycleStarted: this.markCycleStarted.bind(this),
       finishCycle: this.finishCycle.bind(this),
     });
+  }
+
+  private async collectAndPersistContext(
+    target?: ObserverTargetRuntime,
+    readiness?: RustMuleReadiness,
+  ) {
+    return collectAndPersistObserverContext(
+      {
+        analyzer: this.analyzer,
+        analyzerFactory: this.analyzerFactory,
+        mattermost: this.mattermost,
+        client: this.client,
+        logWatcher: this.logWatcher,
+        runtimeStore: this.runtimeStore,
+        searchHealthLog: this.searchHealthLog,
+        targetResolver: this.targetResolver,
+        eventLog: this.eventLog,
+        lastObservedSearchSignatures: this.lastObservedSearchSignatures,
+        lastObservedSearchStates: this.lastObservedSearchStates,
+        getCurrentCycleState: () => ({
+          startedAt: this.currentCycleStartedAt,
+          target: this.currentCycleTarget,
+        }),
+        clearCurrentCycleState: () => {
+          this.currentCycleStartedAt = undefined;
+          this.currentCycleTarget = undefined;
+        },
+        markCycleStarted: this.markCycleStarted.bind(this),
+        finishCycle: this.finishCycle.bind(this),
+      },
+      target,
+      readiness,
+    );
   }
 
   private async markCycleStarted(

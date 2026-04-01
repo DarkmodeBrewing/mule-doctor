@@ -194,6 +194,14 @@ async function collectAndPersistContext(
   }
 }
 
+export async function collectAndPersistObserverContext(
+  config: ObserverCycleRunnerConfig,
+  target?: ObserverTargetRuntime,
+  readiness?: RustMuleReadiness,
+): Promise<ObserverCycleContext | undefined> {
+  return collectAndPersistContext(config, target, readiness);
+}
+
 async function resolveTarget(
   config: ObserverCycleRunnerConfig,
 ): Promise<ObserverTargetRuntime | undefined> {
