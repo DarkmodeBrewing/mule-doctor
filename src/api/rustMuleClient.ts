@@ -4,16 +4,12 @@
  * Polls endpoints periodically and exposes typed response helpers.
  */
 
-import { readFile } from "fs/promises";
 import {
-  clampInt,
   DEFAULT_HTTP_TIMEOUT_MS,
   HttpError,
-  inferStatus,
-  isAbortError,
   isRecoverableReadError,
-  isTerminalDebugResult,
   log,
+  normalizeBootstrapResult,
   normalizeDownloads,
   normalizeLookupStats,
   normalizeRoutingBuckets,
@@ -22,28 +18,32 @@ import {
   normalizeSharedActions,
   normalizeSharedFiles,
   normalizeStatus,
-  normalizeTraceHops,
+  normalizeTraceLookupResult,
   readString,
   RequestTimeoutError,
-  resolvePollOptions,
-  sleep,
 } from "./rustMuleClientShared.js";
+import { RustMuleClientTransport } from "./rustMuleClientTransport.js";
 import type {
   BootstrapJobResult,
   LookupStats,
   NodeInfo,
   Peer,
   PollOptions,
-  RequestOptions,
   RoutingBucket,
+  RustMuleDownloadEntry,
   RustMuleDownloadsResponse,
+  RustMuleKeywordHit,
+  RustMuleKeywordSearchInfo,
   RustMuleKeywordSearchResponse,
   RustMuleReadiness,
   RustMuleSearchDetailResponse,
   RustMuleSearchesResponse,
   RustMuleSharedActionsResponse,
+  RustMuleSharedActionStatus,
+  RustMuleSharedFileEntry,
   RustMuleSharedFilesResponse,
   RustMuleStatus,
+  TraceLookupHop,
   TraceLookupResult,
 } from "./rustMuleClientTypes.js";
 
@@ -71,13 +71,7 @@ export type {
 } from "./rustMuleClientTypes.js";
 
 export class RustMuleClient {
-  private readonly baseUrl: string;
-  private readonly apiPrefix: string;
-  private readonly tokenPath: string | undefined;
-  private readonly debugTokenPath: string | undefined;
-  private readonly httpTimeoutMs: number;
-  private authToken: string | undefined;
-  private debugToken: string | undefined;
+  private readonly transport: RustMuleClientTransport;
 
   constructor(
     baseUrl: string,
@@ -86,107 +80,17 @@ export class RustMuleClient {
     debugTokenPath?: string,
     httpTimeoutMs = DEFAULT_HTTP_TIMEOUT_MS,
   ) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
-    const trimmedPrefix = apiPrefix.trim();
-    if (trimmedPrefix === "") {
-      this.apiPrefix = "";
-    } else {
-      const withoutTrailing = trimmedPrefix.replace(/\/+$/, "");
-      this.apiPrefix = withoutTrailing.startsWith("/") ? withoutTrailing : `/${withoutTrailing}`;
-    }
-    this.tokenPath = tokenPath;
-    this.debugTokenPath = debugTokenPath;
-    this.httpTimeoutMs = clampInt(httpTimeoutMs, DEFAULT_HTTP_TIMEOUT_MS, 100, 120_000);
+    this.transport = new RustMuleClientTransport(
+      baseUrl,
+      tokenPath,
+      apiPrefix,
+      debugTokenPath,
+      httpTimeoutMs,
+    );
   }
 
-  /** Load bearer/debug tokens from disk (if configured). */
   async loadToken(): Promise<void> {
-    if (this.tokenPath) {
-      try {
-        const token = (await readFile(this.tokenPath, "utf8")).trim();
-        if (!token) {
-          throw new Error("Auth token file is empty");
-        }
-        this.authToken = token;
-        log("info", "rustMuleClient", "Auth token loaded");
-      } catch (err) {
-        throw new Error(`Failed to load auth token from ${this.tokenPath}: ${String(err)}`, {
-          cause: err,
-        });
-      }
-    }
-
-    if (this.debugTokenPath) {
-      try {
-        const token = (await readFile(this.debugTokenPath, "utf8")).trim();
-        if (!token) {
-          throw new Error("Debug token file is empty");
-        }
-        this.debugToken = token;
-        log("info", "rustMuleClient", "Debug token loaded");
-      } catch (err) {
-        throw new Error(`Failed to load debug token from ${this.debugTokenPath}: ${String(err)}`, {
-          cause: err,
-        });
-      }
-    }
-  }
-
-  private headers(options: RequestOptions = {}): Record<string, string> {
-    const h: Record<string, string> = { "Content-Type": "application/json" };
-    if (this.authToken) h["Authorization"] = `Bearer ${this.authToken}`;
-    if (options.debug && this.debugToken) {
-      h["X-Debug-Token"] = this.debugToken;
-    }
-    return h;
-  }
-
-  private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const url = `${this.baseUrl}${this.apiPrefix}${path}`;
-    const res = await this.fetchWithTimeout("GET", url, { headers: this.headers(options) });
-    if (!res.ok) {
-      throw new HttpError("GET", url, res.status);
-    }
-    return res.json() as Promise<T>;
-  }
-
-  private async post<T>(
-    path: string,
-    body: Record<string, unknown> = {},
-    options: RequestOptions = {},
-  ): Promise<T> {
-    const url = `${this.baseUrl}${this.apiPrefix}${path}`;
-    const res = await this.fetchWithTimeout("POST", url, {
-      method: "POST",
-      headers: this.headers(options),
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      throw new HttpError("POST", url, res.status);
-    }
-    return res.json() as Promise<T>;
-  }
-
-  private async fetchWithTimeout(
-    method: string,
-    url: string,
-    init: RequestInit,
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, this.httpTimeoutMs);
-
-    try {
-      return await fetch(url, { ...init, signal: controller.signal });
-    } catch (err) {
-      if (isAbortError(err)) {
-        throw new RequestTimeoutError(method, url, this.httpTimeoutMs);
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeout);
-    }
+    await this.transport.loadToken();
   }
 
   async getNodeInfo(): Promise<NodeInfo> {
@@ -212,29 +116,29 @@ export class RustMuleClient {
   }
 
   async getStatus(): Promise<RustMuleStatus> {
-    const status = await this.get<Record<string, unknown>>("/status");
+    const status = await this.transport.get<Record<string, unknown>>("/status");
     return normalizeStatus(status);
   }
 
   async getSearches(): Promise<RustMuleSearchesResponse> {
-    const payload = await this.get<Record<string, unknown>>("/searches");
+    const payload = await this.transport.get<Record<string, unknown>>("/searches");
     return normalizeSearches(payload);
   }
 
   async getSearchDetail(searchId: string): Promise<RustMuleSearchDetailResponse> {
-    const payload = await this.get<Record<string, unknown>>(
+    const payload = await this.transport.get<Record<string, unknown>>(
       `/searches/${encodeURIComponent(searchId)}`,
     );
     return normalizeSearchDetail(payload);
   }
 
   async getSharedFiles(): Promise<RustMuleSharedFilesResponse> {
-    const payload = await this.get<Record<string, unknown>>("/shared");
+    const payload = await this.transport.get<Record<string, unknown>>("/shared");
     return normalizeSharedFiles(payload);
   }
 
   async getSharedActions(): Promise<RustMuleSharedActionsResponse> {
-    const payload = await this.get<Record<string, unknown>>("/shared/actions");
+    const payload = await this.transport.get<Record<string, unknown>>("/shared/actions");
     return normalizeSharedActions(payload);
   }
 
@@ -251,7 +155,7 @@ export class RustMuleClient {
   }
 
   async getDownloads(): Promise<RustMuleDownloadsResponse> {
-    const payload = await this.get<Record<string, unknown>>("/downloads");
+    const payload = await this.transport.get<Record<string, unknown>>("/downloads");
     return normalizeDownloads(payload);
   }
 
@@ -270,7 +174,10 @@ export class RustMuleClient {
     } else if (query) {
       payload["query"] = query;
     }
-    const response = await this.post<Record<string, unknown>>("/kad/search_keyword", payload);
+    const response = await this.transport.post<Record<string, unknown>>(
+      "/kad/search_keyword",
+      payload,
+    );
     return {
       ...response,
       keyword_id_hex:
@@ -295,7 +202,9 @@ export class RustMuleClient {
 
   async getPeers(): Promise<Peer[]> {
     try {
-      const payload = await this.get<{ peers?: Array<Record<string, unknown>> }>("/kad/peers");
+      const payload = await this.transport.get<{ peers?: Array<Record<string, unknown>> }>(
+        "/kad/peers",
+      );
       const peers = Array.isArray(payload.peers) ? payload.peers : [];
       return peers.map((p) => ({
         ...p,
@@ -323,7 +232,7 @@ export class RustMuleClient {
 
   async getRoutingBuckets(): Promise<RoutingBucket[]> {
     try {
-      const payload = await this.get<{
+      const payload = await this.transport.get<{
         buckets?: Array<Record<string, unknown>>;
       }>("/debug/routing/buckets", { debug: true });
       return normalizeRoutingBuckets(payload);
@@ -355,7 +264,7 @@ export class RustMuleClient {
   async getLookupStats(): Promise<LookupStats> {
     let events: Record<string, unknown>;
     try {
-      events = await this.get<Record<string, unknown>>("/events");
+      events = await this.transport.get<Record<string, unknown>>("/events");
     } catch (err) {
       if (!isRecoverableReadError(err)) {
         throw err;
@@ -368,7 +277,7 @@ export class RustMuleClient {
   }
 
   async triggerBootstrap(options: PollOptions = {}): Promise<BootstrapJobResult> {
-    const started = await this.post<Record<string, unknown>>(
+    const started = await this.transport.post<Record<string, unknown>>(
       "/debug/bootstrap/restart",
       {},
       { debug: true },
@@ -378,16 +287,12 @@ export class RustMuleClient {
       throw new Error(`Bootstrap restart response missing job_id: ${JSON.stringify(started)}`);
     }
 
-    const result = await this.pollDebugResult<Record<string, unknown>>(
+    const result = await this.transport.pollDebugResult<Record<string, unknown>>(
       `/debug/bootstrap/jobs/${encodeURIComponent(jobId)}`,
       options,
     );
 
-    return {
-      ...result,
-      jobId,
-      status: inferStatus(result),
-    };
+    return normalizeBootstrapResult(result, jobId);
   }
 
   async traceLookup(targetId?: string, options: PollOptions = {}): Promise<TraceLookupResult> {
@@ -396,7 +301,7 @@ export class RustMuleClient {
       body["target_id"] = targetId.trim();
     }
 
-    const started = await this.post<Record<string, unknown>>("/debug/trace_lookup", body, {
+    const started = await this.transport.post<Record<string, unknown>>("/debug/trace_lookup", body, {
       debug: true,
     });
     const traceId = readString(started, ["trace_id", "traceId"]);
@@ -404,40 +309,16 @@ export class RustMuleClient {
       throw new Error(`Trace lookup response missing trace_id: ${JSON.stringify(started)}`);
     }
 
-    const result = await this.pollDebugResult<Record<string, unknown>>(
+    const result = await this.transport.pollDebugResult<Record<string, unknown>>(
       `/debug/trace_lookup/${encodeURIComponent(traceId)}`,
       options,
     );
 
-    return {
-      ...result,
-      traceId,
-      status: inferStatus(result),
-      hops: normalizeTraceHops(result["hops"]),
-    };
-  }
-
-  private async pollDebugResult<T extends Record<string, unknown>>(
-    path: string,
-    options: PollOptions = {},
-  ): Promise<T> {
-    const { pollIntervalMs, maxWaitMs } = resolvePollOptions(options);
-
-    const deadline = Date.now() + maxWaitMs;
-    while (true) {
-      const result = await this.get<Record<string, unknown>>(path, { debug: true });
-      if (isTerminalDebugResult(result)) {
-        return result as T;
-      }
-      if (Date.now() >= deadline) {
-        throw new Error(`Timed out polling ${path} after ${maxWaitMs}ms`);
-      }
-      await sleep(pollIntervalMs);
-    }
+    return normalizeTraceLookupResult(result, traceId);
   }
 
   private async postSharedAction(path: string): Promise<RustMuleSharedActionsResponse> {
-    const payload = await this.post<Record<string, unknown>>(path, { confirm: true });
+    const payload = await this.transport.post<Record<string, unknown>>(path, { confirm: true });
     return normalizeSharedActions(payload);
   }
 }

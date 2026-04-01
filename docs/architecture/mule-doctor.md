@@ -250,6 +250,7 @@ Implementation note:
 - the managed rust-mule config layer is split between a stable public entrypoint, shared contract/types helpers, parser/validation logic, and TOML rendering so config ownership rules do not live in one large file
 - the source-code tool layer is split between a thin public coordinator, shared contracts/helpers, bounded filesystem operations, and git-blame parsing so source inspection logic does not all live in one module
 - the observer runtime is split between scheduler/control flow in `observer.ts`, cycle execution in a dedicated runner, shared prompt/state helpers, and observed-search lifecycle tracking
+- the rust-mule client layer is split between a public endpoint facade, request/token/poll transport, shared response normalization helpers, and shared types so the API surface stays stable while transport concerns remain isolated
 
 Primary purpose:
 
