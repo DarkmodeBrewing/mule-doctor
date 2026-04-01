@@ -144,7 +144,8 @@ function getErrorCode(err: unknown): string | undefined {
 export function buildContainerVolumeOwnershipHint(path: string, err: unknown): string {
   const resolved = resolve(path);
   const code = getErrorCode(err);
-  if (!resolved.startsWith("/data") || (code !== "EACCES" && code !== "EPERM")) {
+  const isDataPath = resolved === "/data" || resolved.startsWith("/data/");
+  if (!isDataPath || (code !== "EACCES" && code !== "EPERM")) {
     return "";
   }
   return (
