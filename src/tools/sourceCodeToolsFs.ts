@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { mkdir, open, readdir, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -114,7 +115,7 @@ export class SourceCodeToolsFs {
     await mkdir(this.proposalDir, { recursive: true });
 
     const timestamp = new Date().toISOString().replace(/[.:]/g, "-");
-    const artifactName = `proposal-${timestamp}.patch`;
+    const artifactName = `proposal-${timestamp}-${randomUUID()}.patch`;
     const artifactAbsPath = resolve(this.proposalDir, artifactName);
     await writeFile(artifactAbsPath, artifactContent, "utf8");
 

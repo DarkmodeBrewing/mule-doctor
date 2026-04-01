@@ -1,5 +1,6 @@
 import type { ServerResponse } from "node:http";
 import { redactLine, redactText } from "../logs/redaction.js";
+import { RequestError } from "./http.js";
 import type { RuntimeState } from "../types/contracts.js";
 import {
   DEFAULT_LOG_LINES,
@@ -112,7 +113,7 @@ async function handleLlmLogDetail(
   path: string,
   res: ServerResponse,
 ): Promise<void> {
-  const fileName = decodeURIComponent(path.slice("/api/llm/logs/".length));
+  const fileName = decodeRouteFileName(path.slice("/api/llm/logs/".length), "Invalid LLM log path");
   const content = await readFromAllowedDir(ctx.llmLogDir, fileName, MAX_FILE_BYTES);
   sendJson(res, 200, {
     ok: true,
@@ -133,7 +134,7 @@ async function handleProposalDetail(
   path: string,
   res: ServerResponse,
 ): Promise<void> {
-  const fileName = decodeURIComponent(path.slice("/api/proposals/".length));
+  const fileName = decodeRouteFileName(path.slice("/api/proposals/".length), "Invalid proposal path");
   const content = await readFromAllowedDir(ctx.proposalDir, fileName, MAX_FILE_BYTES);
   sendJson(res, 200, {
     ok: true,
@@ -160,4 +161,12 @@ function buildObserverStatus(runtimeState: RuntimeState) {
       ? redactText(runtimeState.lastTargetFailureReason)
       : runtimeState.lastTargetFailureReason,
   };
+}
+
+function decodeRouteFileName(rawPath: string, invalidMessage: string): string {
+  try {
+    return decodeURIComponent(rawPath);
+  } catch {
+    throw new RequestError(400, invalidMessage);
+  }
 }

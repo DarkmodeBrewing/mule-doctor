@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { redactText } from "../logs/redaction.js";
 import { describeDiagnosticTarget } from "../targets/describeTarget.js";
 import type { DiagnosticTargetRef } from "../types/contracts.js";
 import { readJsonBody, sendJson } from "./http.js";
@@ -148,7 +149,13 @@ async function handleOperatorEvents(
   }
   const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 30, 1, 200);
   const events = await ctx.operatorEvents.listRecent(limit);
-  sendJson(res, 200, { ok: true, events });
+  sendJson(res, 200, {
+    ok: true,
+    events: events.map((event) => ({
+      ...event,
+      message: redactText(event.message),
+    })),
+  });
 }
 
 async function handleInstanceComparison(

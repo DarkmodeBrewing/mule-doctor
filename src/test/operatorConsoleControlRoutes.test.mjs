@@ -95,6 +95,51 @@ test("OperatorConsoleServer returns operator event history", async () => {
     assert.equal(payload.ok, true);
     assert.equal(payload.events.length, 1);
     assert.equal(payload.events[0].type, "diagnostic_target_changed");
+    assert.equal(payload.events[0].message.includes("/workspace/secret"), false);
+
+    await server.stop();
+  } finally {
+    await tmp.cleanup();
+  }
+});
+
+test("OperatorConsoleServer redacts operator event messages", async () => {
+  const tmp = await makeTempDir();
+  try {
+    const rustLogPath = join(tmp.dir, "rust-mule.log");
+    await writeFile(rustLogPath, "", "utf8");
+    const operatorEvents = new StubOperatorEvents();
+    operatorEvents.events = [
+      {
+        timestamp: "2026-03-08T02:00:00.000Z",
+        type: "diagnostic_target_changed",
+        message: "Failed to read /workspace/secret.env while rotating token",
+        target: { kind: "external" },
+        actor: "operator_console",
+      },
+    ];
+
+    const server = new OperatorConsoleServer({
+      authToken: "ui-secret",
+      host: "127.0.0.1",
+      port: 0,
+      rustMuleLogPath: rustLogPath,
+      llmLogDir: tmp.dir,
+      proposalDir: tmp.dir,
+      getAppLogs: () => [],
+      subscribeToAppLogs: () => () => {},
+      operatorEvents,
+    });
+    await server.start();
+
+    const cookie = await loginAndGetCookie(server.publicAddress());
+    const res = await fetch(`${server.publicAddress()}/api/operator/events?limit=10`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(res.status, 200);
+    const payload = await res.json();
+    assert.equal(payload.events.length, 1);
+    assert.equal(payload.events[0].message.includes("/workspace/secret.env"), false);
 
     await server.stop();
   } finally {
