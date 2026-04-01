@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY package*.json ./
+RUN npm ci --omit=dev
 COPY --from=app-builder /app/dist ./dist
 COPY scripts/container-healthcheck.sh /app/scripts/container-healthcheck.sh
 COPY --from=rust-builder /opt/rust-mule /opt/rust-mule
