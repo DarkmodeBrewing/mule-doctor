@@ -163,7 +163,8 @@ Current status:
 - managed-instance surface diagnostics now also persist deduplicated observed search lifecycle records for active and terminal keyword searches
 - observer cycles now also persist deduplicated observed search lifecycle records for the active diagnostic target, including externally configured targets
 - operator console manual keyword search dispatch now records first-class lifecycle entries against the selected managed instance or active diagnostic target
-- remaining work should focus on refinement only: richer lifecycle context for non-controlled searches, tighter operator workflows around that data, and any additional reporting surfaces that prove useful in practice
+- operator console search-health history now supports source, outcome, dispatch-readiness, and target/instance filtering over persisted lifecycle records
+- remaining work should focus on refinement only: any additional lifecycle context or reporting surfaces that prove useful in practice
 
 ## Task K: Expose Keyword Search and Publish Status as First-Class Diagnostics
 

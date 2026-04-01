@@ -440,7 +440,37 @@
       <article class="card">
         <div class="row">
           <h2>Search Health History</h2>
-          <button id="refresh-search-health-results">Refresh</button>
+          <div class="controls">
+            <select id="search-health-source-filter" aria-label="Filter search health by source">
+              <option value="">All sources</option>
+              <option value="controlled_discoverability">Controlled</option>
+              <option value="operator_triggered_search">Manual</option>
+              <option value="managed_instance_observation">Managed observation</option>
+              <option value="observer_target_observation">Observer target</option>
+            </select>
+            <select id="search-health-outcome-filter" aria-label="Filter search health by outcome">
+              <option value="">All outcomes</option>
+              <option value="active">Active</option>
+              <option value="found">Found</option>
+              <option value="completed_empty">Empty</option>
+              <option value="timed_out">Timed out</option>
+            </select>
+            <select
+              id="search-health-dispatch-filter"
+              aria-label="Filter search health by dispatch readiness"
+            >
+              <option value="">Any dispatch readiness</option>
+              <option value="ready">Ready at dispatch</option>
+              <option value="not_ready">Not ready at dispatch</option>
+            </select>
+            <input
+              id="search-health-target-filter"
+              type="text"
+              placeholder="instance or target"
+              aria-label="Filter search health by target or instance"
+            />
+            <button id="refresh-search-health-results">Refresh</button>
+          </div>
         </div>
         <div class="preset-help muted">
           Historical lifecycle records over time. Use the compare panel above for current runtime surface state.

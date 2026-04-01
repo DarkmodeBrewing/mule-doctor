@@ -67,13 +67,14 @@ class StubSearchHealthResultsStore {
     this.records = [];
   }
 
-  async listRecent(limit = 20) {
-    return this.records.slice(-limit);
+  async listRecent(limit = 20, filters = {}) {
+    return this.records.filter((record) => matchesSearchHealthFilters(record, filters)).slice(-limit);
   }
 
-  async summarizeRecent(limit = 20) {
-    const records = this.records.slice(-limit);
+  async summarizeRecent(limit = 20, filters = {}) {
+    const records = this.records.filter((record) => matchesSearchHealthFilters(record, filters)).slice(-limit);
     const latest = records.at(-1);
+    const activeCount = records.filter((record) => record.outcome === "active").length;
     const foundCount = records.filter((record) => record.outcome === "found").length;
     const completedEmptyCount = records.filter(
       (record) => record.outcome === "completed_empty",
@@ -92,6 +93,7 @@ class StubSearchHealthResultsStore {
     return {
       windowSize: records.length,
       totalSearches: records.length,
+      activeCount,
       foundCount,
       completedEmptyCount,
       timedOutCount,
@@ -109,6 +111,8 @@ class StubSearchHealthResultsStore {
             searcherInstanceId: latest.controlledContext.searcherInstanceId,
           }
         : undefined,
+      latestInstanceId: latest?.observedContext?.instanceId,
+      latestTargetLabel: latest?.observerContext?.label,
       lastSuccessAt: [...records].reverse().find((record) => record.outcome === "found")
         ?.recordedAt,
     };
@@ -153,6 +157,41 @@ class StubSearchHealthResultsStore {
       },
     });
   }
+}
+
+function matchesSearchHealthFilters(record, filters) {
+  if (filters.source && record.source !== filters.source) {
+    return false;
+  }
+  if (filters.outcome && record.outcome !== filters.outcome) {
+    return false;
+  }
+  if (typeof filters.dispatchReady === "boolean") {
+    const readyAtDispatch =
+      record.readinessAtDispatch.publisher.ready === true &&
+      record.readinessAtDispatch.searcher.ready === true;
+    if (readyAtDispatch !== filters.dispatchReady) {
+      return false;
+    }
+  }
+  if (filters.target) {
+    const target = String(filters.target).trim().toLowerCase();
+    const haystack = [
+      record.controlledContext?.publisherInstanceId,
+      record.controlledContext?.searcherInstanceId,
+      record.observedContext?.instanceId,
+      record.observerContext?.label,
+      record.observerContext?.target?.kind,
+      record.observerContext?.target?.instanceId,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    if (!haystack.includes(target)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export {

@@ -207,6 +207,8 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(discoverabilityModule, /discoverability-summary/);
     assert.match(discoverabilityModule, /search-health-results/);
     assert.match(discoverabilityModule, /search-health-summary/);
+    assert.match(discoverabilityModule, /search-health-source-filter/);
+    assert.match(discoverabilityModule, /search-health-target-filter/);
     assert.match(discoverabilityModule, /llm-invocation-results/);
     assert.match(discoverabilityModule, /llm-invocation-summary/);
 
@@ -252,6 +254,10 @@ test("OperatorConsoleServer requires authentication for UI and API endpoints", a
     assert.match(rootHtml, /discoverability-results/);
     assert.match(rootHtml, /discoverability-summary/);
     assert.match(rootHtml, /refresh-search-health-results/);
+    assert.match(rootHtml, /search-health-source-filter/);
+    assert.match(rootHtml, /search-health-outcome-filter/);
+    assert.match(rootHtml, /search-health-dispatch-filter/);
+    assert.match(rootHtml, /search-health-target-filter/);
     assert.match(rootHtml, /search-health-results/);
     assert.match(rootHtml, /search-health-summary/);
     assert.match(rootHtml, /refresh-llm-invocations/);

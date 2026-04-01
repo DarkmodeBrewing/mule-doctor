@@ -1,7 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { redactText } from "../logs/redaction.js";
 import { describeDiagnosticTarget } from "../targets/describeTarget.js";
-import type { DiagnosticTargetRef } from "../types/contracts.js";
+import type {
+  DiagnosticTargetRef,
+  SearchHealthOutcome,
+  SearchHealthRecordFilters,
+  SearchHealthRecordSource,
+} from "../types/contracts.js";
 import { readJsonBody, sendJson } from "./http.js";
 import {
   clampInt,
@@ -298,8 +303,13 @@ async function handleSearchHealthResults(
     return;
   }
   const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
-  const results = await ctx.searchHealthResults.listRecent(limit);
-  sendJson(res, 200, { ok: true, results });
+  const filters = parseSearchHealthFilters(url);
+  if ("error" in filters) {
+    sendJson(res, 400, { ok: false, error: filters.error });
+    return;
+  }
+  const results = await ctx.searchHealthResults.listRecent(limit, filters.filters);
+  sendJson(res, 200, { ok: true, results, filters: filters.filters });
 }
 
 async function handleSearchHealthSummary(
@@ -317,8 +327,13 @@ async function handleSearchHealthSummary(
     return;
   }
   const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
-  const summary = await ctx.searchHealthResults.summarizeRecent(limit);
-  sendJson(res, 200, { ok: true, summary });
+  const filters = parseSearchHealthFilters(url);
+  if ("error" in filters) {
+    sendJson(res, 400, { ok: false, error: filters.error });
+    return;
+  }
+  const summary = await ctx.searchHealthResults.summarizeRecent(limit, filters.filters);
+  sendJson(res, 200, { ok: true, summary, filters: filters.filters });
 }
 
 async function handleLlmInvocationResults(
@@ -357,4 +372,55 @@ async function handleLlmInvocationSummary(
   const limit = clampInt(parseInt(url.searchParams.get("limit") ?? "", 10), 20, 1, 200);
   const summary = await ctx.llmInvocationResults.summarizeRecent(limit);
   sendJson(res, 200, { ok: true, summary });
+}
+
+const SEARCH_HEALTH_SOURCES = new Set<SearchHealthRecordSource>([
+  "controlled_discoverability",
+  "operator_triggered_search",
+  "managed_instance_observation",
+  "observer_target_observation",
+]);
+
+const SEARCH_HEALTH_OUTCOMES = new Set<SearchHealthOutcome>([
+  "active",
+  "found",
+  "completed_empty",
+  "timed_out",
+]);
+
+function parseSearchHealthFilters(
+  url: URL,
+): { filters: SearchHealthRecordFilters } | { error: string } {
+  const sourceParam = url.searchParams.get("source")?.trim();
+  const outcomeParam = url.searchParams.get("outcome")?.trim();
+  const dispatchReadyParam = url.searchParams.get("dispatchReady")?.trim();
+  const targetParam = url.searchParams.get("target")?.trim();
+
+  if (sourceParam && !SEARCH_HEALTH_SOURCES.has(sourceParam as SearchHealthRecordSource)) {
+    return { error: "invalid search health source filter" };
+  }
+  if (outcomeParam && !SEARCH_HEALTH_OUTCOMES.has(outcomeParam as SearchHealthOutcome)) {
+    return { error: "invalid search health outcome filter" };
+  }
+  if (
+    dispatchReadyParam &&
+    dispatchReadyParam !== "ready" &&
+    dispatchReadyParam !== "not_ready"
+  ) {
+    return { error: "invalid search health dispatchReady filter" };
+  }
+
+  return {
+    filters: {
+      source: sourceParam as SearchHealthRecordSource | undefined,
+      outcome: outcomeParam as SearchHealthOutcome | undefined,
+      dispatchReady:
+        dispatchReadyParam === "ready"
+          ? true
+          : dispatchReadyParam === "not_ready"
+            ? false
+            : undefined,
+      target: targetParam || undefined,
+    },
+  };
 }

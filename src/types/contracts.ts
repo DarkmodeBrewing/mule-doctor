@@ -376,6 +376,13 @@ export interface SearchHealthRecord {
   observerContext?: SearchHealthObserverContext;
 }
 
+export interface SearchHealthRecordFilters {
+  source?: SearchHealthRecordSource;
+  outcome?: SearchHealthOutcome;
+  dispatchReady?: boolean;
+  target?: string;
+}
+
 export interface SearchHealthSummary {
   windowSize: number;
   totalSearches: number;

@@ -155,6 +155,19 @@ document.getElementById("refresh-discoverability-results").onclick =
   discoverability.refreshDiscoverabilityResults;
 document.getElementById("refresh-search-health-results").onclick =
   discoverability.refreshSearchHealthResults;
+document.getElementById("search-health-source-filter").onchange =
+  discoverability.refreshSearchHealthResults;
+document.getElementById("search-health-outcome-filter").onchange =
+  discoverability.refreshSearchHealthResults;
+document.getElementById("search-health-dispatch-filter").onchange =
+  discoverability.refreshSearchHealthResults;
+document.getElementById("search-health-target-filter").onchange =
+  discoverability.refreshSearchHealthResults;
+document.getElementById("search-health-target-filter").onkeydown = (event) => {
+  if (event.key === "Enter") {
+    discoverability.refreshSearchHealthResults();
+  }
+};
 document.getElementById("refresh-llm-invocations").onclick =
   discoverability.refreshLlmInvocationResults;
 document.getElementById("refresh-instances").onclick = instances.refreshInstances;
