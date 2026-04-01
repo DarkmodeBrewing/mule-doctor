@@ -26,6 +26,14 @@ import {
   rollbackCreatedInstances,
   writeMetadata,
 } from "./instanceManagerPlanning.js";
+import {
+  handleManagedProcessExit,
+  monitorManagedProcessLiveness,
+  reconcileRunningInstances,
+  startManagedInstance,
+  stopManagedInstance,
+  type InstanceManagerLifecycleDeps,
+} from "./instanceManagerLifecycle.js";
 import type { ManagedRustMuleConfigTemplate } from "./rustMuleConfig.js";
 
 const DEFAULT_INSTANCE_ROOT_DIR = "/data/instances";
@@ -87,7 +95,7 @@ export class InstanceManager {
     await this.catalog.initialize();
     await ensureBinaryAvailable(this.rustMuleBinaryPath);
     await mkdir(this.instanceRootDir, { recursive: true });
-    await this.reconcileRunningInstances();
+    await reconcileRunningInstances(this.lifecycleDeps(), this.trackReconciledProcess.bind(this));
   }
 
   async listInstances(): Promise<ManagedInstanceRecord[]> {
@@ -139,152 +147,16 @@ export class InstanceManager {
   }
 
   async startInstance(id: string): Promise<ManagedInstanceRecord> {
-    return this.enqueueOperation(async () => {
-      const record = await this.requireInstance(id);
-      const current = await this.refreshRecordIfProcessMissing(record);
-      if (current.status === "running" && current.currentProcess) {
-        return current;
-      }
-
-      const command = this.buildCommand(current);
-      const handle = await this.processLauncher.launch({
-        command: command[0],
-        args: command.slice(1),
-        cwd: current.runtime.rootDir,
-        logPath: current.runtime.logPath,
-      });
-      const now = new Date().toISOString();
-      const started = await this.persistRecord({
-        ...current,
-        status: "running",
-        updatedAt: now,
-        currentProcess: {
-          pid: handle.pid,
-          command,
-          cwd: current.runtime.rootDir,
-          startedAt: now,
-        },
-        lastError: undefined,
-      });
-      this.trackLiveProcess(started.id, handle.pid, handle.exit);
-      return started;
-    });
+    return startManagedInstance(this.lifecycleDeps(), id, this.trackLiveProcess.bind(this));
   }
 
   async stopInstance(id: string, reason = "stopped by mule-doctor"): Promise<ManagedInstanceRecord> {
-    return this.enqueueOperation(async () => {
-      const record = await this.requireInstance(id);
-      const current = await this.refreshRecordIfProcessMissing(record);
-      if (!current.currentProcess) {
-        if (current.status === "planned") {
-          return current;
-        }
-        return this.persistRecord({
-          ...current,
-          status: "stopped",
-          updatedAt: new Date().toISOString(),
-          lastExit: {
-            at: new Date().toISOString(),
-            exitCode: null,
-            signal: null,
-            reason,
-          },
-          lastError: undefined,
-        });
-      }
-
-      const pid = current.currentProcess.pid;
-      await this.processLauncher.stop(pid, this.stopSignal);
-      await waitForProcessExit(pid, this.processLauncher, this.stopTimeoutMs);
-      const refreshed = await this.catalog.get(current.id);
-      if (refreshed && refreshed.status !== "running") {
-        return refreshed;
-      }
-      return this.persistRecord({
-        ...current,
-        status: "stopped",
-        updatedAt: new Date().toISOString(),
-        currentProcess: undefined,
-        lastExit: {
-          at: new Date().toISOString(),
-          exitCode: null,
-          signal: this.stopSignal,
-          reason,
-        },
-        lastError: undefined,
-      });
-    });
+    return stopManagedInstance(this.lifecycleDeps(), id, reason);
   }
 
   async restartInstance(id: string): Promise<ManagedInstanceRecord> {
     await this.stopInstance(id, "restarted by mule-doctor");
     return this.startInstance(id);
-  }
-
-  private async reconcileRunningInstances(): Promise<void> {
-    const records = await this.catalog.list();
-    for (const record of records) {
-      if (record.status !== "running") {
-        continue;
-      }
-      const pid = record.currentProcess?.pid;
-      if (!pid) {
-        await this.persistRecord({
-          ...record,
-          status: "failed",
-          updatedAt: new Date().toISOString(),
-          lastError: "Managed instance was marked running without process state during startup",
-          lastExit: {
-            at: new Date().toISOString(),
-            exitCode: null,
-            signal: null,
-            reason: "mule-doctor restarted without recoverable process state",
-          },
-        });
-        continue;
-      }
-      const alive = await this.processLauncher.isRunning(pid);
-      if (!alive) {
-        await this.persistRecord({
-          ...record,
-          status: "failed",
-          updatedAt: new Date().toISOString(),
-          currentProcess: undefined,
-          lastError: "Managed process was not running during startup reconciliation",
-          lastExit: {
-            at: new Date().toISOString(),
-            exitCode: null,
-            signal: null,
-            reason: "process missing during mule-doctor startup reconciliation",
-          },
-        });
-        continue;
-      }
-      this.trackReconciledProcess(record.id, pid);
-    }
-  }
-
-  private async refreshRecordIfProcessMissing(record: ManagedInstanceRecord): Promise<ManagedInstanceRecord> {
-    if (record.status !== "running" || !record.currentProcess) {
-      return record;
-    }
-    const alive = await this.processLauncher.isRunning(record.currentProcess.pid);
-    if (alive) {
-      return record;
-    }
-    return this.persistRecord({
-      ...record,
-      status: "failed",
-      updatedAt: new Date().toISOString(),
-      currentProcess: undefined,
-      lastError: "Managed process was not running when lifecycle state was refreshed",
-      lastExit: {
-        at: new Date().toISOString(),
-        exitCode: null,
-        signal: null,
-        reason: "process missing during lifecycle refresh",
-      },
-    });
   }
 
   private trackLiveProcess(
@@ -312,7 +184,12 @@ export class InstanceManager {
     if (this.liveProcesses.has(pid)) {
       return;
     }
-    const tracked = this.monitorProcessLiveness(id, pid)
+    const tracked = monitorManagedProcessLiveness(
+      this.lifecycleDeps(),
+      id,
+      pid,
+      this.handleProcessExit.bind(this),
+    )
       .then((record) => record)
       .finally(() => {
         this.liveProcesses.delete(pid);
@@ -325,49 +202,7 @@ export class InstanceManager {
     pid: number,
     exit: ManagedInstanceExitState,
   ): Promise<ManagedInstanceRecord> {
-    return this.enqueueOperation(async () => {
-      const current = await this.catalog.get(id);
-      if (!current || current.currentProcess?.pid !== pid) {
-        return (
-          current ?? {
-            id,
-            status: "failed",
-            createdAt: exit.at,
-            updatedAt: exit.at,
-            apiHost: this.apiHost,
-            apiPort: 0,
-            runtime: buildRuntimePaths(this.instanceRootDir, id),
-          }
-        );
-      }
-      return this.persistRecord({
-        ...current,
-        status: exit.error ? "failed" : "stopped",
-        updatedAt: exit.at,
-        currentProcess: undefined,
-        lastExit: exit,
-        lastError: exit.error,
-      });
-    });
-  }
-
-  private buildCommand(record: ManagedInstanceRecord): string[] {
-    return [this.rustMuleBinaryPath, "--config", record.runtime.configPath];
-  }
-
-  private async monitorProcessLiveness(
-    id: string,
-    pid: number,
-  ): Promise<ManagedInstanceRecord> {
-    while (await this.processLauncher.isRunning(pid)) {
-      await new Promise<void>((resolveWait) => setTimeout(resolveWait, this.reconcilePollMs));
-    }
-    return this.handleProcessExit(id, pid, {
-      at: new Date().toISOString(),
-      exitCode: null,
-      signal: null,
-      reason: "process exited after mule-doctor startup reconciliation",
-    });
+    return handleManagedProcessExit(this.lifecycleDeps(), id, pid, exit);
   }
 
   private async requireInstance(id: string): Promise<ManagedInstanceRecord> {
@@ -393,21 +228,22 @@ export class InstanceManager {
     );
     return run;
   }
+
+  private lifecycleDeps(): InstanceManagerLifecycleDeps {
+    return {
+      catalog: this.catalog,
+      apiHost: this.apiHost,
+      instanceRootDir: this.instanceRootDir,
+      rustMuleBinaryPath: this.rustMuleBinaryPath,
+      processLauncher: this.processLauncher,
+      reconcilePollMs: this.reconcilePollMs,
+      stopSignal: this.stopSignal,
+      stopTimeoutMs: this.stopTimeoutMs,
+      persistRecord: this.persistRecord.bind(this),
+      requireInstance: this.requireInstance.bind(this),
+      enqueueOperation: this.enqueueOperation.bind(this),
+    };
+  }
 }
 
 export { buildRuntimePaths } from "./instanceManagerPlanning.js";
-
-async function waitForProcessExit(
-  pid: number,
-  processLauncher: ProcessLauncher,
-  timeoutMs: number,
-): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    if (!(await processLauncher.isRunning(pid))) {
-      return;
-    }
-    await new Promise<void>((resolveWait) => setTimeout(resolveWait, 100));
-  }
-  throw new Error(`Timed out waiting for managed process ${pid} to exit`);
-}

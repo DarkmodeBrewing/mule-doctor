@@ -252,6 +252,7 @@ Implementation note:
 - the observer runtime is split between scheduler/control flow in `observer.ts`, cycle execution in a dedicated runner, shared prompt/state helpers, and observed-search lifecycle tracking
 - the rust-mule client layer is split between a public endpoint facade, request/token/poll transport, shared response normalization helpers, and shared types so the API surface stays stable while transport concerns remain isolated
 - the managed-instance surface diagnostics layer is split between service orchestration, runtime-surface shaping/highlights, observed-search lifecycle recording, and shared snapshot/detail types
+- the managed-instance manager is split between a catalog/queue facade and dedicated lifecycle/process reconciliation helpers so start/stop/reconcile behavior does not live in one file
 
 Primary purpose:
 
