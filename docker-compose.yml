@@ -8,6 +8,10 @@ services:
         RUST_MULE_REPO: ${RUST_MULE_REPO:-https://github.com/DarkmodeBrewing/rust-mule.git}
         RUST_MULE_REF: ${RUST_MULE_REF:-main}
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "17835:17835"
       - "${MULE_DOCTOR_UI_PORT:-18080}:${MULE_DOCTOR_UI_PORT:-18080}"

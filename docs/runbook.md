@@ -110,6 +110,7 @@ Important runtime note:
 - `docker-compose.yml` bind-mounts `./data:/data`
 - the image runs as `node` with UID/GID `1000:1000`
 - the host `./data` path should be writable by `1000:1000`
+- the compose service now raises `nofile` to `65536:65536` for the bundled `rust-mule` process and any managed `rust-mule` children it spawns
 
 Prepare the bind mount if needed:
 
@@ -135,6 +136,20 @@ Expected container sequence:
 2. it waits for a readable non-empty token file
 3. it exports `RUST_MULE_TOKEN_PATH`
 4. it starts mule-doctor
+
+Container resource note:
+
+- the bundled stack now sets:
+
+```yaml
+ulimits:
+  nofile:
+    soft: 65536
+    hard: 65536
+```
+
+- this helps prevent `Too many open files (os error 24)` failures from the bundled `rust-mule`
+- if you still see file-descriptor exhaustion, verify both the container and host daemon limits
 
 ## Operator Console
 
@@ -260,6 +275,24 @@ Fix the host bind-mount ownership:
 ```bash
 sudo chown -R 1000:1000 data
 ```
+
+### rust-mule logs `Too many open files (os error 24)`
+
+The bundled compose stack now raises the container `nofile` limit to `65536`.
+
+Verify the live container limit:
+
+```bash
+docker exec -it mule-doctor bash -lc 'ulimit -n'
+```
+
+If the reported limit is still low, verify the host Docker service limit too:
+
+```bash
+systemctl show docker --property=LimitNOFILE
+```
+
+If the host daemon limit is already high but the application still exhausts descriptors, the remaining issue is likely in `rust-mule` itself rather than the container runtime.
 
 ### UI is not reachable
 
