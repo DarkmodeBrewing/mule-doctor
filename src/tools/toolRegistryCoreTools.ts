@@ -3,6 +3,7 @@ import type {
   RustMuleClient,
   TraceLookupResult,
 } from "../api/rustMuleClient.js";
+import { redactLine } from "../logs/redaction.js";
 import type { RegisteredTool, RecentLogSource } from "./toolRegistryShared.js";
 import { clampInt } from "./toolRegistryShared.js";
 
@@ -82,7 +83,7 @@ export function buildCoreTools(
       },
       handler: async (args) => {
         const n = clampInt(args["n"], 50, 1, 1000);
-        return logWatcher.getRecentLines(n);
+        return logWatcher.getRecentLines(n).map(redactLine);
       },
     },
     {
@@ -135,7 +136,7 @@ export function buildCoreTools(
           if (!haystack.includes(needle)) continue;
           totalMatches += 1;
           if (matches.length < limit) {
-            matches.push(line);
+            matches.push(redactLine(line));
           }
         }
 

@@ -67,7 +67,9 @@ test("ToolRegistry getSearchHealthSummary returns derived lifecycle totals", asy
 });
 
 test("ToolRegistry getLlmInvocationResults returns recent audit metadata", async () => {
-  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore());
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore(), {
+    toolProfile: "full",
+  });
 
   const result = await registry.invoke("getLlmInvocationResults", { n: 10 });
 

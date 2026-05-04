@@ -112,7 +112,9 @@ test("ToolRegistry searchLogs returns bounded matches", async () => {
 });
 
 test("ToolRegistry triggerBootstrap and traceLookup delegate to client", async () => {
-  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher());
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
+    toolProfile: "full",
+  });
 
   const bootstrap = await registry.invoke("triggerBootstrap", {});
   const trace = await registry.invoke("traceLookup", { target_id: "abcd" });
@@ -142,6 +144,44 @@ test("ToolRegistry mattermost profile excludes debug and source-oriented tools",
   assert.equal(names.includes("git_blame"), false);
 });
 
+test("ToolRegistry observer profile is read-only and excludes source/patch tools", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore(), {
+    sourcePath: process.cwd(),
+    toolProfile: "observer_cycle",
+  });
+  const names = registry.getDefinitions().map((definition) => definition.function.name);
+
+  assert.equal(names.includes("getNodeInfo"), true);
+  assert.equal(names.includes("getHistory"), true);
+  assert.equal(names.includes("getLlmInvocationSummary"), true);
+  assert.equal(names.includes("summarizeSearchPublishDiagnostics"), true);
+  assert.equal(names.includes("triggerBootstrap"), false);
+  assert.equal(names.includes("traceLookup"), false);
+  assert.equal(names.includes("search_code"), false);
+  assert.equal(names.includes("read_file"), false);
+  assert.equal(names.includes("show_function"), false);
+  assert.equal(names.includes("propose_patch"), false);
+  assert.equal(names.includes("git_blame"), false);
+});
+
+test("ToolRegistry managed analysis profile allows source reads but not side effects or patch proposals", async () => {
+  const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore(), {
+    sourcePath: process.cwd(),
+    toolProfile: "managed_instance_analysis",
+  });
+  const names = registry.getDefinitions().map((definition) => definition.function.name);
+
+  assert.equal(names.includes("getNodeInfo"), true);
+  assert.equal(names.includes("summarizeSearchPublishDiagnostics"), true);
+  assert.equal(names.includes("search_code"), true);
+  assert.equal(names.includes("read_file"), true);
+  assert.equal(names.includes("show_function"), true);
+  assert.equal(names.includes("git_blame"), true);
+  assert.equal(names.includes("triggerBootstrap"), false);
+  assert.equal(names.includes("traceLookup"), false);
+  assert.equal(names.includes("propose_patch"), false);
+});
+
 test("ToolRegistry mattermost profile rejects forbidden tools at invoke time", async () => {
   const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), new StubRuntimeStore(), {
     toolProfile: "mattermost_command",
@@ -160,4 +200,22 @@ test("ToolRegistry mattermost profile rejects forbidden tools at invoke time", a
     success: false,
     error: "Unknown tool: traceLookup",
   });
+});
+
+test("ToolRegistry redacts secrets from log tool output", async () => {
+  class SecretLogWatcher {
+    getRecentLines() {
+      return ["token=super-secret", "Authorization: Bearer abc123"];
+    }
+  }
+
+  const registry = new ToolRegistry(new StubClient(), new SecretLogWatcher());
+
+  const recent = await registry.invoke("getRecentLogs", {});
+  const searched = await registry.invoke("searchLogs", { query: "secret" });
+
+  assert.equal(recent.success, true);
+  assert.deepEqual(recent.data, ["token=[redacted]", "Authorization: Bearer [redacted]"]);
+  assert.equal(searched.success, true);
+  assert.deepEqual(searched.data.matches, ["token=[redacted]"]);
 });

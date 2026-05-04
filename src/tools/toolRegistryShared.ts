@@ -35,7 +35,7 @@ export interface ToolRegistryOptions {
   toolProfile?: ToolProfile;
 }
 
-export type ToolProfile = "full" | "mattermost_command";
+export type ToolProfile = "full" | "observer_cycle" | "managed_instance_analysis" | "mattermost_command";
 
 export interface RegisteredTool {
   definition: ToolDefinition;
@@ -51,6 +51,57 @@ export function getAllowedToolNames(profile: ToolProfile): Set<string> | undefin
   switch (profile) {
     case "full":
       return undefined;
+    case "observer_cycle":
+      return new Set([
+        "getNodeInfo",
+        "getPeers",
+        "getRoutingBuckets",
+        "getLookupStats",
+        "getRecentLogs",
+        "getHistory",
+        "getDiscoverabilityResults",
+        "getDiscoverabilitySummary",
+        "getSearchHealthResults",
+        "getSearchHealthSummary",
+        "getLlmInvocationSummary",
+        "searchLogs",
+        "listKeywordSearches",
+        "summarizeKeywordSearches",
+        "getKeywordSearch",
+        "listSharedFiles",
+        "summarizeSharedLibrary",
+        "listSharedActions",
+        "getDownloads",
+        "summarizeDownloads",
+        "summarizeSearchPublishDiagnostics",
+      ]);
+    case "managed_instance_analysis":
+      return new Set([
+        "getNodeInfo",
+        "getPeers",
+        "getRoutingBuckets",
+        "getLookupStats",
+        "getRecentLogs",
+        "getHistory",
+        "getDiscoverabilityResults",
+        "getDiscoverabilitySummary",
+        "getSearchHealthResults",
+        "getSearchHealthSummary",
+        "searchLogs",
+        "listKeywordSearches",
+        "summarizeKeywordSearches",
+        "getKeywordSearch",
+        "listSharedFiles",
+        "summarizeSharedLibrary",
+        "listSharedActions",
+        "getDownloads",
+        "summarizeDownloads",
+        "summarizeSearchPublishDiagnostics",
+        "search_code",
+        "read_file",
+        "show_function",
+        "git_blame",
+      ]);
     case "mattermost_command":
       return new Set([
         "getNodeInfo",

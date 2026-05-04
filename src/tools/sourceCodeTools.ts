@@ -1,4 +1,5 @@
 import { relative, resolve } from "node:path";
+import { redactText } from "../logs/redaction.js";
 import { SourceCodeToolsFs } from "./sourceCodeToolsFs.js";
 import { gitBlame } from "./sourceCodeToolsGit.js";
 import {
@@ -74,7 +75,7 @@ export class SourceCodeTools {
           matches.push({
             path: file.relPath,
             line: index + 1,
-            preview: line.slice(0, 400),
+            preview: redactText(line.slice(0, 400)),
           });
         }
       }
@@ -90,7 +91,11 @@ export class SourceCodeTools {
   }
 
   async readFile(pathRaw: string): Promise<ReadFileResult> {
-    return this.fsTools.readFile(pathRaw, this.maxReadBytes);
+    const result = await this.fsTools.readFile(pathRaw, this.maxReadBytes);
+    return {
+      ...result,
+      content: redactText(result.content),
+    };
   }
 
   async showFunction(nameRaw: string): Promise<ShowFunctionResult> {
@@ -141,6 +146,10 @@ export class SourceCodeTools {
     const safePath = this.fsTools.resolveUserPath(pathRaw);
     await this.fsTools.assertPathWithinRoot(safePath);
     this.fsTools.assertPathAllowed(toPosixPath(relative(this.rootPath, safePath)), "git_blame");
-    return gitBlame(this.rootPath, safePath, lineRaw);
+    const result = await gitBlame(this.rootPath, safePath, lineRaw);
+    return {
+      ...result,
+      content: redactText(result.content),
+    };
   }
 }

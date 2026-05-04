@@ -21,6 +21,7 @@ test("ToolRegistry enables source tools only when sourcePath is configured", asy
 
     const withSource = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
       sourcePath: tmp.dir,
+      toolProfile: "full",
     });
     const withSourceNames = withSource
       .getDefinitions()
@@ -48,6 +49,7 @@ test("ToolRegistry source tools search, read, and show function return structure
 
     const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
       sourcePath: tmp.dir,
+      toolProfile: "full",
     });
 
     const search = await registry.invoke("search_code", { query: "handshake" });
@@ -75,6 +77,7 @@ test("ToolRegistry source tools block path traversal", async () => {
 
     const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
       sourcePath: tmp.dir,
+      toolProfile: "full",
     });
     const result = await registry.invoke("read_file", { path: "../etc/passwd" });
 
@@ -96,6 +99,7 @@ test("ToolRegistry propose_patch triggers patch proposal notifier with diff cont
     const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
       sourcePath: tmp.dir,
       proposalDir,
+      toolProfile: "full",
       patchProposalNotifier: async (notice) => {
         notices.push(notice);
       },
@@ -122,6 +126,7 @@ test("ToolRegistry propose_patch succeeds even when notifier fails", async () =>
     const registry = new ToolRegistry(new StubClient(), new StubLogWatcher(), undefined, {
       sourcePath: tmp.dir,
       proposalDir,
+      toolProfile: "full",
       patchProposalNotifier: async () => {
         throw new Error("webhook down");
       },
