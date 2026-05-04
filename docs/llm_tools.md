@@ -16,6 +16,18 @@ Source of truth:
 mule-doctor does not let the LLM call rust-mule or the filesystem directly.
 Instead, the LLM gets a bounded set of registered tools through the OpenAI tool-calling interface.
 
+The exposed tools are selected by invocation profile:
+
+- `observer_cycle`: scheduled diagnostics; read-only runtime/history/search/shared/download tools only
+- `mattermost_command`: human command diagnostics; read-only runtime/search/shared/download tools only
+- `managed_instance_analysis`: human managed-instance analysis; read-only runtime tools plus bounded source-inspection tools
+- `full`: complete registry surface used only when a caller explicitly opts into the complete tool set
+
+Scheduled observer cycles and human analysis routes do not receive debug side-effect tools such as
+`triggerBootstrap` or `traceLookup`. They also do not receive `propose_patch`; managed-instance
+analysis may inspect source when `RUST_MULE_SOURCE_PATH` is configured, but it cannot create patch
+proposal artifacts through the LLM tool surface.
+
 Each tool is exposed as a function definition with:
 
 - a stable tool name
@@ -78,6 +90,7 @@ Notes:
 - `n` is optional
 - default `50`
 - bounded to `1..1000`
+- returned lines are redacted before they are sent to the LLM
 
 ### `getHistory`
 
@@ -299,12 +312,15 @@ Notes:
 - matching is safe bounded substring matching
 - `n` defaults to `500`, bounded to `1..5000`
 - `limit` defaults to `50`, bounded to `1..200`
+- returned matching lines are redacted before they are sent to the LLM
 
 ## Optional Source-Inspection Tools
 
 These tools are only registered when `RUST_MULE_SOURCE_PATH` is configured.
 
-They are intended for read-only investigation plus patch proposal generation for human review.
+They are intended for bounded read-only investigation by default.
+`propose_patch` remains implemented for explicit full-profile use, but scheduled observer cycles,
+Mattermost commands, and managed-instance analysis do not expose it.
 
 ### `search_code`
 
@@ -333,6 +349,7 @@ Notes:
 - searches Rust-project text files only
 - excludes directories such as `.git`, `node_modules`, `target`, `dist`, and `build`
 - excludes sensitive paths such as `.env`, `.git`, and key/certificate-like files
+- match previews are redacted before they are sent to the LLM
 
 ### `read_file`
 
@@ -363,6 +380,7 @@ Notes:
 - sensitive paths are blocked
 - binary files are rejected
 - output is bounded
+- file content is redacted before it is sent to the LLM
 
 ## rust-mule Runtime and Data-Surface Tools
 
@@ -641,6 +659,7 @@ Notes:
 - file path must stay within `RUST_MULE_SOURCE_PATH`
 - sensitive paths are blocked
 - result is derived from porcelain blame output
+- blamed line content is redacted before it is sent to the LLM
 
 ## rust-mule-Specific Tools
 
@@ -827,7 +846,18 @@ Always registered:
 - `triggerBootstrap`
 - `traceLookup`
 
-Surface-specific restriction:
+Surface-specific restrictions:
+
+- Scheduled observer analysis uses the `observer_cycle` profile
+- that profile keeps routine runtime/history/search/download diagnostics and compact LLM invocation summaries
+- it excludes debug-action tools and all source/patch-oriented tools:
+  - `triggerBootstrap`
+  - `traceLookup`
+  - `search_code`
+  - `read_file`
+  - `show_function`
+  - `propose_patch`
+  - `git_blame`
 
 - Mattermost command analysis uses a narrower tool profile
 - that profile keeps routine runtime/history/search/download diagnostics
@@ -839,6 +869,13 @@ Surface-specific restriction:
   - `show_function`
   - `propose_patch`
   - `git_blame`
+
+- Managed-instance analysis uses the `managed_instance_analysis` profile
+- that profile keeps read-only runtime/search/download diagnostics and bounded source-inspection tools
+- it excludes debug-action tools and patch proposal generation:
+  - `triggerBootstrap`
+  - `traceLookup`
+  - `propose_patch`
 
 Conditionally registered:
 
@@ -865,8 +902,11 @@ Important limits:
 - the LLM cannot execute arbitrary shell commands through the normal analysis tool surface
 - source inspection is restricted to the configured source root
 - sensitive files and paths are blocked from search/read/blame
-- `propose_patch` does not modify source files; it writes review artifacts only
+- `propose_patch` does not modify source files; it writes review artifacts only and is not exposed to scheduled observer, Mattermost, or managed-instance analysis profiles
 - rust-mule debug tools depend on the configured debug-token path and upstream debug endpoint availability
+- OpenAI requests are bounded by the invocation duration budget and sent with SDK retries disabled so one request cannot silently multiply the configured wait budget
+- logs and source snippets returned by tools are redacted before model exposure
+- prompts explicitly tell the model to treat logs, source files, command text, runtime data, and tool output as untrusted evidence rather than instructions
 
 ## Current Design Notes
 

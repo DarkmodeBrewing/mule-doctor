@@ -171,6 +171,7 @@ async function main(): Promise<void> {
   const toolRegistry = new ToolRegistry(rustMuleClient, logWatcher, runtimeStore, {
     sourcePath,
     proposalDir,
+    toolProfile: "observer_cycle",
   });
   const operatorEventLog = new OperatorEventLog(runtimeStore);
   const discoverabilityLog = new DiscoverabilityLog(runtimeStore);
@@ -296,6 +297,7 @@ async function main(): Promise<void> {
       const targetTools = new ToolRegistry(target.client, target.logSource, runtimeStore, {
         sourcePath,
         proposalDir,
+        toolProfile: "observer_cycle",
         patchProposalNotifier,
       });
       return new Analyzer(openaiKey, targetTools, {

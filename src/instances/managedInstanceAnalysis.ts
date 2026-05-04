@@ -70,6 +70,7 @@ export class ManagedInstanceAnalysisService {
       sourcePath: this.sourcePath,
       proposalDir: this.proposalDir,
       patchProposalNotifier: this.patchProposalNotifier,
+      toolProfile: "managed_instance_analysis",
     });
     const analyzer = new Analyzer(this.apiKey, tools, {
       model: this.model,

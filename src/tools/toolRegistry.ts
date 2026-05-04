@@ -50,7 +50,7 @@ export class ToolRegistry {
       this.register(tool.definition, tool.handler);
     }
 
-    this.applyToolProfile(options.toolProfile ?? "full");
+    this.applyToolProfile(options.toolProfile ?? "observer_cycle");
   }
 
   private register(def: ToolDefinition, handler: ToolHandler): void {

@@ -193,3 +193,30 @@ test("Analyzer records invocation audit metadata and finish reason", async () =>
   assert.equal(audit.records[0].finishReason, "completed");
   assert.equal(audit.records[0].toolCalls, 0);
 });
+
+test("Analyzer sends request timeout and disables OpenAI retries for budget control", async () => {
+  const tools = new StubToolRegistry();
+  const analyzer = new Analyzer("test-key", tools, {
+    maxDurationMs: 1234,
+  });
+  let capturedOptions;
+
+  analyzer.client = {
+    chat: {
+      completions: {
+        create: async (_body, options) => {
+          capturedOptions = options;
+          return completion({ content: "bounded", tool_calls: [] }, "stop");
+        },
+      },
+    },
+  };
+
+  const result = await analyzer.analyze("diagnose");
+
+  assert.equal(result, "bounded");
+  assert.equal(capturedOptions.maxRetries, 0);
+  assert.equal(typeof capturedOptions.timeout, "number");
+  assert.ok(capturedOptions.timeout > 0);
+  assert.ok(capturedOptions.timeout <= 1234);
+});
