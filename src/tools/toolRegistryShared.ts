@@ -125,8 +125,10 @@ export function getAllowedToolNames(profile: ToolProfile): Set<string> | undefin
         "summarizeDownloads",
         "summarizeSearchPublishDiagnostics",
       ]);
-    default:
-      return undefined;
+    default: {
+      const exhaustiveCheck: never = profile;
+      throw new Error(`Unknown tool profile: ${exhaustiveCheck}`);
+    }
   }
 }
 
